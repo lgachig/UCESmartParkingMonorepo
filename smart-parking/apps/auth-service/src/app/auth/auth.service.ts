@@ -5,9 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
-
 import * as argon2 from 'argon2';
-
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 
@@ -53,47 +51,47 @@ export class AuthService {
   }
 
   async login(data: LoginDto) {
-    
-  const user = await this.prisma.user.findUnique({
-    where: {
-      email: data.email,
-    },
-  });
 
-  if (!user) {
-    throw new UnauthorizedException(
-      'Dont found any user with the provided email',
-    );
-  }
+    const user = await this.prisma.user.findUnique({
+      where: {
+        email: data.email,
+      },
+    });
 
-  const isPasswordValid = await argon2.verify(
-    user.password,
-    data.password,
-  );
-
-  if (!isPasswordValid) {
-    throw new UnauthorizedException(
-      'Password is incorrect',
-    );
-  }
-
-  const payload = {
-    sub: user.id,
-    email: user.email,
-    role: user.role,
-  };
-
-  const accessToken = await this.jwtService.signAsync(payload);
-
-  return {
-    accessToken,
-    user: {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
+    if (!user) {
+      throw new UnauthorizedException(
+        "Don't found any user with the provided email",
+      );
     }
-  };
+
+    const isPasswordValid = await argon2.verify(
+      user.password,
+      data.password,
+    );
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException(
+        'Password is incorrect',
+      );
+    }
+
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    };
+
+    const accessToken = await this.jwtService.signAsync(payload);
+
+    return {
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+      }
+    };
   }
 }
