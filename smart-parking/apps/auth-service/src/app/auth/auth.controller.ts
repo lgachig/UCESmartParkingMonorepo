@@ -6,6 +6,7 @@ import {
 
 import { RegisterDto } from './dto/register.dto';
 import { AuthService } from './auth.service';
+import { LoginDto } from './dto/login.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -19,4 +20,11 @@ export class AuthController {
   ) {
     return this.authService.register(data);
   }
-}
+
+  @Post('login')
+  async login(
+    @Body() data: LoginDto,
+  ) {
+    return this.authService.login(data);
+  }
+} 
