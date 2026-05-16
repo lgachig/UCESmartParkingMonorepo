@@ -7,7 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
+enum Role {
   ADMIN
   STUDENT
   TEACHER
@@ -19,7 +19,7 @@ model User {
   password     String
   firstName    String
   lastName     String
-  role         UserRole     @default(STUDENT)
+  role         Role         @default(STUDENT)
 
   isActive     Boolean      @default(true)
   isVerified   Boolean      @default(false)
