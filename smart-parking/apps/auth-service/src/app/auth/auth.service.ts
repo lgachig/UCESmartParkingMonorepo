@@ -75,16 +75,10 @@ export class AuthService {
       );
     }
 
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-    };
-
-    const accessToken = await this.jwtService.signAsync(payload);
+    const tokens = await this.generateTokens( user.id, user.email, user.role,);
 
     return {
-      accessToken,
+      ...tokens,
       user: {
         id: user.id,
         email: user.email,
@@ -93,5 +87,56 @@ export class AuthService {
         role: user.role,
       }
     };
+  }
+
+  async generateTokens(
+    userId: string,
+    email: string,
+    role: string,
+  ) {
+    const payload = {
+      sub: userId,
+      email,
+      role,
+    };
+
+    const accessToken =
+      await this.jwtService.signAsync(payload, {
+        secret: process.env.JWT_SECRET,
+        expiresIn: '15m',
+      });
+
+    const refreshToken =
+      await this.jwtService.signAsync(payload, {
+        secret: process.env.JWT_REFRESH_SECRET,
+        expiresIn: '7d',
+      });
+
+    return {
+      accessToken,
+      refreshToken,
+    };
+  }
+
+  async refreshToken(token: string) {
+
+    try {
+      const payload =
+        await this.jwtService.verifyAsync(token, {
+          secret:
+            process.env.JWT_REFRESH_SECRET,
+        });
+
+      return this.generateTokens(
+        payload.sub,
+        payload.email,
+        payload.role,
+      );
+
+    } catch {
+      throw new UnauthorizedException(
+        'Invalid refresh token',
+      );
+    }
   }
 }
