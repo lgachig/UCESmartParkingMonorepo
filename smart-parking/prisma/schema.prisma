@@ -44,3 +44,21 @@ model RefreshToken {
 
   @@map("refresh_tokens")
 }
+
+model AuditLog {
+  id        String   @id @default(uuid())
+
+  action    String
+
+  userId    String?
+
+  email     String?
+
+  ipAddress String?
+
+  userAgent String?
+
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+}

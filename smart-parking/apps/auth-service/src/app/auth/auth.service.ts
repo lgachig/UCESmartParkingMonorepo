@@ -8,12 +8,14 @@ import { LoginDto } from './dto/login.dto';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { RegisterDto } from './dto/register.dto';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly auditService: AuditService,
   ) {}
 
   async register(data: RegisterDto) {
@@ -59,24 +61,39 @@ export class AuthService {
     });
 
     if (!user) {
+      await this.auditService.log({
+        action: 'LOGIN_FAILED, USER_NOT_FOUND',
+        email: data.email,
+      });
       throw new UnauthorizedException(
         "Don't found any user with the provided email",
       );
     }
 
     const isPasswordValid = await argon2.verify(
-      user.password,
-      data.password,
+      user.password, 
+      data.password!,
     );
 
     if (!isPasswordValid) {
+      await this.auditService.log({
+        action: 'LOGIN_FAILED, INVALID_PASSWORD',
+        email: data.email,
+      });
       throw new UnauthorizedException(
         'Password is incorrect',
       );
+
     }
 
     const tokens = await this.generateTokens( user.id, user.email, user.role,);
 
+    await this.auditService.log({
+      action: 'USER_LOGIN',
+      userId: user.id,
+      email: user.email,
+      
+    });
     return {
       ...tokens,
       user: {
@@ -100,17 +117,15 @@ export class AuthService {
       role,
     };
 
-    const accessToken =
-      await this.jwtService.signAsync(payload, {
-        secret: process.env.JWT_SECRET,
-        expiresIn: '15m',
-      });
+    const accessToken = await this.jwtService.signAsync(payload, {
+      secret: process.env.JWT_SECRET,
+      expiresIn: '15m',
+    });
 
-    const refreshToken =
-      await this.jwtService.signAsync(payload, {
-        secret: process.env.JWT_REFRESH_SECRET,
-        expiresIn: '7d',
-      });
+    const refreshToken = await this.jwtService.signAsync(payload, {
+      secret: process.env.JWT_REFRESH_SECRET,
+      expiresIn: '7d',
+    });
 
     return {
       accessToken,
@@ -121,11 +136,9 @@ export class AuthService {
   async refreshToken(token: string) {
 
     try {
-      const payload =
-        await this.jwtService.verifyAsync(token, {
-          secret:
-            process.env.JWT_REFRESH_SECRET,
-        });
+      const payload = await this.jwtService.verifyAsync(token, {
+        secret: process.env.JWT_REFRESH_SECRET,
+      });
 
       return this.generateTokens(
         payload.sub,
