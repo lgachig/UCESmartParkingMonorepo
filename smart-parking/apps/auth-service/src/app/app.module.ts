@@ -8,9 +8,10 @@ import { ThrottlerModule, } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, } from '@nestjs/throttler';
 import { AuditModule } from './audit/audit.module';
+import { AppRedisModule } from './redis/redis.module';
 
 @Module({
-  imports: [PrismaModule, AuditModule, AuthModule, ThrottlerModule.forRoot([{ttl: 60000,limit: 10,},]),],
+  imports: [PrismaModule, AppRedisModule, AuditModule, AuthModule, ThrottlerModule.forRoot([{ttl: 60000,limit: 10,},]),],
   controllers: [AppController],
   providers: [AppService, {
     provide: APP_GUARD,
