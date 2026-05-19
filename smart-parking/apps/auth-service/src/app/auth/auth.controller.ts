@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Get, Req, UseGuards,} from '@nestjs/common';
+import { Body, Controller, Post, Get, Req, UseGuards, Request} from '@nestjs/common';
 import { RegisterDto } from './dto/register.dto';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -35,9 +35,7 @@ export class AuthController {
 
   @Post('refresh')
   async refreshToken( @Body() data: RefreshTokenDto,) {
-    return this.authService.refreshToken(
-      data.refreshToken!,
-    );
+    return this.authService.refreshToken( data.refreshToken!,);
   }
 
   @Roles(Role.ADMIN)
@@ -45,8 +43,18 @@ export class AuthController {
   @Get('admin')
   adminRoute() {
     return {
-      message:
-        'Access granted to admin route',
+      message:'Access granted to admin route',
     };
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  async logout( @Req() req: any ) {
+    const authHeader = req.headers.authorization;
+
+    const token = authHeader.split(' ')[1];
+
+    return this.authService.logout( token,);
   }
 } 

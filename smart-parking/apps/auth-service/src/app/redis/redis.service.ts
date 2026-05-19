@@ -34,4 +34,24 @@ export class AppRedisService {
   async delete(key: string) {
     return this.redis.del(key);
   }
+
+  async blacklistToken(
+    token: string,
+    expiresIn: number,
+    ) {
+    await this.redis.set(
+        `blacklist:${token}`,
+        'true',
+        'EX',
+        expiresIn,
+    );
+  }
+
+  async isBlacklisted(
+    token: string,
+    ) {
+    return this.redis.get(
+        `blacklist:${token}`,
+    );
+  }
 }

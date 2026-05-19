@@ -9,6 +9,7 @@ import * as argon2 from 'argon2';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { AuditService } from '../audit/audit.service';
+import { AppRedisService } from '../redis/redis.service';
 
 @Injectable()
 export class AuthService {
@@ -16,6 +17,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly auditService: AuditService,
+    private readonly redisService: AppRedisService,
   ) {}
 
   async register(data: RegisterDto) {
@@ -147,10 +149,19 @@ export class AuthService {
       );
 
     } catch {
-      throw new UnauthorizedException(
-        'Invalid refresh token',
-      );
+      throw new UnauthorizedException('Invalid refresh token',);
     }
   }
   
+  async logout(token: string) {
+    const decoded = this.jwtService.decode(token) as any;
+
+    const expiresIn = decoded.exp - Math.floor(Date.now() / 1000);
+
+    await this.redisService.blacklistToken( token, expiresIn,);
+
+    return {
+      message: 'Logout successful',
+    };
+  }
 }
