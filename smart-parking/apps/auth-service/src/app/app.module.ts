@@ -11,9 +11,10 @@ import { AuditModule } from './audit/audit.module';
 import { AppRedisModule } from './redis/redis.module';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
+import { HealthModule } from './health/health.module';
 
 @Module({
-  imports: [PrismaModule, AppRedisModule, AuditModule, AuthModule, ThrottlerModule.forRoot([{ttl: 60000,limit: 10,},]),
+  imports: [PrismaModule, HealthModule, AppRedisModule, AuditModule, AuthModule, ThrottlerModule.forRoot([{ttl: 60000,limit: 10,},]),
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: Joi.object({

@@ -9,6 +9,9 @@ module.exports = {
       devtoolModuleFilenameTemplate: '[absolute-resource-path]',
     }),
   },
+  externals: {
+    '@nestjs/terminus': 'commonjs @nestjs/terminus',
+  },
   plugins: [
     new NxAppWebpackPlugin({
       target: 'node',
