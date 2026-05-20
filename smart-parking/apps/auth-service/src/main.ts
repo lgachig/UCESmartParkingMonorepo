@@ -5,14 +5,19 @@ import { winstonConfig } from './app/logger/logger.config';
 import { WinstonModule } from 'nest-winston';
 import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule, } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
+
 
 async function bootstrap() {
+
   const app = await NestFactory.create(AppModule,
   {
     logger: WinstonModule.createLogger({
       instance: winstonConfig,
     }),
   },);
+
+  const configService = app.get(ConfigService);
 
   const globalPrefix = 'api';
 
@@ -38,14 +43,11 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
 
-  const document = SwaggerModule.createDocument(app,
-                                                config,);
+  const document = SwaggerModule.createDocument(app, config,);
 
-  SwaggerModule.setup('docs',
-                      app,
-                      document,);
+  SwaggerModule.setup('docs', app, document,);
 
-  const port = process.env.PORT || 3000;
+  const port = configService.get<number>('PORT') || 3000;
   await app.listen(port);
 
   Logger.log(

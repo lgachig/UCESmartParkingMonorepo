@@ -10,6 +10,8 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { AuditService } from '../audit/audit.service';
 import { AppRedisService } from '../redis/redis.service';
+import { ConfigService } from '@nestjs/config';
+
 
 @Injectable()
 export class AuthService {
@@ -18,6 +20,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly auditService: AuditService,
     private readonly redisService: AppRedisService,
+    private readonly configService: ConfigService
   ) {}
 
   async register(data: RegisterDto) {
@@ -85,7 +88,6 @@ export class AuthService {
       throw new UnauthorizedException(
         'Password is incorrect',
       );
-
     }
 
     const tokens = await this.generateTokens( user.id, user.email, user.role,);
@@ -94,7 +96,6 @@ export class AuthService {
       action: 'USER_LOGIN',
       userId: user.id,
       email: user.email,
-      
     });
     return {
       ...tokens,
@@ -120,12 +121,12 @@ export class AuthService {
     };
 
     const accessToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.JWT_SECRET,
+      secret: this.configService.get<string>('JWT_SECRET',),
       expiresIn: '15m',
     });
 
     const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.JWT_REFRESH_SECRET,
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET',),
       expiresIn: '7d',
     });
 
@@ -139,7 +140,7 @@ export class AuthService {
 
     try {
       const payload = await this.jwtService.verifyAsync(token, {
-        secret: process.env.JWT_REFRESH_SECRET,
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET',),
       });
 
       return this.generateTokens(
