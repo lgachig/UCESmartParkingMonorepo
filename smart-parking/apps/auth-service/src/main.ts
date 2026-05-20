@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule, } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { HttpExceptionFilter } from './app/filters/http-exception.filter';
+import { TransformResponseInterceptor } from './app/interceptors/transform-response.interceptor';
 
 async function bootstrap() {
 
@@ -22,6 +23,7 @@ async function bootstrap() {
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
   app.useGlobalFilters( new HttpExceptionFilter(),);
+  app.useGlobalInterceptors( new TransformResponseInterceptor(), );
   app.use(helmet());
   app.useGlobalPipes(
     new ValidationPipe({
