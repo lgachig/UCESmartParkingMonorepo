@@ -6,7 +6,7 @@ import { WinstonModule } from 'nest-winston';
 import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule, } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-
+import { HttpExceptionFilter } from './app/filters/http-exception.filter';
 
 async function bootstrap() {
 
@@ -20,8 +20,8 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   const globalPrefix = 'api';
-
   app.setGlobalPrefix(globalPrefix);
+  app.useGlobalFilters( new HttpExceptionFilter(),);
   app.use(helmet());
   app.useGlobalPipes(
     new ValidationPipe({
