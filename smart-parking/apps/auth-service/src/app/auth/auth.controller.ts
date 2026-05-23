@@ -8,6 +8,7 @@ import { Roles } from './decorators/roles.decorator';
 import { Role } from './enums/role.enum';
 import { RolesGuard } from './guards/roles.guard';
 import { ApiBearerAuth, ApiTags, } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -20,7 +21,9 @@ export class AuthController {
   async register( @Body() data: RegisterDto,) {
     return this.authService.register(data);
   }
-
+  @Throttle({
+  default: { limit: 5,
+              ttl: 60000,},})
   @Post('login')
   async login( @Body() data: LoginDto,) {
     return this.authService.login(data);
@@ -33,6 +36,10 @@ export class AuthController {
     return req.user;
   }
 
+  @Throttle({
+
+  default: { limit: 3,
+              ttl: 60000,},})
   @Post('refresh')
   async refreshToken( @Body() data: RefreshTokenDto,) {
     return this.authService.refreshToken( data.refreshToken!,);
