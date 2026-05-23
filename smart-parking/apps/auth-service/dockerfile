@@ -1,0 +1,16 @@
+FROM node:20-alpine
+
+WORKDIR /app
+COPY package*.json ./
+COPY prisma ./prisma
+
+RUN npm install
+COPY . .
+
+RUN npx prisma generate
+RUN npx nx build @org/auth-service
+RUN ls
+RUN find .
+
+EXPOSE 3000
+CMD ["node", "apps/auth-service/dist/main.js"] 

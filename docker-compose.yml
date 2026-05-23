@@ -25,6 +25,27 @@ services:
     networks:
       - smartparking-network
 
+
+  auth-service:
+    build:
+      context: ./smart-parking
+      dockerfile: apps/auth-service/Dockerfile
+    container_name: smartparking-auth-service
+    restart: unless-stopped
+    depends_on: 
+      - postgres
+      - redis
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://admin:admin@postgres:5432/smartparking
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your_jwt_secret
+      JWT_REFRESH_SECRET: your_refresh_secret
+    ports:
+      - '3000:3000'
+    networks:
+      - smartparking-network
+
 volumes:
   postgres_data:
   redis_data:
