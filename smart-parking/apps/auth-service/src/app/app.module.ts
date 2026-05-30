@@ -12,9 +12,10 @@ import { AppRedisModule } from './redis/redis.module';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
 import { HealthModule } from './health/health.module';
+import { UserClientModule } from './user-client/user-client.module';
 
 @Module({
-  imports: [PrismaModule, HealthModule, AppRedisModule, AuditModule, AuthModule, ThrottlerModule.forRoot([{ttl: 60000,limit: 10,},]),
+  imports: [PrismaModule, HealthModule, UserClientModule, AppRedisModule, AuditModule, AuthModule, ThrottlerModule.forRoot([{ttl: 60000,limit: 10,},]),
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: Joi.object({
@@ -22,7 +23,10 @@ import { HealthModule } from './health/health.module';
         JWT_SECRET:Joi.string().required(),
         JWT_REFRESH_SECRET:Joi.string().required(),
         DATABASE_URL: Joi.string().required(),
-        REDIS_URL: Joi.string().required(),}),}),],
+        REDIS_URL: Joi.string().required(),
+        USER_SERVICE_URL: Joi.string().required().default('http://localhost:3001'),
+        INTERNAL_SERVICE_KEY: Joi.string().required(),
+      }),}),],
   controllers: [AppController],
   providers: [AppService, {
     provide: APP_GUARD,

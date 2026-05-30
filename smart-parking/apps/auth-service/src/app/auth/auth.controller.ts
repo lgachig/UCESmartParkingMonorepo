@@ -9,6 +9,9 @@ import { Role } from './enums/role.enum';
 import { RolesGuard } from './guards/roles.guard';
 import { ApiBearerAuth, ApiTags, } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -63,5 +66,31 @@ export class AuthController {
     const token = authHeader.split(' ')[1];
 
     return this.authService.logout( token,);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  async changePassword(
+    @Req() req: any,
+    @Body() data: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(req.user.userId, data);
+  }
+
+  @Throttle({
+    default: { limit: 3, ttl: 60000 },
+  })
+  @Post('forgot-password')
+  async forgotPassword(@Body() data: ForgotPasswordDto) {
+    return this.authService.forgotPassword(data);
+  }
+
+  @Throttle({
+    default: { limit: 5, ttl: 60000 },
+  })
+  @Post('reset-password')
+  async resetPassword(@Body() data: ResetPasswordDto) {
+    return this.authService.resetPassword(data);
   }
 } 

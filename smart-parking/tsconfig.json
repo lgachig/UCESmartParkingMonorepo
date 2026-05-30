@@ -5,6 +5,9 @@
   "references": [
     {
       "path": "./apps/auth-service"
+    },
+    {
+      "path": "./apps/user-service"
     }
   ]
 }

@@ -7,11 +7,13 @@ import { RolesGuard } from './guards/roles.guard';
 import { AuditModule } from '../audit/audit.module';
 import { AppRedisService } from '../redis/redis.service';
 import { AppRedisModule } from '../redis/redis.module';
+import { UserClientModule } from '../user-client/user-client.module';
 
 @Module({
   imports: [
     AuditModule,
     AppRedisModule,
+    UserClientModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: {

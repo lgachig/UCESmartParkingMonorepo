@@ -13,4 +13,4 @@ RUN ls
 RUN find .
 
 EXPOSE 3000
-CMD ["node", "apps/auth-service/dist/main.js"] 
+CMD ["sh", "-c", "npx prisma migrate deploy --schema prisma/auth/schema.prisma && node apps/auth-service/dist/main.js"]
