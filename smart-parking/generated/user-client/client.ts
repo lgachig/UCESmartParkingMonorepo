@@ -46,3 +46,8 @@ export { Prisma }
  * 
  */
 export type UserProfile = Prisma.UserProfileModel
+/**
+ * Model AuditLog
+ * 
+ */
+export type AuditLog = Prisma.AuditLogModel

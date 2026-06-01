@@ -5,14 +5,21 @@ import * as Joi from 'joi';
 import { UserModule } from './user/user.module';
 import { ConfigModule } from '@nestjs/config';
 import { HealthModule } from './health/health.module';
+import { MetricsModule } from './metrics/metrics.module';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { RequestLoggerMiddleware } from './middlewares/request-logger.middleware';
+import { MetricsMiddleware } from './middlewares/metrics.middleware';
+import { AuditModule } from './audit/audit.module';
+import { AppRedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
     UserModule,
     HealthModule,
+    MetricsModule,
+    AuditModule,
+    AppRedisModule,
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
     ConfigModule.forRoot({
       isGlobal: true,
@@ -28,6 +35,7 @@ import { RequestLoggerMiddleware } from './middlewares/request-logger.middleware
   controllers: [AppController],
   providers: [
     AppService,
+    MetricsMiddleware,
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
@@ -36,6 +44,8 @@ import { RequestLoggerMiddleware } from './middlewares/request-logger.middleware
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+    consumer
+      .apply(RequestLoggerMiddleware, MetricsMiddleware)
+      .forRoutes('*');
   }
 }

@@ -1,16 +1,28 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { AuditService } from '../audit/audit.service';
+import { AppRedisService } from '../redis/redis.service';
 import { CreateUserProfileDto } from '../dto/create-user-profile.dto';
 import { UpdateUserProfileDto } from '../dto/update-user-profile.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly auditService: AuditService,
+    private readonly redisService: AppRedisService,
+  ) { }
 
   async create(data: CreateUserProfileDto) {
-    return this.prismaService.userProfile.create({
-      data,
+    const profile = await this.prismaService.userProfile.create({ data });
+
+    await this.auditService.log({
+      action: 'USER_CREATED',
+      authUserId: profile.authUserId,
+      profileId: profile.id,
     });
+
+    return profile;
   }
 
   async findAll(page = 1, limit = 20) {
@@ -56,6 +68,16 @@ export class UsersService {
   }
 
   async findById(id: string) {
+    const cacheKey = `user-profile:id:${id}`;
+    try {
+      const cached = await this.redisService.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (err) {
+
+    }
+
     const profile = await this.prismaService.userProfile.findFirst({
       where: { id, isActive: true },
     });
@@ -64,16 +86,38 @@ export class UsersService {
       throw new NotFoundException('User profile not found');
     }
 
+    try {
+      await this.redisService.set(cacheKey, JSON.stringify(profile), 3600);
+    } catch (err) {
+
+    }
+
     return profile;
   }
 
   async findByAuthUserId(authUserId: string) {
+    const cacheKey = `user-profile:auth:${authUserId}`;
+    try {
+      const cached = await this.redisService.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (err) {
+
+    }
+
     const profile = await this.prismaService.userProfile.findFirst({
       where: { authUserId, isActive: true },
     });
 
     if (!profile) {
       throw new NotFoundException('User profile not found');
+    }
+
+    try {
+      await this.redisService.set(cacheKey, JSON.stringify(profile), 3600);
+    } catch (err) {
+
     }
 
     return profile;
@@ -85,33 +129,71 @@ export class UsersService {
 
   async updateMe(authUserId: string, data: UpdateUserProfileDto) {
     const profile = await this.findByAuthUserId(authUserId);
-
-    return this.prismaService.userProfile.update({
+    const updated = await this.prismaService.userProfile.update({
       where: { id: profile.id },
       data,
     });
+
+    await this.invalidateCache(profile);
+
+    await this.auditService.log({
+      action: 'PROFILE_UPDATED',
+      authUserId,
+      profileId: profile.id,
+      metadata: { updatedFields: Object.keys(data) },
+    });
+
+    return updated;
   }
 
   async update(id: string, data: UpdateUserProfileDto) {
     await this.findById(id);
-
-    return this.prismaService.userProfile.update({
+    const updated = await this.prismaService.userProfile.update({
       where: { id },
       data,
     });
+
+    await this.invalidateCache(updated);
+
+    await this.auditService.log({
+      action: 'USER_UPDATED',
+      authUserId: updated.authUserId,
+      profileId: id,
+      metadata: { updatedFields: Object.keys(data) },
+    });
+
+    return updated;
   }
 
   async deactivate(id: string) {
-    await this.findById(id);
-
-    const profile = await this.prismaService.userProfile.update({
+    const profile = await this.findById(id);
+    const updated = await this.prismaService.userProfile.update({
       where: { id },
       data: { isActive: false },
     });
 
+    await this.invalidateCache(profile);
+
+    await this.auditService.log({
+      action: 'USER_DEACTIVATED',
+      authUserId: profile.authUserId,
+      profileId: id,
+    });
+
     return {
       message: 'User profile deactivated successfully',
-      profile,
+      profile: updated,
     };
+  }
+
+  private async invalidateCache(profile: { id: string; authUserId: string }) {
+    try {
+      await Promise.all([
+        this.redisService.delete(`user-profile:id:${profile.id}`),
+        this.redisService.delete(`user-profile:auth:${profile.authUserId}`),
+      ]);
+    } catch (err) {
+
+    }
   }
 }

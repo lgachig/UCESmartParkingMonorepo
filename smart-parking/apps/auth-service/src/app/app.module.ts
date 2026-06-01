@@ -13,9 +13,11 @@ import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
 import { HealthModule } from './health/health.module';
 import { UserClientModule } from './user-client/user-client.module';
+import { MetricsModule } from './metrics/metrics.module';
+import { MetricsMiddleware } from './middlewares/metrics.middleware';
 
 @Module({
-  imports: [PrismaModule, HealthModule, UserClientModule, AppRedisModule, AuditModule, AuthModule, ThrottlerModule.forRoot([{ttl: 60000,limit: 10,},]),
+  imports: [PrismaModule, HealthModule, MetricsModule, UserClientModule, AppRedisModule, AuditModule, AuthModule, ThrottlerModule.forRoot([{ttl: 60000,limit: 10,},]),
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: Joi.object({
@@ -28,13 +30,15 @@ import { UserClientModule } from './user-client/user-client.module';
         INTERNAL_SERVICE_KEY: Joi.string().required(),
       }),}),],
   controllers: [AppController],
-  providers: [AppService, {
+  providers: [AppService, MetricsMiddleware, {
     provide: APP_GUARD,
     useClass: ThrottlerGuard,
   },],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+    consumer
+      .apply(RequestLoggerMiddleware, MetricsMiddleware)
+      .forRoutes('*');
   }
 }

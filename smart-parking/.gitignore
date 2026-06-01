@@ -49,4 +49,6 @@ Thumbs.db
 .nx/self-healing
 test-output
 
+logs
+
 /generated/prisma

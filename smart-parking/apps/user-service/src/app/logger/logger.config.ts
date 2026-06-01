@@ -11,16 +11,16 @@ export const winstonConfig = winston.createLogger({
     winston.format.errors({ stack: true }),
     winston.format.json(),
   ),
-  defaultMeta: { service: 'auth-service' },
+  defaultMeta: { service: 'user-service' },
   transports: [
     new winston.transports.Console({
       format: winston.format.combine(
         winston.format.colorize(),
-        utilities.format.nestLike('AuthService'),
+        utilities.format.nestLike('UserService'),
       ),
     }),
     new winston.transports.File({
-      filename: join(logsDir, 'auth-service.log'),
+      filename: join(logsDir, 'user-service.log'),
       maxsize: 5_242_880,
       maxFiles: 5,
     }),

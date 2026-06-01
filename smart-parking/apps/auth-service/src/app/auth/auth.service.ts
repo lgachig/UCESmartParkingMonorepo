@@ -31,7 +31,7 @@ export class AuthService {
     private readonly redisService: AppRedisService,
     private readonly configService: ConfigService,
     private readonly userClientService: UserClientService,
-  ) {}
+  ) { }
 
   async register(data: RegisterDto) {
     const existingUser = await this.prisma.user.findUnique({
@@ -101,7 +101,6 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 
-    // Guardar refresh token en DB para poder revocarlo
     await this.prisma.refreshToken.create({
       data: {
         token: tokens.refreshToken,
@@ -149,6 +148,10 @@ export class AuthService {
     });
 
     if (!stored) {
+      await this.auditService.log({
+        action: 'TOKEN_REFRESH_FAILED',
+        metadata: { reason: 'invalid_or_expired' },
+      });
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
@@ -157,7 +160,6 @@ export class AuthService {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
       });
 
-      // Rotar: eliminar el anterior y crear uno nuevo
       await this.prisma.refreshToken.delete({ where: { id: stored.id } });
 
       const tokens = await this.generateTokens(
@@ -174,22 +176,37 @@ export class AuthService {
         },
       });
 
+      await this.auditService.log({
+        action: 'TOKEN_REFRESHED',
+        userId: payload.sub,
+        email: payload.email,
+      });
+
       return tokens;
     } catch {
+      await this.auditService.log({
+        action: 'TOKEN_REFRESH_FAILED',
+        userId: stored.userId,
+        metadata: { reason: 'verification_failed' },
+      });
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
 
-  async logout(token: string) {
-    const decoded = this.jwtService.decode(token) as any;
+  async logout(token: string, userId?: string, email?: string) {
+    const decoded = this.jwtService.decode(token) as { sub: string; exp: number };
     const expiresIn = decoded.exp - Math.floor(Date.now() / 1000);
 
-    // Blacklist el access token en Redis
     await this.redisService.blacklistToken(token, expiresIn);
 
-    // Revocar todos los refresh tokens del usuario en DB
     await this.prisma.refreshToken.deleteMany({
       where: { userId: decoded.sub },
+    });
+
+    await this.auditService.log({
+      action: 'USER_LOGOUT',
+      userId: userId ?? decoded.sub,
+      email,
     });
 
     return { message: 'Logout successful' };

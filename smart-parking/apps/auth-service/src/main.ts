@@ -21,7 +21,7 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   const globalPrefix = 'api';
-  app.setGlobalPrefix(globalPrefix);
+  app.setGlobalPrefix(globalPrefix, { exclude: ['metrics'] });
   app.useGlobalFilters( new HttpExceptionFilter(),);
   app.useGlobalInterceptors( new TransformResponseInterceptor(), );
   app.use(helmet());
@@ -56,6 +56,9 @@ async function bootstrap() {
   Logger.log(
     `🚀 Application is running on: http://localhost:${port}/${globalPrefix}`,
   );
+  Logger.log(`📊 Metrics: http://localhost:${port}/metrics`);
+  Logger.log(`📚 Swagger docs: http://localhost:${port}/docs`);
+  Logger.log(`📝 Logs file: logs/auth-service.log`);
 }
 
 bootstrap();

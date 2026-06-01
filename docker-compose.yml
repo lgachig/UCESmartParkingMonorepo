@@ -11,6 +11,12 @@ services:
       - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d smartparking"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - smartparking-network
 
@@ -22,19 +28,25 @@ services:
       - '6379:6379'
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
       - smartparking-network
-
 
   auth-service:
     build:
       context: ./smart-parking
-      dockerfile: apps/auth-service/Dockerfile
+      dockerfile: apps/auth-service/dockerfile
     container_name: smartparking-auth-service
     restart: unless-stopped
-    depends_on: 
-      - postgres
-      - redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       PORT: 3000
       DATABASE_URL: postgresql://admin:admin@postgres:5432/smartparking
@@ -43,6 +55,28 @@ services:
       JWT_REFRESH_SECRET: your_refresh_secret
     ports:
       - '3000:3000'
+    networks:
+      - smartparking-network
+
+  user-service:
+    build:
+      context: ./smart-parking
+      dockerfile: apps/user-service/dockerfile
+    container_name: smartparking-user-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      USER_SERVICE_PORT: 3001
+      USER_DATABASE_URL: postgresql://admin:admin@postgres:5432/userdb
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your_jwt_secret
+      INTERNAL_SERVICE_KEY: internal_service_secret_key
+    ports:
+      - '3001:3001'
     networks:
       - smartparking-network
 

@@ -21,3 +21,14 @@ model UserProfile {
 
   @@map("user_profiles")
 }
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String
+  authUserId String?
+  profileId  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}

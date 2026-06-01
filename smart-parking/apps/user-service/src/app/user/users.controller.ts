@@ -10,7 +10,16 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { UsersService } from './users.service';
 import { CreateUserProfileDto } from '../dto/create-user-profile.dto';
 import { UpdateUserProfileDto } from '../dto/update-user-profile.dto';
@@ -29,20 +38,33 @@ import { Role } from '../auth/enums/role.enum';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @ApiOperation({ summary: 'Create user profile (internal - auth-service only)' })
+  @ApiBody({ type: CreateUserProfileDto })
+  @ApiResponse({ status: 201, description: 'Profile created' })
+  @ApiResponse({ status: 401, description: 'Invalid service key' })
   @UseGuards(ServiceKeyGuard)
   @Post()
   create(@Body() dto: CreateUserProfileDto) {
     return this.usersService.create(dto);
   }
 
+  @ApiOperation({ summary: 'Get my profile' })
   @ApiBearerAuth()
+  @ApiResponse({ status: 200, description: 'Authenticated user profile' })
+  @ApiResponse({ status: 401, description: 'JWT required' })
   @UseGuards(JwtAuthGuard)
   @Get('me')
   findMe(@Req() req: { user: { userId: string } }) {
     return this.usersService.findMe(req.user.userId);
   }
 
+  @ApiOperation({ summary: 'Update my profile' })
   @ApiBearerAuth()
+  @ApiBody({ type: UpdateUserProfileDto })
+  @ApiResponse({ status: 200, description: 'Profile updated' })
+  @ApiResponse({ status: 429, description: 'Too many requests (limit: 10/min)' })
+  @ApiBearerAuth()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @UseGuards(JwtAuthGuard)
   @Patch('me')
   updateMe(
@@ -52,19 +74,29 @@ export class UsersController {
     return this.usersService.updateMe(req.user.userId, dto);
   }
 
+  @ApiOperation({ summary: 'Search users (admin)' })
   @ApiBearerAuth()
+  @ApiQuery({ name: 'q', required: true, example: 'Luis' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 20 })
+  @ApiResponse({ status: 200, description: 'Search results' })
+  @ApiResponse({ status: 403, description: 'Admin role required' })
+  @ApiResponse({ status: 429, description: 'Too many requests (limit: 15/min)' })
+  @Throttle({ default: { limit: 15, ttl: 60000 } })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Get('search')
   search(@Query() query: SearchUsersQueryDto) {
-    return this.usersService.search(
-      query.q,
-      query.page,
-      query.limit,
-    );
+    return this.usersService.search(query.q, query.page, query.limit);
   }
 
+  @ApiOperation({ summary: 'List all active profiles (admin)' })
   @ApiBearerAuth()
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 20 })
+  @ApiResponse({ status: 200, description: 'Paginated profile list' })
+  @ApiResponse({ status: 429, description: 'Too many requests (limit: 15/min)' })
+  @Throttle({ default: { limit: 15, ttl: 60000 } })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Get()
@@ -72,7 +104,11 @@ export class UsersController {
     return this.usersService.findAll(query.page, query.limit);
   }
 
+  @ApiOperation({ summary: 'Get profile by auth user ID (admin)' })
   @ApiBearerAuth()
+  @ApiParam({ name: 'authUserId', example: '406fda9e-8ebc-4816-95d7-6af3d1af4392' })
+  @ApiResponse({ status: 200, description: 'Profile found' })
+  @ApiResponse({ status: 404, description: 'Profile not found' })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Get('profile/:authUserId')
@@ -80,7 +116,10 @@ export class UsersController {
     return this.usersService.findByAuthUserId(authUserId);
   }
 
+  @ApiOperation({ summary: 'Get profile by profile ID (admin)' })
   @ApiBearerAuth()
+  @ApiParam({ name: 'id', description: 'Internal profile UUID' })
+  @ApiResponse({ status: 200, description: 'Profile found' })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Get(':id')
@@ -88,7 +127,12 @@ export class UsersController {
     return this.usersService.findById(id);
   }
 
+  @ApiOperation({ summary: 'Update profile by ID (admin)' })
   @ApiBearerAuth()
+  @ApiParam({ name: 'id', description: 'Internal profile UUID' })
+  @ApiBody({ type: UpdateUserProfileDto })
+  @ApiResponse({ status: 429, description: 'Too many requests (limit: 10/min)' })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Patch(':id')
@@ -96,7 +140,10 @@ export class UsersController {
     return this.usersService.update(id, dto);
   }
 
+  @ApiOperation({ summary: 'Deactivate profile (admin soft delete)' })
   @ApiBearerAuth()
+  @ApiParam({ name: 'id', description: 'Internal profile UUID' })
+  @ApiResponse({ status: 200, description: 'Profile deactivated' })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Delete(':id')
