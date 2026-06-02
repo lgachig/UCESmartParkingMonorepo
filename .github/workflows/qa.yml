@@ -17,27 +17,19 @@ jobs:
     name: Build & Push to Docker Hub
     runs-on: ubuntu-latest
     environment: qa
+    # Override in GitHub: Environment qa → Variables, or repo Settings → Actions → Variables
+    env:
+      QA_AUTH_API_URL: ${{ vars.QA_AUTH_API_URL || secrets.QA_AUTH_API_URL || 'http://32.199.64.38:3000/api' }}
+      QA_USER_API_URL: ${{ vars.QA_USER_API_URL || secrets.QA_USER_API_URL || 'http://100.50.63.232:3001/api' }}
+      QA_VEHICLE_API_URL: ${{ vars.QA_VEHICLE_API_URL || secrets.QA_VEHICLE_API_URL || 'http://34.204.142.7:3003/api' }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify QA API URLs (frontend build)
-        env:
-          QA_AUTH_API_URL: ${{ vars.QA_AUTH_API_URL }}
-          QA_USER_API_URL: ${{ vars.QA_USER_API_URL }}
-          QA_VEHICLE_API_URL: ${{ vars.QA_VEHICLE_API_URL }}
+      - name: Log QA API URLs used for frontend build
         run: |
-          missing=0
-          for name in QA_AUTH_API_URL QA_USER_API_URL QA_VEHICLE_API_URL; do
-            eval "val=\$$name"
-            if [ -z "$val" ]; then
-              echo "::error::Missing environment variable: $name"
-              echo "Add it in GitHub → Settings → Environments → qa → Environment variables"
-              missing=1
-            else
-              echo "$name is set"
-            fi
-          done
-          [ "$missing" -eq 0 ] || exit 1
+          echo "QA_AUTH_API_URL=$QA_AUTH_API_URL"
+          echo "QA_USER_API_URL=$QA_USER_API_URL"
+          echo "QA_VEHICLE_API_URL=$QA_VEHICLE_API_URL"
 
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -77,9 +69,9 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-frontend:qa
           build-args: |
-            NEXT_PUBLIC_AUTH_API_URL=${{ vars.QA_AUTH_API_URL }}
-            NEXT_PUBLIC_USER_API_URL=${{ vars.QA_USER_API_URL }}
-            NEXT_PUBLIC_VEHICLE_API_URL=${{ vars.QA_VEHICLE_API_URL }}
+            NEXT_PUBLIC_AUTH_API_URL=${{ env.QA_AUTH_API_URL }}
+            NEXT_PUBLIC_USER_API_URL=${{ env.QA_USER_API_URL }}
+            NEXT_PUBLIC_VEHICLE_API_URL=${{ env.QA_VEHICLE_API_URL }}
 
   deploy:
     name: Deploy on EC2 instances
