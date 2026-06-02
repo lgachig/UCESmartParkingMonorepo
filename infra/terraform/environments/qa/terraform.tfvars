@@ -1,7 +1,7 @@
 aws_region       = "us-east-1"
 environment      = "qa"
 instance_type    = "t3.medium"
-key_name         = "practicaUTest"
+key_name         = "practicaUPro"
 allowed_ssh_cidr = "0.0.0.0/0"
 dockerhub_user   = "lgachig"
 

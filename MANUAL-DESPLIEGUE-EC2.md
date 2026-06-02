@@ -159,7 +159,6 @@ terraform apply -var-file=terraform.tfvars
 
 ```bash
 cd infra/terraform/environments/qa   # o prod
-
 cp terraform.tfvars.example terraform.tfvars
 # Editar: key_name, dockerhub_user, allowed_ssh_cidr, aws_region
 ```
