@@ -15,6 +15,8 @@ mkdir -p /opt/smartparking
 cat > /opt/smartparking/.env <<ENVEOF
 ${env_content}
 ENVEOF
+chown -R ec2-user:ec2-user /opt/smartparking
+chmod 644 /opt/smartparking/.env
 
 cat > /opt/smartparking/deploy.sh <<'DEPLOY'
 #!/usr/bin/env bash
