@@ -8,7 +8,7 @@ on:
     types: [closed]
     branches: [PROD, prod]
   workflow_dispatch:
- 
+  
 concurrency:
   group: prod-pipeline-${{ github.ref }}
   cancel-in-progress: false
