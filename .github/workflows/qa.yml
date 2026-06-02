@@ -1,0 +1,90 @@
+name: QA CI/CD
+
+on:
+  push:
+    branches: [QA, qa]
+  workflow_dispatch:
+
+concurrency:
+  group: qa-pipeline
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  docker-push:
+    name: Build & Push to Docker Hub
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push auth-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking
+          file: ./smart-parking/apps/auth-service/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-auth:qa
+
+      - name: Push user-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking
+          file: ./smart-parking/apps/user-service/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-user:qa
+
+      - name: Push vehicle-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking
+          file: ./smart-parking/apps/vehicle-service/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-vehicle:qa
+
+      - name: Push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking/apps/frontend
+          file: ./smart-parking/apps/frontend/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-frontend:qa
+          build-args: |
+            NEXT_PUBLIC_AUTH_API_URL=${{ vars.QA_AUTH_API_URL }}
+            NEXT_PUBLIC_USER_API_URL=${{ vars.QA_USER_API_URL }}
+            NEXT_PUBLIC_VEHICLE_API_URL=${{ vars.QA_VEHICLE_API_URL }}
+
+  deploy:
+    name: Deploy on EC2 instances
+    needs: docker-push
+    runs-on: ubuntu-latest
+    environment: qa
+    strategy:
+      matrix:
+        include:
+          - name: auth
+            host_secret: QA_EC2_AUTH_HOST
+          - name: user
+            host_secret: QA_EC2_USER_HOST
+          - name: vehicle
+            host_secret: QA_EC2_VEHICLE_HOST
+          - name: frontend
+            host_secret: QA_EC2_FRONTEND_HOST
+    steps:
+      - name: Deploy ${{ matrix.name }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets[matrix.host_secret] }}
+          username: ec2-user
+          key: ${{ secrets.QA_EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            export DOCKERHUB_USER="${{ secrets.DOCKERHUB_USERNAME }}"
+            export DOCKERHUB_TOKEN="${{ secrets.DOCKERHUB_TOKEN }}"
+            bash /opt/smartparking/deploy.sh
