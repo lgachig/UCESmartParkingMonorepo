@@ -271,8 +271,13 @@ export class AuthService {
         ttlSeconds,
       );
 
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+      const resetUrl = frontendUrl
+        ? `${frontendUrl.replace(/\/$/, '')}/reset-password?token=${token}`
+        : undefined;
+
       this.logger.log(
-        `Password reset token generated for ${user.email} (dev: ${token})`,
+        `Password reset token generated for ${user.email}${resetUrl ? ` → ${resetUrl}` : ` (dev token: ${token})`}`,
       );
 
       await this.auditService.log({
@@ -280,6 +285,17 @@ export class AuthService {
         userId: user.id,
         email: user.email,
       });
+
+      const response: { message: string; resetUrl?: string } = {
+        message:
+          'If an account with that email exists, a password reset link has been sent',
+      };
+
+      if (resetUrl && this.configService.get<string>('NODE_ENV') !== 'production') {
+        response.resetUrl = resetUrl;
+      }
+
+      return response;
     }
 
     return {

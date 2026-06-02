@@ -8,6 +8,9 @@
     },
     {
       "path": "./apps/user-service"
+    },
+    {
+      "path": "./apps/vehicle-service"
     }
   ]
 }

@@ -1,14 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-
-interface AuditLogEntry {
-  action: string;
-  userId?: string;
-  email?: string;
-  ipAddress?: string;
-  userAgent?: string;
-  metadata?: any;
-}
+import type { AuditLogEntry } from '../interfaces/audit-log.interface';
 
 @Injectable()
 export class AuditService {

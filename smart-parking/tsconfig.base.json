@@ -19,7 +19,8 @@
     "customConditions": ["@org/source"],
     "paths": {
       "@generated/auth-client/*": ["./generated/auth-client/*"],
-      "@generated/user-client/*": ["./generated/user-client/*"]
+      "@generated/user-client/*": ["./generated/user-client/*"],
+      "@generated/vehicle-client/*": ["./generated/vehicle-client/*"]
     }
   }
 }

@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../../generated/vehicle-client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Vehicle {
+  id                 String   @id @default(uuid())
+  authUserId         String   @unique
+  registrationNumber String
+  plate              String
+  color              String
+  model              String
+  year               Int
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("vehicles")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String
+  authUserId String?
+  vehicleId  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}

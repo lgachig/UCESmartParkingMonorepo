@@ -53,6 +53,10 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: your_jwt_secret
       JWT_REFRESH_SECRET: your_refresh_secret
+      USER_SERVICE_URL: http://user-service:3001
+      INTERNAL_SERVICE_KEY: internal_service_secret_key
+      CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
+      FRONTEND_URL: http://localhost:3002
     ports:
       - '3000:3000'
     networks:
@@ -75,8 +79,51 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: your_jwt_secret
       INTERNAL_SERVICE_KEY: internal_service_secret_key
+      CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
     ports:
       - '3001:3001'
+    networks:
+      - smartparking-network
+
+  vehicle-service:
+    build:
+      context: ./smart-parking
+      dockerfile: apps/vehicle-service/dockerfile
+    container_name: smartparking-vehicle-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      VEHICLE_SERVICE_PORT: 3003
+      VEHICLE_DATABASE_URL: postgresql://admin:admin@postgres:5432/vehicledb
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your_jwt_secret
+      INTERNAL_SERVICE_KEY: internal_service_secret_key
+      CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
+    ports:
+      - '3003:3003'
+    networks:
+      - smartparking-network
+
+  frontend:
+    build:
+      context: ./smart-parking/apps/frontend
+      dockerfile: dockerfile
+      args:
+        NEXT_PUBLIC_AUTH_API_URL: http://localhost:3000/api
+        NEXT_PUBLIC_USER_API_URL: http://localhost:3001/api
+        NEXT_PUBLIC_VEHICLE_API_URL: http://localhost:3003/api
+    container_name: smartparking-frontend
+    restart: unless-stopped
+    depends_on:
+      - auth-service
+      - user-service
+      - vehicle-service
+    ports:
+      - '3002:3002'
     networks:
       - smartparking-network
 

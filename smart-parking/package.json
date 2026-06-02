@@ -39,9 +39,6 @@
     "webpack-cli": "^5.1.4"
   },
   "workspaces": [
-    "packages/*",
-    "auth-service",
-    "auth-service-e2e",
     "apps/*"
   ],
   "dependencies": {

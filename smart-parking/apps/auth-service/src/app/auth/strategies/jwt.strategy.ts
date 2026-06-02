@@ -5,12 +5,7 @@ import { AppRedisService } from '../../redis/redis.service';
 import { Request } from 'express';
 import { UnauthorizedException } from '@nestjs/common'; 
 import { ConfigService } from '@nestjs/config';
-
-interface JwtPayload {
-  sub: string;
-  email: string;
-  role: string;
-}
+import type { JwtPayload } from '../interfaces/jwt-payload.interface';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy( Strategy,) {

@@ -29,6 +29,7 @@ import { AppRedisModule } from './redis/redis.module';
         JWT_SECRET: Joi.string().required(),
         REDIS_URL: Joi.string().required(),
         INTERNAL_SERVICE_KEY: Joi.string().required(),
+        CORS_ORIGINS: Joi.string().optional(),
       }),
     }),
   ],

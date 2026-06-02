@@ -8,6 +8,7 @@ import { DocumentBuilder, SwaggerModule, } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { HttpExceptionFilter } from './app/filters/http-exception.filter';
 import { TransformResponseInterceptor } from './app/interceptors/transform-response.interceptor';
+import { applyCors } from '../../../shared/cors';
 
 async function bootstrap() {
 
@@ -31,14 +32,7 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
       transform: true,}),
   );
-  // Enable CORS for specific origins
-  app.enableCors({
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3001',
-    ],
-    credentials: true,
-  });
+  applyCors(app, configService);
 
   const config = new DocumentBuilder().setTitle('Smart Parking Auth API',)
     .setDescription( 'Authentication microservice for Smart Parking',)

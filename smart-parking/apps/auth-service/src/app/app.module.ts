@@ -28,6 +28,8 @@ import { MetricsMiddleware } from './middlewares/metrics.middleware';
         REDIS_URL: Joi.string().required(),
         USER_SERVICE_URL: Joi.string().required().default('http://localhost:3001'),
         INTERNAL_SERVICE_KEY: Joi.string().required(),
+        CORS_ORIGINS: Joi.string().optional(),
+        FRONTEND_URL: Joi.string().optional(),
       }),}),],
   controllers: [AppController],
   providers: [AppService, MetricsMiddleware, {

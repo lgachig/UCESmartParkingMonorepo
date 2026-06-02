@@ -8,6 +8,7 @@ import { AppModule } from './app/app.module';
 import { HttpExceptionFilter } from './app/filters/http-exception.filter';
 import { TransformResponseInterceptor } from './app/interceptors/transform-response.interceptor';
 import { winstonConfig } from './app/logger/logger.config';
+import { applyCors } from '../../../shared/cors';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -26,10 +27,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
-    credentials: true,
-  });
+  applyCors(app, configService);
 
   const config = new DocumentBuilder()
     .setTitle('Smart Parking User API')
