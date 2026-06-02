@@ -1,0 +1,136 @@
+name: QA CI/CD
+
+on:
+  push:
+    branches: [QA, qa]
+  workflow_dispatch:
+
+concurrency:
+  group: qa-pipeline-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  docker-push:
+    name: Build & Push to Docker Hub
+    runs-on: ubuntu-latest
+    environment: qa
+    # Override in GitHub: Environment qa → Variables, or repo Settings → Actions → Variables
+    env:
+      QA_AUTH_API_URL: ${{ vars.QA_AUTH_API_URL || secrets.QA_AUTH_API_URL || 'http://32.199.64.38:3000/api' }}
+      QA_USER_API_URL: ${{ vars.QA_USER_API_URL || secrets.QA_USER_API_URL || 'http://100.50.63.232:3001/api' }}
+      QA_VEHICLE_API_URL: ${{ vars.QA_VEHICLE_API_URL || secrets.QA_VEHICLE_API_URL || 'http://34.204.142.7:3003/api' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log QA API URLs used for frontend build
+        run: |
+          echo "QA_AUTH_API_URL=$QA_AUTH_API_URL"
+          echo "QA_USER_API_URL=$QA_USER_API_URL"
+          echo "QA_VEHICLE_API_URL=$QA_VEHICLE_API_URL"
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push auth-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking
+          file: ./smart-parking/apps/auth-service/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-auth:qa
+
+      - name: Push user-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking
+          file: ./smart-parking/apps/user-service/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-user:qa
+
+      - name: Push vehicle-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking
+          file: ./smart-parking/apps/vehicle-service/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-vehicle:qa
+
+      - name: Push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking/apps/frontend
+          file: ./smart-parking/apps/frontend/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-frontend:qa
+          build-args: |
+            NEXT_PUBLIC_AUTH_API_URL=${{ env.QA_AUTH_API_URL }}
+            NEXT_PUBLIC_USER_API_URL=${{ env.QA_USER_API_URL }}
+            NEXT_PUBLIC_VEHICLE_API_URL=${{ env.QA_VEHICLE_API_URL }}
+
+  deploy:
+    name: Deploy on EC2 instances
+    needs: docker-push
+    runs-on: ubuntu-latest
+    environment: qa
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: auth
+            host_secret: QA_EC2_AUTH_HOST
+            service_name: auth-service
+          - name: user
+            host_secret: QA_EC2_USER_HOST
+            service_name: app
+          - name: vehicle
+            host_secret: QA_EC2_VEHICLE_HOST
+            service_name: app
+          - name: frontend
+            host_secret: QA_EC2_FRONTEND_HOST
+            service_name: app
+    steps:
+      - name: Deploy ${{ matrix.name }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets[matrix.host_secret] }}
+          username: ec2-user
+          key: ${{ secrets.QA_EC2_SSH_KEY }}
+          port: 22
+          timeout: 120s
+          command_timeout: 15m
+          script_stop: true
+          script: |
+            export DOCKERHUB_USER="${{ secrets.DOCKERHUB_USERNAME }}"
+            export DOCKERHUB_TOKEN="${{ secrets.DOCKERHUB_TOKEN }}"
+            cd /opt/smartparking
+            patch_env() {
+              key="$1"
+              val="$2"
+              env_file="/opt/smartparking/.env"
+              if sudo grep -q "^${key}=" "$env_file" 2>/dev/null; then
+                sudo sed -i "s|^${key}=.*|${key}=${val}|" "$env_file"
+              else
+                echo "${key}=${val}" | sudo tee -a "$env_file" > /dev/null
+              fi
+            }
+            CORS_LIST="http://${{ secrets.QA_EC2_FRONTEND_HOST }}:3002,http://${{ secrets.QA_EC2_AUTH_HOST }}:3000,http://${{ secrets.QA_EC2_USER_HOST }}:3001,http://${{ secrets.QA_EC2_VEHICLE_HOST }}:3003"
+            if [ "${{ matrix.name }}" = "auth" ]; then
+              patch_env USER_SERVICE_URL "http://${{ secrets.QA_EC2_USER_HOST }}:3001"
+              patch_env FRONTEND_URL "http://${{ secrets.QA_EC2_FRONTEND_HOST }}:3002"
+              patch_env CORS_ORIGINS "$CORS_LIST"
+            fi
+            if [ "${{ matrix.name }}" = "user" ] || [ "${{ matrix.name }}" = "vehicle" ]; then
+              patch_env CORS_ORIGINS "$CORS_LIST"
+            fi
+            if [ -n "${DOCKERHUB_TOKEN:-}" ] && [ -n "${DOCKERHUB_USER:-}" ]; then
+              echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USER}" --password-stdin
+            fi
+            /usr/local/bin/docker-compose pull
+            /usr/local/bin/docker-compose up -d --force-recreate ${{ matrix.service_name }}
+            /usr/local/bin/docker-compose ps

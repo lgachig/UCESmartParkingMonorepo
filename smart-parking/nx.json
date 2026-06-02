@@ -51,7 +51,7 @@
       "options": {
         "targetName": "test"
       },
-      "exclude": ["apps/auth-service-e2e/**/*"]
+      "exclude": ["apps/auth-service-e2e/**/*", "apps/user-service-e2e/**/*"]
     }
   ],
   "nxCloudId": "6a04f199d9c12b94101d9d74",

@@ -1,0 +1,20 @@
+aws_region       = "us-east-1"
+environment      = "qa"
+key_name         = "TU_KEY_PAIR_EC2"
+allowed_ssh_cidr = "TU_IP_PUBLICA/32"
+dockerhub_user   = "TU_USUARIO_DOCKERHUB"
+
+# Primer apply: valores temporales
+frontend_url     = "http://0.0.0.0:3002"
+user_service_url = "http://0.0.0.0:3001"
+cors_origins     = "http://0.0.0.0:3002"
+
+# Segundo apply: reemplazar con las Elastic IP de terraform output
+# frontend_url     = "http://54.12.34.56:3002"
+# user_service_url = "http://54.12.34.57:3001"
+# cors_origins     = "http://54.12.34.56:3002,http://54.12.34.58:3000,http://54.12.34.57:3001,http://54.12.34.59:3003"
+
+# Secretos (NO poner aquí — exportar en terminal):
+# export TF_VAR_jwt_secret="..."
+# export TF_VAR_jwt_refresh_secret="..."
+# export TF_VAR_internal_service_key="..."

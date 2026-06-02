@@ -4,10 +4,13 @@
   "files": [],
   "references": [
     {
-      "path": "./apps/auth-service-e2e"
+      "path": "./apps/auth-service"
     },
     {
-      "path": "./apps/auth-service"
+      "path": "./apps/user-service"
+    },
+    {
+      "path": "./apps/vehicle-service"
     }
   ]
 }
