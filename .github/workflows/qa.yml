@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: qa-pipeline
-  cancel-in-progress: true
+  group: qa-pipeline-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -79,6 +79,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: qa
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: auth
@@ -96,6 +97,9 @@ jobs:
           host: ${{ secrets[matrix.host_secret] }}
           username: ec2-user
           key: ${{ secrets.QA_EC2_SSH_KEY }}
+          port: 22
+          timeout: 120s
+          command_timeout: 15m
           script_stop: true
           script: |
             export DOCKERHUB_USER="${{ secrets.DOCKERHUB_USERNAME }}"
