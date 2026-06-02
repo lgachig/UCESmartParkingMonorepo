@@ -84,12 +84,16 @@ jobs:
         include:
           - name: auth
             host_secret: QA_EC2_AUTH_HOST
+            service_name: auth-service
           - name: user
             host_secret: QA_EC2_USER_HOST
+            service_name: app
           - name: vehicle
             host_secret: QA_EC2_VEHICLE_HOST
+            service_name: app
           - name: frontend
             host_secret: QA_EC2_FRONTEND_HOST
+            service_name: app
     steps:
       - name: Deploy ${{ matrix.name }}
         uses: appleboy/ssh-action@v1.2.0
@@ -105,9 +109,27 @@ jobs:
             export DOCKERHUB_USER="${{ secrets.DOCKERHUB_USERNAME }}"
             export DOCKERHUB_TOKEN="${{ secrets.DOCKERHUB_TOKEN }}"
             cd /opt/smartparking
+            patch_env() {
+              key="$1"
+              val="$2"
+              if grep -q "^${key}=" .env 2>/dev/null; then
+                sed -i "s|^${key}=.*|${key}=${val}|" .env
+              else
+                echo "${key}=${val}" >> .env
+              fi
+            }
+            CORS_LIST="http://${{ secrets.QA_EC2_FRONTEND_HOST }}:3002,http://${{ secrets.QA_EC2_AUTH_HOST }}:3000,http://${{ secrets.QA_EC2_USER_HOST }}:3001,http://${{ secrets.QA_EC2_VEHICLE_HOST }}:3003"
+            if [ "${{ matrix.name }}" = "auth" ]; then
+              patch_env USER_SERVICE_URL "http://${{ secrets.QA_EC2_USER_HOST }}:3001"
+              patch_env FRONTEND_URL "http://${{ secrets.QA_EC2_FRONTEND_HOST }}:3002"
+              patch_env CORS_ORIGINS "$CORS_LIST"
+            fi
+            if [ "${{ matrix.name }}" = "user" ] || [ "${{ matrix.name }}" = "vehicle" ]; then
+              patch_env CORS_ORIGINS "$CORS_LIST"
+            fi
             if [ -n "${DOCKERHUB_TOKEN:-}" ] && [ -n "${DOCKERHUB_USER:-}" ]; then
               echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USER}" --password-stdin
             fi
             /usr/local/bin/docker-compose pull
-            /usr/local/bin/docker-compose up -d
+            /usr/local/bin/docker-compose up -d --force-recreate ${{ matrix.service_name }}
             /usr/local/bin/docker-compose ps
