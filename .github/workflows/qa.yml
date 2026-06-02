@@ -100,4 +100,10 @@ jobs:
           script: |
             export DOCKERHUB_USER="${{ secrets.DOCKERHUB_USERNAME }}"
             export DOCKERHUB_TOKEN="${{ secrets.DOCKERHUB_TOKEN }}"
-            bash /opt/smartparking/deploy.sh
+            cd /opt/smartparking
+            if [ -n "${DOCKERHUB_TOKEN:-}" ] && [ -n "${DOCKERHUB_USER:-}" ]; then
+              echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USER}" --password-stdin
+            fi
+            /usr/local/bin/docker-compose pull
+            /usr/local/bin/docker-compose up -d
+            /usr/local/bin/docker-compose ps
