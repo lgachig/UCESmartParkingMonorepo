@@ -3,12 +3,11 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
 import { winstonConfig } from './app/logger/logger.config';
 import { WinstonModule } from 'nest-winston';
-import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule, } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { HttpExceptionFilter } from './app/filters/http-exception.filter';
 import { TransformResponseInterceptor } from './app/interceptors/transform-response.interceptor';
-import { applyCors } from '../../../shared/cors';
+import { applyCors, configureHelmet } from '../../../shared/cors';
 
 async function bootstrap() {
 
@@ -25,14 +24,14 @@ async function bootstrap() {
   app.setGlobalPrefix(globalPrefix, { exclude: ['metrics'] });
   app.useGlobalFilters( new HttpExceptionFilter(),);
   app.useGlobalInterceptors( new TransformResponseInterceptor(), );
-  app.use(helmet());
+  applyCors(app, configService);
+  app.use(configureHelmet());
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,}),
   );
-  applyCors(app, configService);
 
   const config = new DocumentBuilder().setTitle('Smart Parking Auth API',)
     .setDescription( 'Authentication microservice for Smart Parking',)

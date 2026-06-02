@@ -3,12 +3,11 @@ import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { WinstonModule } from 'nest-winston';
-import helmet from 'helmet';
 import { AppModule } from './app/app.module';
 import { HttpExceptionFilter } from './app/filters/http-exception.filter';
 import { TransformResponseInterceptor } from './app/interceptors/transform-response.interceptor';
 import { winstonConfig } from './app/logger/logger.config';
-import { applyCors } from '../../../shared/cors';
+import { applyCors, configureHelmet } from '../../../shared/cors';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -19,7 +18,8 @@ async function bootstrap() {
   app.setGlobalPrefix('api', { exclude: ['metrics'] });
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new TransformResponseInterceptor());
-  app.use(helmet());
+  applyCors(app, configService);
+  app.use(configureHelmet());
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -27,7 +27,6 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  applyCors(app, configService);
 
   const config = new DocumentBuilder()
     .setTitle('Smart Parking Vehicle API')
