@@ -1,6 +1,7 @@
 terraform {
   required_version = ">= 1.5.0"
-  backend "s3" {}
+  # Estado local (terraform.tfstate en esta carpeta).
+  # Facilita cambiar de laboratorio AWS sin bucket S3 ni credenciales extra para el backend.
   required_providers {
     aws = { source = "hashicorp/aws", version = "~> 5.0" }
   }
@@ -15,16 +16,17 @@ provider "aws" {
 
 # 1) Auth EC2 — postgres + redis + auth-service
 module "auth" {
-  source           = "../../modules/microservice-ec2"
-  name             = "auth"
-  environment      = var.environment
-  instance_type    = var.instance_type
-  key_name         = var.key_name
-  allowed_ssh_cidr = var.allowed_ssh_cidr
-  service_port     = 3000
-  dockerhub_user   = var.dockerhub_user
-  docker_image     = "smartparking-auth"
-  env_content      = <<-EOF
+  source             = "../../modules/microservice-ec2"
+  name               = "auth"
+  environment        = var.environment
+  instance_type      = var.instance_type
+  key_name           = var.key_name
+  allowed_ssh_cidr   = var.allowed_ssh_cidr
+  service_port       = 3000
+  dockerhub_user     = var.dockerhub_user
+  docker_image       = "smartparking-auth"
+  docker_image_tag   = var.environment
+  env_content        = <<-EOF
     DOCKERHUB_USER=${var.dockerhub_user}
     PORT=3000
     DATABASE_URL=postgresql://admin:admin@postgres:5432/smartparking
@@ -40,16 +42,17 @@ module "auth" {
 
 # 2) User EC2 — connects to postgres/redis on auth EC2
 module "user" {
-  source           = "../../modules/microservice-ec2"
-  name             = "user"
-  environment      = var.environment
-  instance_type    = var.instance_type
-  key_name         = var.key_name
-  allowed_ssh_cidr = var.allowed_ssh_cidr
-  service_port     = 3001
-  dockerhub_user   = var.dockerhub_user
-  docker_image     = "smartparking-user"
-  env_content      = <<-EOF
+  source             = "../../modules/microservice-ec2"
+  name               = "user"
+  environment        = var.environment
+  instance_type      = var.instance_type
+  key_name           = var.key_name
+  allowed_ssh_cidr   = var.allowed_ssh_cidr
+  service_port       = 3001
+  dockerhub_user     = var.dockerhub_user
+  docker_image       = "smartparking-user"
+  docker_image_tag   = var.environment
+  env_content        = <<-EOF
     DOCKERHUB_USER=${var.dockerhub_user}
     USER_SERVICE_PORT=3001
     USER_DATABASE_URL=postgresql://admin:admin@${module.auth.elastic_ip}:5432/userdb
@@ -62,16 +65,17 @@ module "user" {
 
 # 3) Vehicle EC2
 module "vehicle" {
-  source           = "../../modules/microservice-ec2"
-  name             = "vehicle"
-  environment      = var.environment
-  instance_type    = var.instance_type
-  key_name         = var.key_name
-  allowed_ssh_cidr = var.allowed_ssh_cidr
-  service_port     = 3003
-  dockerhub_user   = var.dockerhub_user
-  docker_image     = "smartparking-vehicle"
-  env_content      = <<-EOF
+  source             = "../../modules/microservice-ec2"
+  name               = "vehicle"
+  environment        = var.environment
+  instance_type      = var.instance_type
+  key_name           = var.key_name
+  allowed_ssh_cidr   = var.allowed_ssh_cidr
+  service_port       = 3003
+  dockerhub_user     = var.dockerhub_user
+  docker_image       = "smartparking-vehicle"
+  docker_image_tag   = var.environment
+  env_content        = <<-EOF
     DOCKERHUB_USER=${var.dockerhub_user}
     VEHICLE_SERVICE_PORT=3003
     VEHICLE_DATABASE_URL=postgresql://admin:admin@${module.auth.elastic_ip}:5432/vehicledb
@@ -84,14 +88,15 @@ module "vehicle" {
 
 # 4) Frontend EC2
 module "frontend" {
-  source           = "../../modules/microservice-ec2"
-  name             = "frontend"
-  environment      = var.environment
-  instance_type    = var.instance_type
-  key_name         = var.key_name
-  allowed_ssh_cidr = var.allowed_ssh_cidr
-  service_port     = 3002
-  dockerhub_user   = var.dockerhub_user
-  docker_image     = "smartparking-frontend"
-  env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
+  source             = "../../modules/microservice-ec2"
+  name               = "frontend"
+  environment        = var.environment
+  instance_type      = var.instance_type
+  key_name           = var.key_name
+  allowed_ssh_cidr   = var.allowed_ssh_cidr
+  service_port       = 3002
+  dockerhub_user     = var.dockerhub_user
+  docker_image       = "smartparking-frontend"
+  docker_image_tag   = var.environment
+  env_content        = "DOCKERHUB_USER=${var.dockerhub_user}"
 }

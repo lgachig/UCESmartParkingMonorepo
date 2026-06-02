@@ -55,7 +55,7 @@ services:
     restart: unless-stopped
     ports: ["6379:6379"]
   auth-service:
-    image: ${dockerhub_user}/${docker_image}:qa
+    image: ${dockerhub_user}/${docker_image}:${docker_image_tag}
     restart: unless-stopped
     env_file: [.env]
     ports: ["${service_port}:${service_port}"]
@@ -67,7 +67,7 @@ COMPOSE
 cat > /opt/smartparking/docker-compose.yml <<COMPOSE
 services:
   app:
-    image: ${dockerhub_user}/${docker_image}:qa
+    image: ${dockerhub_user}/${docker_image}:${docker_image_tag}
     restart: unless-stopped
     env_file: [.env]
     ports: ["${service_port}:${service_port}"]

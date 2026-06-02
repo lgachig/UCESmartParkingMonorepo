@@ -55,35 +55,3 @@ variable "cors_origins" {
   type        = string
   description = "Comma-separated origins for all EC2 public URLs"
 }
-
-output "auth_elastic_ip" {
-  value = module.auth.elastic_ip
-}
-
-output "user_elastic_ip" {
-  value = module.user.elastic_ip
-}
-
-output "vehicle_elastic_ip" {
-  value = module.vehicle.elastic_ip
-}
-
-output "frontend_elastic_ip" {
-  value = module.frontend.elastic_ip
-}
-
-output "qa_auth_api_url" {
-  value = "http://${module.auth.elastic_ip}:3000/api"
-}
-
-output "qa_user_api_url" {
-  value = "http://${module.user.elastic_ip}:3001/api"
-}
-
-output "qa_vehicle_api_url" {
-  value = "http://${module.vehicle.elastic_ip}:3003/api"
-}
-
-output "qa_frontend_url" {
-  value = "http://${module.frontend.elastic_ip}:3002"
-}

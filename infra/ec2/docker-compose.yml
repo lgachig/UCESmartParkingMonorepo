@@ -1,0 +1,118 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: smartparking-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: smartparking
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U admin -d smartparking']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartparking-network
+
+  redis:
+    image: redis:7
+    container_name: smartparking-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - smartparking-network
+
+  auth-service:
+    image: ${DOCKERHUB_USER}/smartparking-auth:qa
+    container_name: smartparking-auth-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://admin:admin@postgres:5432/smartparking
+      REDIS_URL: redis://redis:6379
+      USER_SERVICE_URL: http://user-service:3001
+    ports:
+      - '3000:3000'
+    networks:
+      - smartparking-network
+
+  user-service:
+    image: ${DOCKERHUB_USER}/smartparking-user:qa
+    container_name: smartparking-user-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      USER_SERVICE_PORT: 3001
+      USER_DATABASE_URL: postgresql://admin:admin@postgres:5432/userdb
+      REDIS_URL: redis://redis:6379
+    ports:
+      - '3001:3001'
+    networks:
+      - smartparking-network
+
+  vehicle-service:
+    image: ${DOCKERHUB_USER}/smartparking-vehicle:qa
+    container_name: smartparking-vehicle-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      VEHICLE_SERVICE_PORT: 3003
+      VEHICLE_DATABASE_URL: postgresql://admin:admin@postgres:5432/vehicledb
+      REDIS_URL: redis://redis:6379
+    ports:
+      - '3003:3003'
+    networks:
+      - smartparking-network
+
+  frontend:
+    image: ${DOCKERHUB_USER}/smartparking-frontend:qa
+    container_name: smartparking-frontend
+    restart: unless-stopped
+    depends_on:
+      - auth-service
+      - user-service
+    ports:
+      - '3002:3002'
+    networks:
+      - smartparking-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  smartparking-network:
+    driver: bridge

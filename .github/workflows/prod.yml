@@ -1,20 +1,16 @@
-# Rama QA → imágenes Docker Hub con tag :qa → deploy SSH a 4 EC2
-# Se dispara con: push a QA/qa, merge de PR hacia QA, o Run workflow manual
-name: QA CI/CD
+# Rama PROD → imágenes con tag :prod → deploy a EC2 de producción / otro laboratorio
+name: PROD CI/CD
 
 on:
   push:
-    branches: [QA, qa]
+    branches: [PROD, prod]
   pull_request:
     types: [closed]
-    branches: [QA, qa]
+    branches: [PROD, prod]
   workflow_dispatch:
 
-# Evita doble ejecución: el merge también genera push; solo corre si el PR se fusionó
-# (push cubre commits directos a la rama)
-
 concurrency:
-  group: qa-pipeline-${{ github.ref }}
+  group: prod-pipeline-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -25,22 +21,21 @@ jobs:
     name: Build & Push to Docker Hub
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-    environment: qa
-    # Override in GitHub: Environment qa → Variables, or repo Settings → Actions → Variables
+    environment: prod
     env:
-      QA_AUTH_API_URL: ${{ vars.QA_AUTH_API_URL || secrets.QA_AUTH_API_URL }}
-      QA_USER_API_URL: ${{ vars.QA_USER_API_URL || secrets.QA_USER_API_URL }}
-      QA_VEHICLE_API_URL: ${{ vars.QA_VEHICLE_API_URL || secrets.QA_VEHICLE_API_URL }}
+      PROD_AUTH_API_URL: ${{ vars.PROD_AUTH_API_URL || secrets.PROD_AUTH_API_URL }}
+      PROD_USER_API_URL: ${{ vars.PROD_USER_API_URL || secrets.PROD_USER_API_URL }}
+      PROD_VEHICLE_API_URL: ${{ vars.PROD_VEHICLE_API_URL || secrets.PROD_VEHICLE_API_URL }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify QA API URLs (frontend build)
+      - name: Verify PROD API URLs (frontend build)
         run: |
           missing=0
-          for name in QA_AUTH_API_URL QA_USER_API_URL QA_VEHICLE_API_URL; do
+          for name in PROD_AUTH_API_URL PROD_USER_API_URL PROD_VEHICLE_API_URL; do
             eval "val=\$$name"
             if [ -z "$val" ]; then
-              echo "::error::Missing $name — set in GitHub Environment qa → Variables"
+              echo "::error::Missing $name — set in GitHub Environment prod → Variables"
               missing=1
             else
               echo "$name=$val"
@@ -60,7 +55,7 @@ jobs:
           context: ./smart-parking
           file: ./smart-parking/apps/auth-service/dockerfile
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-auth:qa
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-auth:prod
 
       - name: Push user-service
         uses: docker/build-push-action@v6
@@ -68,7 +63,7 @@ jobs:
           context: ./smart-parking
           file: ./smart-parking/apps/user-service/dockerfile
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-user:qa
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-user:prod
 
       - name: Push vehicle-service
         uses: docker/build-push-action@v6
@@ -76,7 +71,7 @@ jobs:
           context: ./smart-parking
           file: ./smart-parking/apps/vehicle-service/dockerfile
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-vehicle:qa
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-vehicle:prod
 
       - name: Push frontend
         uses: docker/build-push-action@v6
@@ -84,33 +79,33 @@ jobs:
           context: ./smart-parking/apps/frontend
           file: ./smart-parking/apps/frontend/dockerfile
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-frontend:qa
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-frontend:prod
           build-args: |
-            NEXT_PUBLIC_AUTH_API_URL=${{ env.QA_AUTH_API_URL }}
-            NEXT_PUBLIC_USER_API_URL=${{ env.QA_USER_API_URL }}
-            NEXT_PUBLIC_VEHICLE_API_URL=${{ env.QA_VEHICLE_API_URL }}
+            NEXT_PUBLIC_AUTH_API_URL=${{ env.PROD_AUTH_API_URL }}
+            NEXT_PUBLIC_USER_API_URL=${{ env.PROD_USER_API_URL }}
+            NEXT_PUBLIC_VEHICLE_API_URL=${{ env.PROD_VEHICLE_API_URL }}
 
   deploy:
     name: Deploy on EC2 instances
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     needs: docker-push
     runs-on: ubuntu-latest
-    environment: qa
+    environment: prod
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: auth
-            host_secret: QA_EC2_AUTH_HOST
+            host_secret: PROD_EC2_AUTH_HOST
             service_name: auth-service
           - name: user
-            host_secret: QA_EC2_USER_HOST
+            host_secret: PROD_EC2_USER_HOST
             service_name: app
           - name: vehicle
-            host_secret: QA_EC2_VEHICLE_HOST
+            host_secret: PROD_EC2_VEHICLE_HOST
             service_name: app
           - name: frontend
-            host_secret: QA_EC2_FRONTEND_HOST
+            host_secret: PROD_EC2_FRONTEND_HOST
             service_name: app
     steps:
       - name: Deploy ${{ matrix.name }}
@@ -118,7 +113,7 @@ jobs:
         with:
           host: ${{ secrets[matrix.host_secret] }}
           username: ec2-user
-          key: ${{ secrets.QA_EC2_SSH_KEY }}
+          key: ${{ secrets.PROD_EC2_SSH_KEY }}
           port: 22
           timeout: 120s
           command_timeout: 15m
@@ -137,10 +132,10 @@ jobs:
                 echo "${key}=${val}" | sudo tee -a "$env_file" > /dev/null
               fi
             }
-            CORS_LIST="http://${{ secrets.QA_EC2_FRONTEND_HOST }}:3002,http://${{ secrets.QA_EC2_AUTH_HOST }}:3000,http://${{ secrets.QA_EC2_USER_HOST }}:3001,http://${{ secrets.QA_EC2_VEHICLE_HOST }}:3003"
+            CORS_LIST="http://${{ secrets.PROD_EC2_FRONTEND_HOST }}:3002,http://${{ secrets.PROD_EC2_AUTH_HOST }}:3000,http://${{ secrets.PROD_EC2_USER_HOST }}:3001,http://${{ secrets.PROD_EC2_VEHICLE_HOST }}:3003"
             if [ "${{ matrix.name }}" = "auth" ]; then
-              patch_env USER_SERVICE_URL "http://${{ secrets.QA_EC2_USER_HOST }}:3001"
-              patch_env FRONTEND_URL "http://${{ secrets.QA_EC2_FRONTEND_HOST }}:3002"
+              patch_env USER_SERVICE_URL "http://${{ secrets.PROD_EC2_USER_HOST }}:3001"
+              patch_env FRONTEND_URL "http://${{ secrets.PROD_EC2_FRONTEND_HOST }}:3002"
               patch_env CORS_ORIGINS "$CORS_LIST"
             fi
             if [ "${{ matrix.name }}" = "user" ] || [ "${{ matrix.name }}" = "vehicle" ]; then
