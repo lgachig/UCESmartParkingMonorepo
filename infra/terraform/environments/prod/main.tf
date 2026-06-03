@@ -1,7 +1,6 @@
 terraform {
   required_version = ">= 1.5.0"
-  # Estado local (terraform.tfstate en esta carpeta).
-  # Facilita cambiar de laboratorio AWS sin bucket S3 ni credenciales extra para el backend.
+  # Estado local — ver environments/qa/main.tf
   required_providers {
     aws = { source = "hashicorp/aws", version = "~> 5.0" }
   }
@@ -14,7 +13,6 @@ provider "aws" {
   }
 }
 
-# 1) Auth EC2 — postgres + redis + auth-service
 module "auth" {
   source             = "../../modules/microservice-ec2"
   name               = "auth"
@@ -40,7 +38,6 @@ module "auth" {
     EOF
 }
 
-# 2) User EC2 — connects to postgres/redis on auth EC2
 module "user" {
   source             = "../../modules/microservice-ec2"
   name               = "user"
@@ -63,7 +60,6 @@ module "user" {
     EOF
 }
 
-# 3) Vehicle EC2
 module "vehicle" {
   source             = "../../modules/microservice-ec2"
   name               = "vehicle"
@@ -86,7 +82,6 @@ module "vehicle" {
     EOF
 }
 
-# 4) Frontend EC2
 module "frontend" {
   source             = "../../modules/microservice-ec2"
   name               = "frontend"

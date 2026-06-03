@@ -5,7 +5,7 @@ variable "aws_region" {
 
 variable "environment" {
   type    = string
-  default = "qa"
+  default = "prod"
 }
 
 variable "instance_type" {

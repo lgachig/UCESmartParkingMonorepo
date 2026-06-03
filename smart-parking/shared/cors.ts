@@ -9,14 +9,6 @@ const DEFAULT_CORS_ORIGINS = [
   'http://127.0.0.1:3002',
 ];
 
-/** QA Elastic IPs — update when Terraform outputs change */
-const QA_CORS_ORIGINS = [
-  'http://23.22.208.51:3002',
-  'http://32.199.64.38:3000',
-  'http://100.50.63.232:3001',
-  'http://34.204.142.7:3003',
-];
-
 function parseOriginList(value: string | undefined): string[] {
   if (!value?.trim()) {
     return [];
@@ -33,7 +25,6 @@ export function getCorsOrigins(configService: ConfigService): string[] {
 
   const origins = [
     ...DEFAULT_CORS_ORIGINS,
-    ...QA_CORS_ORIGINS,
     ...fromCorsEnv,
     ...(frontendUrl ? [frontendUrl] : []),
   ];
