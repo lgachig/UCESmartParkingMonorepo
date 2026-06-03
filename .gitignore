@@ -13,14 +13,22 @@ override.tf.json
 .terraformrc
 terraform.rc
 
-# Secrets y llaves
+# Secrets y llaves (nunca subir .pem ni credenciales del lab)
 *.pem
+**/*.pem
+practicaU*.pem
 .env
 .env.*
 !.env.example
 
+# Manual local con credenciales AWS — usar MANUAL-DESPLIEGUE-EC2.example.md en el repo
+MANUAL-DESPLIEGUE-EC2.md
+
 # OS / IDE
 .DS_Store
+**/.DS_Store
+.Rhistory
+*.zip
 .idea/
 .vscode/
 

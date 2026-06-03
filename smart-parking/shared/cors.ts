@@ -52,9 +52,19 @@ export function applyCors(
   });
 }
 
+/** HTTP-only deploy (EC2 sin TLS). Evita HSTS y upgrade-insecure-requests que rompen Swagger. */
 export function configureHelmet() {
   return helmet({
+    strictTransportSecurity: false,
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        'upgrade-insecure-requests': null,
+      },
+    },
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
+    originAgentCluster: false,
   });
 }

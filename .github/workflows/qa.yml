@@ -1,5 +1,3 @@
-# Rama QA → imágenes Docker Hub con tag :qa → deploy SSH a 4 EC2
-# Se dispara con: push a QA/qa, merge de PR hacia QA, o Run workflow manual
 name: QA CI/CD
 
 on:
@@ -9,9 +7,6 @@ on:
     types: [closed]
     branches: [QA, qa]
   workflow_dispatch:
-
-# Evita doble ejecución: el merge también genera push; solo corre si el PR se fusionó
-# (push cubre commits directos a la rama)
 
 concurrency:
   group: qa-pipeline-${{ github.ref }}
@@ -26,7 +21,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     environment: qa
-    # Override in GitHub: Environment qa → Variables, or repo Settings → Actions → Variables
+
     env:
       QA_AUTH_API_URL: ${{ vars.QA_AUTH_API_URL || secrets.QA_AUTH_API_URL }}
       QA_USER_API_URL: ${{ vars.QA_USER_API_URL || secrets.QA_USER_API_URL }}

@@ -1,4 +1,3 @@
-# Rama PROD → imágenes con tag :prod → deploy a EC2 de producción / otro laboratorio
 name: PROD CI/CD
 
 on:

@@ -1,5 +1,8 @@
 # Manual de despliegue — UCE Smart Parking (QA y PROD)
 
+> **En el repo:** este archivo (`MANUAL-DESPLIEGUE-EC2.example.md`) es la plantilla segura.  
+> **En tu PC:** copia a `MANUAL-DESPLIEGUE-EC2.md` y pega ahí credenciales AWS y notas del lab. Ese archivo está en `.gitignore` y **no debe hacerse push**.
+
 Guía para desplegar con **4 EC2 + Elastic IP**, **Terraform (estado local)** y **CI/CD** (GitHub Actions → Docker Hub → SSH).
 
 > Infraestructura: `infra/terraform/` (no uses la carpeta `terraform/` de la raíz; es otro proyecto de ejemplo).
@@ -175,7 +178,7 @@ export TF_VAR_internal_service_key="$(openssl rand -base64 48)"
 
 ```hcl
 frontend_url     = "http://52.70.19.170:3002"
-user_service_url = "http://0.0.0.0:3001"
+user_service_url = "http://52.200.249.238:3001"
 cors_origins     = "http://52.70.19.170:3002"
 environment      = "qa"    # o "prod"
 ```
@@ -190,9 +193,9 @@ Anota las 4 Elastic IP.
 **Segundo apply** (URLs reales):
 
 ```hcl
-frontend_url     = "http://<FRONTEND_EIP>:3002"
-user_service_url = "http://<USER_EIP>:3001"
-cors_origins     = "http://<FRONTEND_EIP>:3002,http://<AUTH_EIP>:3000,http://<USER_EIP>:3001,http://<VEHICLE_EIP>:3003"
+frontend_url     = "http://52.3.55.214:3002"
+user_service_url = "http://3.226.87.218:3001"
+cors_origins     = "http://52.3.55.214:3002,http://100.57.41.94:3000,http://3.226.87.218:3001,http://54.87.199.81:3003"
 ```
 
 ```bash
