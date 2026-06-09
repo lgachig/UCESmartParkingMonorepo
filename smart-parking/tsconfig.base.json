@@ -20,7 +20,8 @@
     "paths": {
       "@generated/auth-client/*": ["./generated/auth-client/*"],
       "@generated/user-client/*": ["./generated/user-client/*"],
-      "@generated/vehicle-client/*": ["./generated/vehicle-client/*"]
+      "@generated/vehicle-client/*": ["./generated/vehicle-client/*"],
+      "@generated/parking-client/*": ["./generated/parking-client/*"]
     }
   }
 }

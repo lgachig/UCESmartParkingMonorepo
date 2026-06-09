@@ -7,6 +7,7 @@ const DEFAULT_CORS_ORIGINS = [
   'http://localhost:3002',
   'http://localhost:3003',
   'http://127.0.0.1:3002',
+  'http://localhost:3004'
 ];
 
 function parseOriginList(value: string | undefined): string[] {

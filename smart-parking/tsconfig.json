@@ -11,6 +11,9 @@
     },
     {
       "path": "./apps/vehicle-service"
+    },
+    {
+      "path": "./apps/parking-service"
     }
   ]
 }

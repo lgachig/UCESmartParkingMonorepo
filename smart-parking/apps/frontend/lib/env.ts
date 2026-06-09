@@ -20,6 +20,10 @@ export const env = {
     'NEXT_PUBLIC_VEHICLE_API_URL',
     process.env.NEXT_PUBLIC_VEHICLE_API_URL,
   ),
+  parkingApiUrl: requireEnv(
+    'NEXT_PUBLIC_PARKING_API_URL',
+    process.env.NEXT_PUBLIC_PARKING_API_URL,
+  ),
   appName: process.env.NEXT_PUBLIC_APP_NAME ?? 'UCE Smart Parking',
   routes: {
     admin: process.env.NEXT_PUBLIC_ROUTE_ADMIN ?? '/admin',

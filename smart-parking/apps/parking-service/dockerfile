@@ -1,0 +1,14 @@
+FROM node:20-alpine
+
+WORKDIR /app
+COPY package*.json ./
+COPY prisma ./prisma
+
+RUN npm install
+COPY . .
+
+RUN npx prisma generate --config prisma.parking.config.ts
+RUN npx nx build @org/parking-service
+
+EXPOSE 3004
+CMD ["sh", "-c", "npx prisma migrate deploy --config prisma.parking.config.ts && node apps/parking-service/dist/main.js"]
