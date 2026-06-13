@@ -21,6 +21,7 @@ variable "key_name" {
 variable "subnet_id" {
   type        = string
   description = "The subnet ID to launch the instance in"
+  default     = null
 }
 
 variable "security_group_ids" {
@@ -32,4 +33,10 @@ variable "user_data" {
   type        = string
   description = "The user data script to run on boot"
   default     = ""
+}
+
+variable "root_volume_size" {
+  type        = number
+  description = "The size of the root volume in GB"
+  default     = 10
 }

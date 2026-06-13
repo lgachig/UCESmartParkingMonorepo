@@ -8,6 +8,14 @@ resource "aws_security_group" "microservice" {
     create_before_destroy = true
   }
 
+  # SSH — inline para evitar conflictos de estado
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ssh_cidr]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -21,20 +29,8 @@ resource "aws_security_group" "microservice" {
   }
 }
 
-# 1) SSH Ingress Rule for all services
-resource "aws_security_group_rule" "ssh" {
-  for_each          = aws_security_group.microservice
-  type              = "ingress"
-  from_port         = 22
-  to_port           = 22
-  protocol          = "tcp"
-  cidr_blocks       = [var.allowed_ssh_cidr]
-  security_group_id = each.value.id
-}
-
-# 2) Specific Port Rules for each service
 resource "aws_security_group_rule" "service_port" {
-  for_each          = tomap({
+  for_each = tomap({
     auth        = 3000
     user        = 3001
     frontend    = 3002
@@ -51,7 +47,6 @@ resource "aws_security_group_rule" "service_port" {
   security_group_id = aws_security_group.microservice[each.key].id
 }
 
-# 3) Extra Ports for Auth Instance (Postgres, Redis, Kafka)
 resource "aws_security_group_rule" "auth_postgres" {
   type              = "ingress"
   from_port         = 5432

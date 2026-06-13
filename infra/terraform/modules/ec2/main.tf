@@ -16,6 +16,12 @@ resource "aws_instance" "this" {
 
   user_data = var.user_data != "" ? var.user_data : null
 
+  root_block_device {
+    volume_size           = var.root_volume_size
+    volume_type           = "gp3"
+    delete_on_termination = true
+  }
+
   tags = {
     Name        = "${var.environment}-${var.service_name}"
     Environment = var.environment
