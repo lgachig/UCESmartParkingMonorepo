@@ -28,6 +28,7 @@ module "auth" {
   key_name           = var.key_name
   subnet_id          = element(module.vpc.public_subnet_ids, 0)
   security_group_ids = [module.security_groups.security_group_ids["auth"]]
+  root_volume_size   = 20
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
     docker_image     = "smartparking-auth"
