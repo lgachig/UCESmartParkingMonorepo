@@ -5,6 +5,11 @@ allowed_ssh_cidr = "0.0.0.0/0"
 dockerhub_user   = "lgachig"
 
 # elastic IPs from outputs to populate settings
-frontend_url     = "http://107.21.254.134:3002"
-user_service_url = "http://52.5.39.181:3001"
-cors_origins     = "http://107.21.254.134:3002,http://98.95.46.236:3000,http://52.5.39.181:3001,http://32.198.202.70:3003"
+# frontend_url     = "http://0.0.0.0:3002"
+# user_service_url = "http://0.0.0.0:3001"
+# cors_origins     = "http://0.0.0.0:3002"
+
+
+frontend_url     = "http://3.214.103.53:3002"
+user_service_url = "http://13.223.149.169:3001"
+cors_origins = "http://3.214.103.53:3002,http://54.158.247.185:3000,http://13.223.149.169:3001,http://54.80.1.200:3003,http://44.213.160.100:3006,http://52.73.15.38:3004,http://52.203.95.90:3005"

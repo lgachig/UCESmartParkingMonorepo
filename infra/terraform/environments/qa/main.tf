@@ -26,7 +26,7 @@ module "auth" {
   service_name       = "auth"
   instance_type      = var.instance_type
   key_name           = var.key_name
-  subnet_id          = module.vpc.public_subnet_ids[0]
+  subnet_id          = element(module.vpc.public_subnet_ids, 0)
   security_group_ids = [module.security_groups.security_group_ids["auth"]]
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
@@ -62,7 +62,7 @@ module "user" {
   service_name       = "user"
   instance_type      = var.instance_type
   key_name           = var.key_name
-  subnet_id          = module.vpc.public_subnet_ids[0]
+  subnet_id          = element(module.vpc.public_subnet_ids, 1)
   security_group_ids = [module.security_groups.security_group_ids["user"]]
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
@@ -95,7 +95,7 @@ module "vehicle" {
   service_name       = "vehicle"
   instance_type      = var.instance_type
   key_name           = var.key_name
-  subnet_id          = module.vpc.public_subnet_ids[0]
+  subnet_id          = element(module.vpc.public_subnet_ids, 2)
   security_group_ids = [module.security_groups.security_group_ids["vehicle"]]
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
@@ -128,7 +128,7 @@ module "frontend" {
   service_name       = "frontend"
   instance_type      = var.instance_type
   key_name           = var.key_name
-  subnet_id          = module.vpc.public_subnet_ids[0]
+  subnet_id          = element(module.vpc.public_subnet_ids, 0)
   security_group_ids = [module.security_groups.security_group_ids["frontend"]]
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
@@ -153,7 +153,7 @@ module "gateway" {
   service_name       = "gateway"
   instance_type      = var.instance_type
   key_name           = var.key_name
-  subnet_id          = module.vpc.public_subnet_ids[0]
+  subnet_id          = element(module.vpc.public_subnet_ids, 1)
   security_group_ids = [module.security_groups.security_group_ids["gateway"]]
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
@@ -190,7 +190,7 @@ module "parking" {
   service_name       = "parking"
   instance_type      = var.instance_type
   key_name           = var.key_name
-  subnet_id          = module.vpc.public_subnet_ids[0]
+  subnet_id          = element(module.vpc.public_subnet_ids, 2)
   security_group_ids = [module.security_groups.security_group_ids["parking"]]
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
@@ -224,7 +224,7 @@ module "reservation" {
   service_name       = "reservation"
   instance_type      = var.instance_type
   key_name           = var.key_name
-  subnet_id          = module.vpc.public_subnet_ids[0]
+  subnet_id          = element(module.vpc.public_subnet_ids, 0)
   security_group_ids = [module.security_groups.security_group_ids["reservation"]]
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user

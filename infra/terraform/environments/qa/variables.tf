@@ -13,7 +13,7 @@ variable "environment" {
 variable "instance_type" {
   type        = string
   description = "The EC2 instance type to launch"
-  default     = "t3.small"
+  default     = "t3.micro"
 }
 
 variable "key_name" {
