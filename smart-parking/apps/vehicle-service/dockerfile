@@ -1,14 +1,19 @@
 FROM node:20-alpine
 
 WORKDIR /app
+
 COPY package*.json ./
 COPY prisma ./prisma
 
-RUN npm install
+RUN npm install --frozen-lockfile
+
 COPY . .
+
+ENV NX_DAEMON=false
 
 RUN npx prisma generate --config prisma.vehicle.config.ts
 RUN npx nx build @org/vehicle-service
 
 EXPOSE 3003
+
 CMD ["sh", "-c", "npx prisma migrate deploy --config prisma.vehicle.config.ts && node apps/vehicle-service/dist/main.js"]

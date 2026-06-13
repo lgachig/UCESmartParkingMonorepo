@@ -1,0 +1,19 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY prisma ./prisma
+
+RUN npm install --frozen-lockfile
+
+COPY . .
+
+ENV NX_DAEMON=false
+
+RUN npx prisma generate --config prisma.reservation.config.ts
+RUN npx nx build @org/reservation-service
+
+EXPOSE 3005
+
+CMD ["sh", "-c", "npx prisma db push --config prisma.reservation.config.ts --accept-data-loss && node apps/reservation-service/dist/main.js"]

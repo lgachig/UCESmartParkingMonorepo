@@ -7,9 +7,10 @@ interface SlotsGridProps {
   slots: Slot[];
   onEdit: (slot: Slot) => void;
   onDelete: (slot: Slot) => void;
+  onRefresh?: () => void;
 }
 
-export default function SlotsGrid({ slots, onEdit, onDelete }: SlotsGridProps) {
+export default function SlotsGrid({ slots, onEdit, onDelete, onRefresh }: SlotsGridProps) {
   return (
     <div className="flex-grow overflow-y-auto pr-1">
       {slots.length === 0 ? (
@@ -17,7 +18,7 @@ export default function SlotsGrid({ slots, onEdit, onDelete }: SlotsGridProps) {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6 pb-20">
           {slots.map((slot) => (
-            <SlotCard key={slot.id} slot={slot} onEdit={onEdit} onDelete={onDelete} />
+            <SlotCard key={slot.id} slot={slot} onEdit={onEdit} onDelete={onDelete} onRefresh={onRefresh} />
           ))}
         </div>
       )}

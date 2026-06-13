@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useEffect, useState, useMemo, startTransition , useCallback } from 'react';
 import SlotsHeader from './SlotsHeader';
 import SlotsGrid from './SlotsGrid';
 import SlotModal from './SlotModal';
@@ -27,8 +27,6 @@ export default function SlotsPage() {
     zone_id: '',
   });
   
-  // Removed zoneFormData state as it is now managed internally by ZoneModal
-
   const fetchData = useCallback(async () => {
     try {
       const [z, s, f] = await Promise.all([
@@ -44,14 +42,15 @@ export default function SlotsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  const fetchDataRef = useRef(fetchData);
-  fetchDataRef.current = fetchData;
+  }, []); 
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    startTransition(() => { fetchData(); });
+    const interval = setInterval(() => {
+      startTransition(() => { fetchData(); });
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const filteredSlots = useMemo(() => {
     if (!searchTerm) return slots;
@@ -161,6 +160,7 @@ export default function SlotsPage() {
         slots={filteredSlots}
         onEdit={handleEditSlot}
         onDelete={handleDeleteSlot}
+        onRefresh={fetchData}
       />
       <SlotModal
         isOpen={isSlotModalOpen}

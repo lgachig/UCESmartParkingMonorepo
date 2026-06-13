@@ -167,6 +167,7 @@ services:
         NEXT_PUBLIC_USER_API_URL: http://localhost:3001/api
         NEXT_PUBLIC_VEHICLE_API_URL: http://localhost:3003/api
         NEXT_PUBLIC_PARKING_API_URL: http://localhost:3004/api
+        NEXT_PUBLIC_RESERVATION_API_URL: http://localhost:3005/api
     container_name: smartparking-frontend
     restart: unless-stopped
     depends_on:
@@ -174,10 +175,79 @@ services:
       - user-service
       - vehicle-service
       - parking-service
+      - reservation-service
     ports:
       - '3002:3002'
     networks:
       - smartparking-network
+
+  reservation-service:
+    build:
+      context: ./smart-parking
+      dockerfile: apps/reservation-service/dockerfile
+    container_name: smartparking-reservation-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      RESERVATION_SERVICE_PORT: 3005
+      RESERVATION_DATABASE_URL: postgresql://admin:admin@postgres:5432/reservationdb
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:29092
+      JWT_SECRET: your_jwt_secret
+      INTERNAL_SERVICE_KEY: internal_service_secret_key
+
+      PARKING_SERVICE_URL: http://parking-service:3004
+      USER_SERVICE_URL: http://user-service:3001
+      VEHICLE_SERVICE_URL: http://vehicle-service:3003
+
+      CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
+    ports:
+      - "3005:3005"
+    networks:
+      - smartparking-network
+      
+  gateway-service:
+    build:
+      context: ./smart-parking
+      dockerfile: apps/gateway-service/dockerfile
+    container_name: smartparking-gateway
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      vehicle-service:
+        condition: service_started
+      parking-service:
+        condition: service_started
+      reservation-service:
+        condition: service_started
+    environment:
+      GATEWAY_PORT: 3006
+      JWT_SECRET: your_jwt_secret
+      REDIS_URL: redis://redis:6379
+      AUTH_SERVICE_URL: http://auth-service:3000
+      USER_SERVICE_URL: http://user-service:3001
+      VEHICLE_SERVICE_URL: http://vehicle-service:3003
+      PARKING_SERVICE_URL: http://parking-service:3004
+      RESERVATION_SERVICE_URL: http://reservation-service:3005
+      CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
+      THROTTLE_TTL: 60000
+      THROTTLE_LIMIT: 60
+    ports:
+      - '3006:3006'
+    networks:
+      - smartparking-network
+
 
 volumes:
   postgres_data:

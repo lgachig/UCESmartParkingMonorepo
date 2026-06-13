@@ -6,6 +6,7 @@ import {
   PieChart, Activity, AlertTriangle, FileText, Loader2
 } from 'lucide-react';
 import { parkingService, type Slot } from '@/services/parking.service';
+import { reservationService } from '@/services/reservation.service';
 import StatCard from '@/components/admin/StatCard';
 import { DashboardShell } from '@/components/layout/DashboardShell';
 
@@ -43,7 +44,18 @@ export default function AdminReportsPage() {
     if (confirm('¿Liberar este puesto?')) {
       setIsReleasingMap((prev) => ({ ...prev, [slotId]: true }));
       try {
-        await parkingService.releaseSlot(slotId);
+        try {
+          const reservations = await reservationService.getBySlot(slotId);
+          const active = reservations.find((r) => r.status === 'PENDING' || r.status === 'ACTIVE');
+          if (active) {
+            await reservationService.adminCancelReservation(active.id);
+          } else {
+            await parkingService.releaseSlot(slotId);
+          }
+        } catch (reserveErr) {
+          console.warn('Failed to release via reservation-service, falling back to direct release:', reserveErr);
+          await parkingService.releaseSlot(slotId);
+        }
         await fetchSlots();
       } catch (err) {
         alert('Error al liberar puesto');

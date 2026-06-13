@@ -12,6 +12,7 @@ import ActionToast from './ActionToast';
 import SlotDetailCard from './SlotDetailCard';
 import { useAuth } from '@/context/AuthContext';
 import { parkingService, type Slot } from '@/services/parking.service';
+import { reservationService } from '@/services/reservation.service';
 
 interface MapInnerProps {
   flyToZone?: any;
@@ -37,6 +38,19 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
     try {
       const data = await parkingService.getSlots();
       setSlots(data);
+
+      const saved = localStorage.getItem('my_reserved_slot_id');
+      if (saved) {
+        const mySlot = data.find((s) => s.id === saved);
+        if (!mySlot || (mySlot.status !== 'RESERVED' && mySlot.status !== 'OCCUPIED')) {
+          localStorage.removeItem('my_reserved_slot_id');
+          setMyActiveSlotId(null);
+        } else {
+          setMyActiveSlotId(saved);
+        }
+      } else {
+        setMyActiveSlotId(null);
+      }
     } catch (err) {
       console.error('Error fetching slots:', err);
     } finally {
@@ -51,11 +65,6 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
 
   useEffect(() => {
     fetchSlots();
-    // Load local active reservation from localStorage
-    const saved = localStorage.getItem('my_reserved_slot_id');
-    if (saved) {
-      setMyActiveSlotId(saved);
-    }
 
     // Geolocation tracker
     const watchId = navigator.geolocation.watchPosition(
@@ -140,7 +149,27 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
   const handleReleaseSlot = async (slotId: string) => {
     setIsReleasing(true);
     try {
-      await parkingService.releaseSlot(slotId);
+      try {
+        // 1. Try to find the active reservation for this slot
+        const reservations = await reservationService.getMyReservations();
+        const active = reservations.find(
+          (r) => r.slotId === slotId && (r.status === 'PENDING' || r.status === 'ACTIVE')
+        );
+        if (active) {
+          await reservationService.cancel(active.id);
+        } else {
+          await parkingService.releaseSlot(slotId);
+        }
+      } catch (err: any) {
+        console.warn('Failed to cancel reservation, falling back to direct release:', err);
+        // Fallback: release slot directly if something fails or slot is already available
+        const currentSlot = slots.find((s) => s.id === slotId);
+        if (currentSlot?.status === 'AVAILABLE' || err.response?.status === 400) {
+          console.warn('Slot already released or release returned 400:', err);
+        } else {
+          await parkingService.releaseSlot(slotId);
+        }
+      }
       localStorage.removeItem('my_reserved_slot_id');
       setMyActiveSlotId(null);
       setSelectedSlot(null);

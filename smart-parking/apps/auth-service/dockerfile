@@ -1,16 +1,19 @@
 FROM node:20-alpine
 
 WORKDIR /app
+
 COPY package*.json ./
 COPY prisma ./prisma
 
-RUN npm install
+RUN npm install --frozen-lockfile
+
 COPY . .
+
+ENV NX_DAEMON=false
 
 RUN npx prisma generate
 RUN npx nx build @org/auth-service
-RUN ls
-RUN find .
 
 EXPOSE 3000
+
 CMD ["sh", "-c", "npx prisma migrate deploy --schema prisma/auth/schema.prisma && node apps/auth-service/dist/main.js"]

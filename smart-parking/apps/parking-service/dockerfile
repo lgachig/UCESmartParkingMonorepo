@@ -1,14 +1,19 @@
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
+
 COPY package*.json ./
 COPY prisma ./prisma
 
-RUN npm install
+RUN npm install --frozen-lockfile
+
 COPY . .
+
+ENV NX_DAEMON=false
 
 RUN npx prisma generate --config prisma.parking.config.ts
 RUN npx nx build @org/parking-service
 
 EXPOSE 3004
-CMD ["sh", "-c", "npx prisma migrate deploy --config prisma.parking.config.ts && node apps/parking-service/dist/main.js"]
+
+CMD ["sh", "-c", "npx prisma db push --config prisma.parking.config.ts --accept-data-loss && node apps/parking-service/dist/main.js"]

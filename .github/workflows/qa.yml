@@ -26,13 +26,15 @@ jobs:
       QA_AUTH_API_URL: ${{ vars.QA_AUTH_API_URL || secrets.QA_AUTH_API_URL }}
       QA_USER_API_URL: ${{ vars.QA_USER_API_URL || secrets.QA_USER_API_URL }}
       QA_VEHICLE_API_URL: ${{ vars.QA_VEHICLE_API_URL || secrets.QA_VEHICLE_API_URL }}
+      QA_PARKING_API_URL: ${{ vars.QA_PARKING_API_URL || secrets.QA_PARKING_API_URL }}
+      QA_RESERVATION_API_URL: ${{ vars.QA_RESERVATION_API_URL || secrets.QA_RESERVATION_API_URL }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Verify QA API URLs (frontend build)
         run: |
           missing=0
-          for name in QA_AUTH_API_URL QA_USER_API_URL QA_VEHICLE_API_URL; do
+          for name in QA_AUTH_API_URL QA_USER_API_URL QA_VEHICLE_API_URL QA_PARKING_API_URL QA_RESERVATION_API_URL; do
             eval "val=\$$name"
             if [ -z "$val" ]; then
               echo "::error::Missing $name — set in GitHub Environment qa → Variables"
@@ -73,6 +75,30 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-vehicle:qa
 
+      - name: Push gateway-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking
+          file: ./smart-parking/apps/gateway-service/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-gateway:qa
+
+      - name: Push parking-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking
+          file: ./smart-parking/apps/parking-service/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-parking:qa
+
+      - name: Push reservation-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking
+          file: ./smart-parking/apps/reservation-service/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-reservation:qa
+
       - name: Push frontend
         uses: docker/build-push-action@v6
         with:
@@ -84,6 +110,8 @@ jobs:
             NEXT_PUBLIC_AUTH_API_URL=${{ env.QA_AUTH_API_URL }}
             NEXT_PUBLIC_USER_API_URL=${{ env.QA_USER_API_URL }}
             NEXT_PUBLIC_VEHICLE_API_URL=${{ env.QA_VEHICLE_API_URL }}
+            NEXT_PUBLIC_PARKING_API_URL=${{ env.QA_PARKING_API_URL }}
+            NEXT_PUBLIC_RESERVATION_API_URL=${{ env.QA_RESERVATION_API_URL }}
 
   deploy:
     name: Deploy on EC2 instances
@@ -106,6 +134,15 @@ jobs:
             service_name: app
           - name: frontend
             host_secret: QA_EC2_FRONTEND_HOST
+            service_name: app
+          - name: gateway
+            host_secret: QA_EC2_GATEWAY_HOST
+            service_name: app
+          - name: parking
+            host_secret: QA_EC2_PARKING_HOST
+            service_name: app
+          - name: reservation
+            host_secret: QA_EC2_RESERVATION_HOST
             service_name: app
     steps:
       - name: Deploy ${{ matrix.name }}
@@ -132,15 +169,49 @@ jobs:
                 echo "${key}=${val}" | sudo tee -a "$env_file" > /dev/null
               fi
             }
-            CORS_LIST="http://${{ secrets.QA_EC2_FRONTEND_HOST }}:3002,http://${{ secrets.QA_EC2_AUTH_HOST }}:3000,http://${{ secrets.QA_EC2_USER_HOST }}:3001,http://${{ secrets.QA_EC2_VEHICLE_HOST }}:3003"
+            CORS_LIST="http://${{ secrets.QA_EC2_FRONTEND_HOST }}:3002,http://${{ secrets.QA_EC2_AUTH_HOST }}:3000,http://${{ secrets.QA_EC2_USER_HOST }}:3001,http://${{ secrets.QA_EC2_VEHICLE_HOST }}:3003,http://${{ secrets.QA_EC2_GATEWAY_HOST }}:3006,http://${{ secrets.QA_EC2_PARKING_HOST }}:3004,http://${{ secrets.QA_EC2_RESERVATION_HOST }}:3005"
+            
+            # Dynamic configurations based on node roles
             if [ "${{ matrix.name }}" = "auth" ]; then
               patch_env USER_SERVICE_URL "http://${{ secrets.QA_EC2_USER_HOST }}:3001"
               patch_env FRONTEND_URL "http://${{ secrets.QA_EC2_FRONTEND_HOST }}:3002"
               patch_env CORS_ORIGINS "$CORS_LIST"
             fi
+            
             if [ "${{ matrix.name }}" = "user" ] || [ "${{ matrix.name }}" = "vehicle" ]; then
+              patch_env USER_DATABASE_URL "postgresql://admin:admin@${{ secrets.QA_EC2_AUTH_HOST }}:5432/userdb"
+              patch_env VEHICLE_DATABASE_URL "postgresql://admin:admin@${{ secrets.QA_EC2_AUTH_HOST }}:5432/vehicledb"
+              patch_env REDIS_URL "redis://${{ secrets.QA_EC2_AUTH_HOST }}:6379"
               patch_env CORS_ORIGINS "$CORS_LIST"
             fi
+
+            if [ "${{ matrix.name }}" = "gateway" ]; then
+              patch_env REDIS_URL "redis://${{ secrets.QA_EC2_AUTH_HOST }}:6379"
+              patch_env AUTH_SERVICE_URL "http://${{ secrets.QA_EC2_AUTH_HOST }}:3000"
+              patch_env USER_SERVICE_URL "http://${{ secrets.QA_EC2_USER_HOST }}:3001"
+              patch_env VEHICLE_SERVICE_URL "http://${{ secrets.QA_EC2_VEHICLE_HOST }}:3003"
+              patch_env PARKING_SERVICE_URL "http://${{ secrets.QA_EC2_PARKING_HOST }}:3004"
+              patch_env RESERVATION_SERVICE_URL "http://${{ secrets.QA_EC2_RESERVATION_HOST }}:3005"
+              patch_env CORS_ORIGINS "$CORS_LIST"
+            fi
+
+            if [ "${{ matrix.name }}" = "parking" ]; then
+              patch_env PARKING_DATABASE_URL "postgresql://admin:admin@${{ secrets.QA_EC2_AUTH_HOST }}:5432/parkingdb"
+              patch_env REDIS_URL "redis://${{ secrets.QA_EC2_AUTH_HOST }}:6379"
+              patch_env KAFKA_BROKERS "${{ secrets.QA_EC2_AUTH_HOST }}:9092"
+              patch_env CORS_ORIGINS "$CORS_LIST"
+            fi
+
+            if [ "${{ matrix.name }}" = "reservation" ]; then
+              patch_env RESERVATION_DATABASE_URL "postgresql://admin:admin@${{ secrets.QA_EC2_AUTH_HOST }}:5432/reservationdb"
+              patch_env REDIS_URL "redis://${{ secrets.QA_EC2_AUTH_HOST }}:6379"
+              patch_env KAFKA_BROKERS "${{ secrets.QA_EC2_AUTH_HOST }}:9092"
+              patch_env PARKING_SERVICE_URL "http://${{ secrets.QA_EC2_PARKING_HOST }}:3004"
+              patch_env USER_SERVICE_URL "http://${{ secrets.QA_EC2_USER_HOST }}:3001"
+              patch_env VEHICLE_SERVICE_URL "http://${{ secrets.QA_EC2_VEHICLE_HOST }}:3003"
+              patch_env CORS_ORIGINS "$CORS_LIST"
+            fi
+
             if [ -n "${DOCKERHUB_TOKEN:-}" ] && [ -n "${DOCKERHUB_USER:-}" ]; then
               echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USER}" --password-stdin
             fi

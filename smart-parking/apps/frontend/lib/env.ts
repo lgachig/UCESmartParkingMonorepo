@@ -20,6 +20,10 @@ export const env = {
     'NEXT_PUBLIC_VEHICLE_API_URL',
     process.env.NEXT_PUBLIC_VEHICLE_API_URL,
   ),
+  reservationApiUrl: requireEnv(
+    'NEXT_PUBLIC_RESERVATION_API_URL',
+    process.env.NEXT_PUBLIC_RESERVATION_API_URL,
+  ),
   parkingApiUrl: requireEnv(
     'NEXT_PUBLIC_PARKING_API_URL',
     process.env.NEXT_PUBLIC_PARKING_API_URL,

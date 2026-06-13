@@ -22,7 +22,7 @@ import { KafkaModule } from './kafka/kafka.module';
     AuditModule,
     AppRedisModule,
     KafkaModule,
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: Joi.object({

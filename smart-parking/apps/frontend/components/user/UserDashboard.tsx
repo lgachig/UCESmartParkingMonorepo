@@ -11,12 +11,19 @@ export default function UserDashboard() {
   const { user } = useAuth();
   const [zones, setZones] = useState<Zone[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
-  const [history, setHistory] = useState<string[]>([]);
+  const [history, setHistory] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const savedHistory = localStorage.getItem('my_reservation_history');
+      if (savedHistory) {
+        try { return JSON.parse(savedHistory); } catch {}
+      }
+    }
+    return [];
+  });
   const [activeSession, setActiveSession] = useState<string | null>(null);
   
   const [flyToZone, setFlyToZone] = useState<any>(null);
   const [zonesMenuOpen, setZonesMenuOpen] = useState(false);
-  const [smartSuggestion, setSmartSuggestion] = useState<{ type: string; slot: Slot } | null>(null);
   const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   const [isReserving, setIsReserving] = useState(false);
 
@@ -28,27 +35,28 @@ export default function UserDashboard() {
       ]);
       setZones(z);
       setSlots(s);
+
+      const savedActive = localStorage.getItem('my_reserved_slot_id');
+      if (savedActive) {
+        const mySlot = s.find((slot) => slot.id === savedActive);
+        if (!mySlot || (mySlot.status !== 'RESERVED' && mySlot.status !== 'OCCUPIED')) {
+          localStorage.removeItem('my_reserved_slot_id');
+          setActiveSession(null);
+        } else {
+          setActiveSession(savedActive);
+        }
+      } else {
+        setActiveSession(null);
+      }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
     }
   }, []);
 
   useEffect(() => {
-    fetchData();
-
-    // Load active session from localStorage
-    const savedActive = localStorage.getItem('my_reserved_slot_id');
-    setActiveSession(savedActive);
-
-    // Load history from localStorage
-    const savedHistory = localStorage.getItem('my_reservation_history');
-    if (savedHistory) {
-      try {
-        setHistory(JSON.parse(savedHistory));
-      } catch {
-        setHistory([]);
-      }
-    }
+    setTimeout(() => {
+      fetchData();
+    }, 0);
 
     // Refresh slots periodically
     const interval = setInterval(fetchData, 10000);
@@ -102,12 +110,14 @@ export default function UserDashboard() {
     [slots, usualSlotNumber]
   );
 
-  useEffect(() => {
+  const smartSuggestion = useMemo(() => {
     if (suggestionDismissed || credits === 0 || activeSession) {
-      setSmartSuggestion(null);
-    } else if (usualSlot && usualSlot.status === 'AVAILABLE') {
-      setSmartSuggestion({ type: 'usual', slot: usualSlot });
+      return null;
     }
+    if (usualSlot && usualSlot.status === 'AVAILABLE') {
+      return { type: 'usual', slot: usualSlot };
+    }
+    return null;
   }, [credits, usualSlot, suggestionDismissed, activeSession]);
 
   const handleAcceptUsualSpot = async () => {
