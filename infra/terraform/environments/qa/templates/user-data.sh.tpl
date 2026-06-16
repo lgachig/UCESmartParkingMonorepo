@@ -63,7 +63,7 @@ services:
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://${auth_public_ip}:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://_LOCAL_IP_:9092'
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -84,6 +84,8 @@ services:
 volumes:
   postgres_data:
 COMPOSE
+local_ip=$(hostname -I | awk '{print $1}')
+sed -i "s/_LOCAL_IP_/$local_ip/g" /opt/smartparking/docker-compose.yml
 %{ else ~}
 cat > /opt/smartparking/docker-compose.yml <<COMPOSE
 services:

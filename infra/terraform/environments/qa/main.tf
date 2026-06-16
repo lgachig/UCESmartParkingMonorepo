@@ -3,23 +3,33 @@ module "vpc" {
   environment = var.environment
 }
 
-module "security_groups" {
-  source           = "../../modules/security_groups"
+# ── Bastion Host ────────────────────────────────────────────────────────────
+# Single public EC2 that acts as the SSH jump server.
+# Only the bastion has a public SSH port open; all microservice instances
+# allow SSH only from the bastion security group.
+module "bastion" {
+  source           = "../../modules/bastion"
   environment      = var.environment
   vpc_id           = module.vpc.vpc_id
-  allowed_ssh_cidr = var.allowed_ssh_cidr
+  subnet_id        = element(module.vpc.public_subnet_ids, 0)
+  key_name         = var.key_name
+  instance_type    = "t3.micro"
+  allowed_ssh_cidr = [var.allowed_ssh_cidr]
 }
 
-# Standalone Elastic IP resources for all 7 microservices
-resource "aws_eip" "auth" { domain = "vpc" }
-resource "aws_eip" "user" { domain = "vpc" }
-resource "aws_eip" "vehicle" { domain = "vpc" }
-resource "aws_eip" "frontend" { domain = "vpc" }
-resource "aws_eip" "gateway" { domain = "vpc" }
-resource "aws_eip" "parking" { domain = "vpc" }
-resource "aws_eip" "reservation" { domain = "vpc" }
+module "security_groups" {
+  source                    = "../../modules/security_groups"
+  environment               = var.environment
+  vpc_id                    = module.vpc.vpc_id
+  allowed_ssh_cidr          = var.allowed_ssh_cidr
+  bastion_security_group_id = module.bastion.security_group_id
+}
 
-# 1) Auth EC2 - runs auth-service, postgres, redis, kafka
+# ── Elastic IPs (only frontend and gateway need public static IPs, others use private IPs) ──
+resource "aws_eip" "frontend"    { domain = "vpc" }
+resource "aws_eip" "gateway"     { domain = "vpc" }
+
+# ── 1) Auth EC2 — auth-service + postgres + redis + kafka ──────────────────
 module "auth" {
   source             = "../../modules/ec2"
   environment        = var.environment
@@ -35,7 +45,6 @@ module "auth" {
     docker_image_tag = var.environment
     service_port     = 3000
     is_auth          = true
-    auth_public_ip   = aws_eip.auth.public_ip
     env_content      = <<-EOF
       DOCKERHUB_USER=${var.dockerhub_user}
       PORT=3000
@@ -51,12 +60,7 @@ module "auth" {
   })
 }
 
-resource "aws_eip_association" "auth" {
-  instance_id   = module.auth.instance_id
-  allocation_id = aws_eip.auth.id
-}
-
-# 2) User EC2
+# ── 2) User EC2 ─────────────────────────────────────────────────────────────
 module "user" {
   source             = "../../modules/ec2"
   environment        = var.environment
@@ -71,12 +75,11 @@ module "user" {
     docker_image_tag = var.environment
     service_port     = 3001
     is_auth          = false
-    auth_public_ip   = aws_eip.auth.public_ip
     env_content      = <<-EOF
       DOCKERHUB_USER=${var.dockerhub_user}
       USER_SERVICE_PORT=3001
-      USER_DATABASE_URL=postgresql://admin:admin@${aws_eip.auth.public_ip}:5432/userdb
-      REDIS_URL=redis://${aws_eip.auth.public_ip}:6379
+      USER_DATABASE_URL=postgresql://admin:admin@${module.auth.private_ip}:5432/userdb
+      REDIS_URL=redis://${module.auth.private_ip}:6379
       JWT_SECRET=${var.jwt_secret}
       INTERNAL_SERVICE_KEY=${var.internal_service_key}
       CORS_ORIGINS=${var.cors_origins}
@@ -84,12 +87,7 @@ module "user" {
   })
 }
 
-resource "aws_eip_association" "user" {
-  instance_id   = module.user.instance_id
-  allocation_id = aws_eip.user.id
-}
-
-# 3) Vehicle EC2
+# ── 3) Vehicle EC2 ──────────────────────────────────────────────────────────
 module "vehicle" {
   source             = "../../modules/ec2"
   environment        = var.environment
@@ -104,12 +102,11 @@ module "vehicle" {
     docker_image_tag = var.environment
     service_port     = 3003
     is_auth          = false
-    auth_public_ip   = aws_eip.auth.public_ip
     env_content      = <<-EOF
       DOCKERHUB_USER=${var.dockerhub_user}
       VEHICLE_SERVICE_PORT=3003
-      VEHICLE_DATABASE_URL=postgresql://admin:admin@${aws_eip.auth.public_ip}:5432/vehicledb
-      REDIS_URL=redis://${aws_eip.auth.public_ip}:6379
+      VEHICLE_DATABASE_URL=postgresql://admin:admin@${module.auth.private_ip}:5432/vehicledb
+      REDIS_URL=redis://${module.auth.private_ip}:6379
       JWT_SECRET=${var.jwt_secret}
       INTERNAL_SERVICE_KEY=${var.internal_service_key}
       CORS_ORIGINS=${var.cors_origins}
@@ -117,12 +114,7 @@ module "vehicle" {
   })
 }
 
-resource "aws_eip_association" "vehicle" {
-  instance_id   = module.vehicle.instance_id
-  allocation_id = aws_eip.vehicle.id
-}
-
-# 4) Frontend EC2
+# ── 4) Frontend EC2 ─────────────────────────────────────────────────────────
 module "frontend" {
   source             = "../../modules/ec2"
   environment        = var.environment
@@ -137,7 +129,6 @@ module "frontend" {
     docker_image_tag = var.environment
     service_port     = 3002
     is_auth          = false
-    auth_public_ip   = aws_eip.auth.public_ip
     env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
   })
 }
@@ -147,7 +138,7 @@ resource "aws_eip_association" "frontend" {
   allocation_id = aws_eip.frontend.id
 }
 
-# 5) Gateway EC2
+# ── 5) Gateway EC2 ──────────────────────────────────────────────────────────
 module "gateway" {
   source             = "../../modules/ec2"
   environment        = var.environment
@@ -162,16 +153,15 @@ module "gateway" {
     docker_image_tag = var.environment
     service_port     = 3006
     is_auth          = false
-    auth_public_ip   = aws_eip.auth.public_ip
     env_content      = <<-EOF
       GATEWAY_PORT=3006
       JWT_SECRET=${var.jwt_secret}
-      REDIS_URL=redis://${aws_eip.auth.public_ip}:6379
-      AUTH_SERVICE_URL=http://${aws_eip.auth.public_ip}:3000
-      USER_SERVICE_URL=http://${aws_eip.user.public_ip}:3001
-      VEHICLE_SERVICE_URL=http://${aws_eip.vehicle.public_ip}:3003
-      PARKING_SERVICE_URL=http://${aws_eip.parking.public_ip}:3004
-      RESERVATION_SERVICE_URL=http://${aws_eip.reservation.public_ip}:3005
+      REDIS_URL=redis://${module.auth.private_ip}:6379
+      AUTH_SERVICE_URL=http://${module.auth.private_ip}:3000
+      USER_SERVICE_URL=http://${module.user.private_ip}:3001
+      VEHICLE_SERVICE_URL=http://${module.vehicle.private_ip}:3003
+      PARKING_SERVICE_URL=http://${module.parking.private_ip}:3004
+      RESERVATION_SERVICE_URL=http://${module.reservation.private_ip}:3005
       CORS_ORIGINS=${var.cors_origins}
       THROTTLE_TTL=60000
       THROTTLE_LIMIT=60
@@ -184,7 +174,7 @@ resource "aws_eip_association" "gateway" {
   allocation_id = aws_eip.gateway.id
 }
 
-# 6) Parking EC2
+# ── 6) Parking EC2 ──────────────────────────────────────────────────────────
 module "parking" {
   source             = "../../modules/ec2"
   environment        = var.environment
@@ -199,13 +189,12 @@ module "parking" {
     docker_image_tag = var.environment
     service_port     = 3004
     is_auth          = false
-    auth_public_ip   = aws_eip.auth.public_ip
     env_content      = <<-EOF
       DOCKERHUB_USER=${var.dockerhub_user}
       PARKING_SERVICE_PORT=3004
-      PARKING_DATABASE_URL=postgresql://admin:admin@${aws_eip.auth.public_ip}:5432/parkingdb
-      REDIS_URL=redis://${aws_eip.auth.public_ip}:6379
-      KAFKA_BROKERS=${aws_eip.auth.public_ip}:9092
+      PARKING_DATABASE_URL=postgresql://admin:admin@${module.auth.private_ip}:5432/parkingdb
+      REDIS_URL=redis://${module.auth.private_ip}:6379
+      KAFKA_BROKERS=${module.auth.private_ip}:9092
       JWT_SECRET=${var.jwt_secret}
       INTERNAL_SERVICE_KEY=${var.internal_service_key}
       CORS_ORIGINS=${var.cors_origins}
@@ -213,12 +202,7 @@ module "parking" {
   })
 }
 
-resource "aws_eip_association" "parking" {
-  instance_id   = module.parking.instance_id
-  allocation_id = aws_eip.parking.id
-}
-
-# 7) Reservation EC2
+# ── 7) Reservation EC2 ──────────────────────────────────────────────────────
 module "reservation" {
   source             = "../../modules/ec2"
   environment        = var.environment
@@ -233,25 +217,19 @@ module "reservation" {
     docker_image_tag = var.environment
     service_port     = 3005
     is_auth          = false
-    auth_public_ip   = aws_eip.auth.public_ip
     env_content      = <<-EOF
       DOCKERHUB_USER=${var.dockerhub_user}
       RESERVATION_SERVICE_PORT=3005
-      RESERVATION_DATABASE_URL=postgresql://admin:admin@${aws_eip.auth.public_ip}:5432/reservationdb
-      REDIS_URL=redis://${aws_eip.auth.public_ip}:6379
-      KAFKA_BROKERS=${aws_eip.auth.public_ip}:9092
+      RESERVATION_DATABASE_URL=postgresql://admin:admin@${module.auth.private_ip}:5432/reservationdb
+      REDIS_URL=redis://${module.auth.private_ip}:6379
+      KAFKA_BROKERS=${module.auth.private_ip}:9092
       JWT_SECRET=${var.jwt_secret}
       INTERNAL_SERVICE_KEY=${var.internal_service_key}
-      PARKING_SERVICE_URL=http://${aws_eip.parking.public_ip}:3004
-      USER_SERVICE_URL=http://${aws_eip.user.public_ip}:3001
-      VEHICLE_SERVICE_URL=http://${aws_eip.vehicle.public_ip}:3003
+      PARKING_SERVICE_URL=http://${module.parking.private_ip}:3004
+      USER_SERVICE_URL=http://${module.user.private_ip}:3001
+      VEHICLE_SERVICE_URL=http://${module.vehicle.private_ip}:3003
       CORS_ORIGINS=${var.cors_origins}
       RESERVATION_EXPIRY_MINUTES=15
       EOF
   })
-}
-
-resource "aws_eip_association" "reservation" {
-  instance_id   = module.reservation.instance_id
-  allocation_id = aws_eip.reservation.id
 }
