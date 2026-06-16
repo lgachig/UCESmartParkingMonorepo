@@ -17,6 +17,7 @@ module "bastion" {
   allowed_ssh_cidr = [var.allowed_ssh_cidr]
 }
 
+
 module "security_groups" {
   source                    = "../../modules/security_groups"
   environment               = var.environment
