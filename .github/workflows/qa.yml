@@ -16,12 +16,15 @@ permissions:
   contents: read
 
 jobs:
+  ci-check:
+    uses: ./.github/workflows/ci.yml
+
   docker-push:
     name: Build & Push to Docker Hub
+    needs: [ci-check]
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     environment: qa
-
     env:
       QA_AUTH_API_URL: ${{ vars.QA_AUTH_API_URL || secrets.QA_AUTH_API_URL }}
       QA_USER_API_URL: ${{ vars.QA_USER_API_URL || secrets.QA_USER_API_URL }}
@@ -114,7 +117,7 @@ jobs:
             NEXT_PUBLIC_RESERVATION_API_URL=${{ env.QA_RESERVATION_API_URL }}
 
   deploy:
-    name: Deploy on EC2 instances
+    name: Deploy on EC2 instances (via Bastion)
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     needs: docker-push
     runs-on: ubuntu-latest
@@ -144,7 +147,32 @@ jobs:
           - name: reservation
             host_secret: QA_EC2_RESERVATION_HOST
             service_name: app
+
     steps:
+      # ── SSH key setup ──────────────────────────────────────────────────────
+      - name: Setup SSH keys and bastion tunnel
+        run: |
+          echo "=== DIAGNOSTICO DE SECRETOS ==="
+          if [ -z "${{ secrets.QA_BASTION_HOST }}" ]; then echo "⚠️ QA_BASTION_HOST esta VACIO (verifica si es secret o variable en GitHub)"; else echo "✅ QA_BASTION_HOST esta configurado"; fi
+          if [ -z "${{ secrets.QA_EC2_SSH_KEY }}" ]; then echo "⚠️ QA_EC2_SSH_KEY esta VACIO"; else echo "✅ QA_EC2_SSH_KEY esta configurado"; fi
+          if [ -z "${{ secrets[matrix.host_secret] }}" ]; then echo "⚠️ ${{ matrix.host_secret }} esta VACIO"; else echo "✅ ${{ matrix.host_secret }} esta configurado"; fi
+          echo "=============================="
+
+          mkdir -p ~/.ssh
+          echo "${{ secrets.QA_EC2_SSH_KEY }}" > ~/.ssh/qa.pem
+          chmod 400 ~/.ssh/qa.pem
+
+          # Trust the bastion's host key
+          ssh-keyscan -H ${{ secrets.QA_BASTION_HOST }} >> ~/.ssh/known_hosts
+
+          # Trust the target instance's host key (collected through the bastion)
+          ssh -i ~/.ssh/qa.pem \
+              -o StrictHostKeyChecking=no \
+              -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.QA_BASTION_HOST }}" \
+              ec2-user@${{ secrets[matrix.host_secret] }} \
+              "echo 'SSH tunnel OK'" 2>/dev/null || true
+
+      # ── Deploy via SSH through Bastion ────────────────────────────────────
       - name: Deploy ${{ matrix.name }}
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -155,10 +183,17 @@ jobs:
           timeout: 120s
           command_timeout: 15m
           script_stop: true
+          debug: true
+          # Route all SSH connections through the bastion host
+          proxy_host: ${{ secrets.QA_BASTION_HOST }}
+          proxy_username: ec2-user
+          proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
+          proxy_port: 22
           script: |
             export DOCKERHUB_USER="${{ secrets.DOCKERHUB_USERNAME }}"
             export DOCKERHUB_TOKEN="${{ secrets.DOCKERHUB_TOKEN }}"
             cd /opt/smartparking
+
             patch_env() {
               key="$1"
               val="$2"
@@ -169,15 +204,15 @@ jobs:
                 echo "${key}=${val}" | sudo tee -a "$env_file" > /dev/null
               fi
             }
+
             CORS_LIST="http://${{ secrets.QA_EC2_FRONTEND_HOST }}:3002,http://${{ secrets.QA_EC2_AUTH_HOST }}:3000,http://${{ secrets.QA_EC2_USER_HOST }}:3001,http://${{ secrets.QA_EC2_VEHICLE_HOST }}:3003,http://${{ secrets.QA_EC2_GATEWAY_HOST }}:3006,http://${{ secrets.QA_EC2_PARKING_HOST }}:3004,http://${{ secrets.QA_EC2_RESERVATION_HOST }}:3005"
-            
-            # Dynamic configurations based on node roles
+
             if [ "${{ matrix.name }}" = "auth" ]; then
               patch_env USER_SERVICE_URL "http://${{ secrets.QA_EC2_USER_HOST }}:3001"
               patch_env FRONTEND_URL "http://${{ secrets.QA_EC2_FRONTEND_HOST }}:3002"
               patch_env CORS_ORIGINS "$CORS_LIST"
             fi
-            
+
             if [ "${{ matrix.name }}" = "user" ] || [ "${{ matrix.name }}" = "vehicle" ]; then
               patch_env USER_DATABASE_URL "postgresql://admin:admin@${{ secrets.QA_EC2_AUTH_HOST }}:5432/userdb"
               patch_env VEHICLE_DATABASE_URL "postgresql://admin:admin@${{ secrets.QA_EC2_AUTH_HOST }}:5432/vehicledb"

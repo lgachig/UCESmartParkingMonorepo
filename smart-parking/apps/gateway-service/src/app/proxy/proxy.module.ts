@@ -90,11 +90,9 @@ export class VehicleProxyController {
 export class ParkingProxyController {
   private readonly proxy;
   constructor(private readonly cfg: ConfigService) {
-    // /api/parking/slots → parking-service /api/slots
-    this.proxy = makeProxy(cfg.get<string>('PARKING_SERVICE_URL')!, {
-      '^/api/parking': '/api',
-    });
+    this.proxy = makeProxy(cfg.get<string>('PARKING_SERVICE_URL')!);
   }
+  
   @All('*')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     this.proxy(req, res, next);

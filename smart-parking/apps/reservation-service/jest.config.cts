@@ -11,7 +11,7 @@ swcJestConfig.swcrc = false;
 
 module.exports = {
   displayName: '@org/reservation-service',
-  preset: '../jest.preset.js',
+  preset: '../../jest.preset.js',
   testEnvironment: 'node',
   transform: {
     '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig],

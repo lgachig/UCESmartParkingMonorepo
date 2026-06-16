@@ -91,8 +91,8 @@ output "github_setup_summary" {
       QA_EC2_AUTH_HOST          = ${module.auth.private_ip}
       QA_EC2_USER_HOST          = ${module.user.private_ip}
       QA_EC2_VEHICLE_HOST       = ${module.vehicle.private_ip}
-      QA_EC2_FRONTEND_HOST      = ${aws_eip.frontend.public_ip}
-      QA_EC2_GATEWAY_HOST       = ${aws_eip.gateway.public_ip}
+      QA_EC2_FRONTEND_HOST      = ${module.frontend.private_ip}
+      QA_EC2_GATEWAY_HOST       = ${module.gateway.private_ip}
       QA_EC2_PARKING_HOST       = ${module.parking.private_ip}
       QA_EC2_RESERVATION_HOST   = ${module.reservation.private_ip}
 

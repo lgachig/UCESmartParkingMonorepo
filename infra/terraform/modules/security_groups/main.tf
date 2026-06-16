@@ -8,12 +8,13 @@ resource "aws_security_group" "microservice" {
     create_before_destroy = true
   }
 
-  # SSH — inline para evitar conflictos de estado
+  # SSH only from the bastion security group (no public SSH access)
   ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [var.bastion_security_group_id]
+    description     = "SSH from bastion only"
   }
 
   egress {
