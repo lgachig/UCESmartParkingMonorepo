@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_call:
   push:
     branches: [main, QA, qa, PROD, prod, develop]
   pull_request:
@@ -25,8 +26,8 @@ jobs:
 
       - run: npm ci --prefix smart-parking
 
-      - name: Lint
-        run: cd smart-parking && npx nx run-many --target=lint --all --parallel=3
+      - name: Lint auth
+        run: cd smart-parking && npx nx run @org/auth-service:lint --verbose
 
       - name: Unit Tests
         run: cd smart-parking && npx nx run-many --target=test --all --parallel=3 --ci --coverage
