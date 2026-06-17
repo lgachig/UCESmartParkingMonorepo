@@ -1,14 +1,13 @@
 aws_region       = "us-east-1"
 environment      = "qa"
-key_name         = "QAUCESmart"
+key_name         = "QAUCESmartParking"
 allowed_ssh_cidr = "0.0.0.0/0"
 dockerhub_user   = "lgachig"
 
 # Primer apply: valores temporales
-frontend_url     = "http://98.95.177.52:3002"
-user_service_url = "http://172.31.88.93:3001"
-cors_origins     = "http://98.95.177.52:3002,http://34.236.240.173:3006,http://172.31.21.250:3000,http://172.31.88.93:3001,http://172.31.68.81:3003,http://172.31.70.157:3004,http://172.31.22.95:3005"
-
+frontend_url     = "http://52.200.64.142:3002"
+user_service_url = "http://172.31.92.248:3001"
+cors_origins     = "http://52.200.64.142:3002,http://34.225.129.123:3006,http://172.31.93.223:3000,http://172.31.92.248:3001,http://172.31.1.31:3003,http://172.31.9.231:3004,http://172.31.25.21:3005"
 
 # Segundo apply: reemplazar con las Elastic IP de terraform output
 # frontend_url     = "http://54.12.34.56:3002"
