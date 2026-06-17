@@ -122,9 +122,9 @@ Repo → **Settings** → **Actions** → permitir workflows.
 
 ```bash
 # Copia los valores desde la consola del lab (Vocareum / AWS Academy). No los pegues en el repo.
-export AWS_ACCESS_KEY_ID="TU_ACCESS_KEY_ID"
-export AWS_SECRET_ACCESS_KEY="TU_SECRET_ACCESS_KEY"
-export AWS_SESSION_TOKEN="TU_SESSION_TOKEN"   # obligatorio si el lab da sesión temporal (ASIA...)
+export AWS_ACCESS_KEY_ID=""
+export AWS_SECRET_ACCESS_KEY=""
+export AWS_SESSION_TOKEN=""   # obligatorio si el lab da sesión temporal (ASIA...)
 export AWS_DEFAULT_REGION="us-east-1"
 
 aws sts get-caller-identity

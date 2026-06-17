@@ -4,11 +4,8 @@ resource "aws_security_group" "microservice" {
   description = "Security Group for ${var.environment}-${each.value}"
   vpc_id      = var.vpc_id
 
-  lifecycle {
-    create_before_destroy = true
-  }
+  lifecycle { create_before_destroy = true }
 
-  # SSH only from the bastion security group (no public SSH access)
   ingress {
     from_port       = 22
     to_port         = 22
@@ -30,47 +27,94 @@ resource "aws_security_group" "microservice" {
   }
 }
 
-resource "aws_security_group_rule" "service_port" {
+resource "aws_security_group_rule" "frontend_public" {
+  type              = "ingress"
+  from_port         = 3002
+  to_port           = 3002
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.microservice["frontend"].id
+  description       = "Frontend public access"
+}
+
+resource "aws_security_group_rule" "gateway_public" {
+  type              = "ingress"
+  from_port         = 3006
+  to_port           = 3006
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.microservice["gateway"].id
+  description       = "Gateway public access"
+}
+
+resource "aws_security_group_rule" "private_from_gateway" {
   for_each = tomap({
     auth        = 3000
     user        = 3001
-    frontend    = 3002
     vehicle     = 3003
     parking     = 3004
     reservation = 3005
-    gateway     = 3006
   })
-  type              = "ingress"
-  from_port         = each.value
-  to_port           = each.value
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.microservice[each.key].id
+  type                     = "ingress"
+  from_port                = each.value
+  to_port                  = each.value
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.microservice["gateway"].id
+  security_group_id        = aws_security_group.microservice[each.key].id
+  description              = "${each.key} accessible from gateway only"
+}
+
+
+resource "aws_security_group_rule" "inter_service" {
+  for_each = tomap({
+    auth        = 3000
+    user        = 3001
+    vehicle     = 3003
+    parking     = 3004
+    reservation = 3005
+  })
+  type                     = "ingress"
+  from_port                = each.value
+  to_port                  = each.value
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.microservice["reservation"].id
+  security_group_id        = aws_security_group.microservice[each.key].id
+  description              = "${each.key} accessible from reservation-service"
+}
+
+locals {
+  internal_sgs = toset(["user", "vehicle", "gateway", "parking", "reservation"])
 }
 
 resource "aws_security_group_rule" "auth_postgres" {
-  type              = "ingress"
-  from_port         = 5432
-  to_port           = 5432
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.microservice["auth"].id
+  for_each                 = local.internal_sgs
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.microservice[each.value].id
+  security_group_id        = aws_security_group.microservice["auth"].id
+  description              = "PostgreSQL from ${each.value}"
 }
 
 resource "aws_security_group_rule" "auth_redis" {
-  type              = "ingress"
-  from_port         = 6379
-  to_port           = 6379
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.microservice["auth"].id
+  for_each                 = local.internal_sgs
+  type                     = "ingress"
+  from_port                = 6379
+  to_port                  = 6379
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.microservice[each.value].id
+  security_group_id        = aws_security_group.microservice["auth"].id
+  description              = "Redis from ${each.value}"
 }
 
 resource "aws_security_group_rule" "auth_kafka" {
-  type              = "ingress"
-  from_port         = 9092
-  to_port           = 9092
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.microservice["auth"].id
+  for_each                 = toset(["parking", "reservation"])
+  type                     = "ingress"
+  from_port                = 9092
+  to_port                  = 9092
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.microservice[each.value].id
+  security_group_id        = aws_security_group.microservice["auth"].id
+  description              = "Kafka from ${each.value}"
 }

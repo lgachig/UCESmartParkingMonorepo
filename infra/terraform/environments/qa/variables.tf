@@ -64,3 +64,4 @@ variable "cors_origins" {
   type        = string
   description = "Comma-separated list of allowed CORS origins"
 }
+

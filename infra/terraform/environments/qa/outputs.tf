@@ -73,35 +73,30 @@ output "qa_frontend_url" {
   value       = "http://${aws_eip.frontend.public_ip}:3002"
 }
 
+variable "auth_host" {
+  type        = string
+  description = "IP privada o DNS del auth EC2 (donde corren postgres, redis, kafka). Dejar en blanco en el primer apply."
+  default     = "placeholder"
+}
+
+
 output "github_setup_summary" {
-  description = "Resumen para configurar GitHub Actions (environment qa)"
+  description = "Solo 3 secrets necesarios en GitHub"
   value       = <<-EOT
-    ╔══════════════════════════════════════════════════════════════╗
-    ║          GitHub Environment: qa  |  Rama: QA / qa           ║
-    ╚══════════════════════════════════════════════════════════════╝
+    ── SECRETS (solo estos 3 son necesarios) ────────────
+    QA_EC2_SSH_KEY   = contenido del archivo ${var.key_name}.pem
+    QA_BASTION_HOST  = ${module.bastion.public_ip}
+    DOCKERHUB_TOKEN  = tu token de Docker Hub
 
-    ── SECRETS (Settings → Secrets → Actions → Environment: qa) ──
+    ── VARIABLES ─────────────────────────────────────────
+    QA_AUTH_API_URL        = http://${aws_eip.gateway.public_ip}:3006/api
+    QA_USER_API_URL        = http://${aws_eip.gateway.public_ip}:3006/api
+    QA_VEHICLE_API_URL     = http://${aws_eip.gateway.public_ip}:3006/api
+    QA_PARKING_API_URL     = http://${aws_eip.gateway.public_ip}:3006/api
+    QA_RESERVATION_API_URL = http://${aws_eip.gateway.public_ip}:3006/api
 
-      DOCKERHUB_USERNAME        = ${var.dockerhub_user}
-      DOCKERHUB_TOKEN           = (token de Docker Hub)
-      QA_EC2_SSH_KEY            = (contenido del .pem — ${var.key_name})
-
-      QA_BASTION_HOST           = ${module.bastion.public_ip}
-
-      QA_EC2_AUTH_HOST          = ${module.auth.private_ip}
-      QA_EC2_USER_HOST          = ${module.user.private_ip}
-      QA_EC2_VEHICLE_HOST       = ${module.vehicle.private_ip}
-      QA_EC2_FRONTEND_HOST      = ${module.frontend.private_ip}
-      QA_EC2_GATEWAY_HOST       = ${module.gateway.private_ip}
-      QA_EC2_PARKING_HOST       = ${module.parking.private_ip}
-      QA_EC2_RESERVATION_HOST   = ${module.reservation.private_ip}
-
-    ── VARIABLES (Settings → Variables → Actions → Environment: qa) ──
-
-      QA_AUTH_API_URL           = http://${aws_eip.gateway.public_ip}:3006/api
-      QA_USER_API_URL           = http://${aws_eip.gateway.public_ip}:3006/api
-      QA_VEHICLE_API_URL        = http://${aws_eip.gateway.public_ip}:3006/api
-      QA_PARKING_API_URL        = http://${aws_eip.gateway.public_ip}:3006/api
-      QA_RESERVATION_API_URL    = http://${aws_eip.gateway.public_ip}:3006/api
+    ── ACCESO PÚBLICO ────────────────────────────────────
+    Frontend: http://${aws_eip.frontend.public_ip}:3002
+    Gateway:  http://${aws_eip.gateway.public_ip}:3006
   EOT
 }

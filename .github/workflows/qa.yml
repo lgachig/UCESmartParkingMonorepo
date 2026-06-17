@@ -118,7 +118,7 @@ jobs:
             NEXT_PUBLIC_RESERVATION_API_URL=${{ env.QA_RESERVATION_API_URL }}
 
   deploy:
-    name: Deploy on EC2 instances (via Bastion)
+    name: Deploy via Bastion (dynamic IP discovery)
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     needs: docker-push
     runs-on: ubuntu-latest
@@ -128,52 +128,80 @@ jobs:
       matrix:
         include:
           - name: auth
-            host_secret: QA_EC2_AUTH_HOST
+            service_tag: auth
             service_name: auth-service
           - name: user
-            host_secret: QA_EC2_USER_HOST
+            service_tag: user
             service_name: app
           - name: vehicle
-            host_secret: QA_EC2_VEHICLE_HOST
+            service_tag: vehicle
             service_name: app
           - name: frontend
-            host_secret: QA_EC2_FRONTEND_HOST
+            service_tag: frontend
             service_name: app
           - name: gateway
-            host_secret: QA_EC2_GATEWAY_HOST
+            service_tag: gateway
             service_name: app
           - name: parking
-            host_secret: QA_EC2_PARKING_HOST
+            service_tag: parking
             service_name: app
           - name: reservation
-            host_secret: QA_EC2_RESERVATION_HOST
+            service_tag: reservation
             service_name: app
 
     steps:
-      - name: Setup SSH keys and bastion tunnel
-        run: |
-          echo "=== DIAGNOSTICO DE SECRETOS ==="
-          if [ -z "${{ secrets.QA_BASTION_HOST }}" ]; then echo "⚠️  QA_BASTION_HOST VACIO"; else echo "✅ QA_BASTION_HOST OK"; fi
-          if [ -z "${{ secrets.QA_EC2_SSH_KEY }}" ];  then echo "⚠️  QA_EC2_SSH_KEY VACIO";  else echo "✅ QA_EC2_SSH_KEY OK"; fi
-          if [ -z "${{ secrets[matrix.host_secret] }}" ]; then echo "⚠️  ${{ matrix.host_secret }} VACIO"; else echo "✅ ${{ matrix.host_secret }} OK"; fi
-          echo "==============================="
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
+      - name: Discover private IP of ${{ matrix.name }} instance
+        id: discover
+        run: |
+          PRIVATE_IP=$(aws ec2 describe-instances \
+            --filters \
+              "Name=tag:Service,Values=${{ matrix.service_tag }}" \
+              "Name=tag:Environment,Values=qa" \
+              "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].PrivateIpAddress" \
+            --output text)
+
+          if [ -z "$PRIVATE_IP" ] || [ "$PRIVATE_IP" = "None" ]; then
+            echo "❌ No se encontró instancia con Service=${{ matrix.service_tag }} Environment=qa"
+            exit 1
+          fi
+
+          echo "✅ Instancia ${{ matrix.name }} encontrada: $PRIVATE_IP"
+          echo "PRIVATE_IP=$PRIVATE_IP" >> $GITHUB_ENV
+
+      - name: Setup SSH key
+        run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.QA_EC2_SSH_KEY }}" > ~/.ssh/qa.pem
           chmod 400 ~/.ssh/qa.pem
-
           ssh-keyscan -H ${{ secrets.QA_BASTION_HOST }} >> ~/.ssh/known_hosts
 
-          ssh -i ~/.ssh/qa.pem \
-              -o StrictHostKeyChecking=no \
-              -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.QA_BASTION_HOST }}" \
-              ec2-user@${{ secrets[matrix.host_secret] }} \
-              "echo 'SSH tunnel OK'" 2>/dev/null || true
+      - name: Wait for SSH connectivity
+        run: |
+          for i in $(seq 1 10); do
+            if ssh -i ~/.ssh/qa.pem \
+                   -o StrictHostKeyChecking=no \
+                   -o ConnectTimeout=10 \
+                   -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.QA_BASTION_HOST }}" \
+                   ec2-user@${{ env.PRIVATE_IP }} "echo OK" 2>/dev/null; then
+              echo "✅ SSH conectado"
+              break
+            fi
+            echo "⏳ Intento $i/10 — esperando..."
+            sleep 15
+          done
 
       - name: Deploy ${{ matrix.name }}
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets[matrix.host_secret] }}
+          host: ${{ env.PRIVATE_IP }}
           username: ec2-user
           key: ${{ secrets.QA_EC2_SSH_KEY }}
           port: 22
@@ -189,67 +217,12 @@ jobs:
             COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
             ENV_FILE="/opt/smartparking/.env"
 
-            # FIX: asegurar que ec2-user es dueño del .env para no necesitar sudo
             sudo chown ec2-user:ec2-user "$ENV_FILE" 2>/dev/null || true
-            sudo chmod 644 "$ENV_FILE" 2>/dev/null || true
+            chmod 644 "$ENV_FILE" 2>/dev/null || true
 
-            # FIX: patch_env sin sudo — ec2-user ya es dueño del archivo
-            patch_env() {
-              local key="$1"
-              local val="$2"
-              if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
-                sed -i "s|^${key}=.*|${key}=${val}|" "$ENV_FILE"
-              else
-                echo "${key}=${val}" >> "$ENV_FILE"
-              fi
-            }
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
+              docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-            CORS_LIST="http://${{ secrets.QA_EC2_FRONTEND_HOST }}:3002,http://${{ secrets.QA_EC2_AUTH_HOST }}:3000,http://${{ secrets.QA_EC2_USER_HOST }}:3001,http://${{ secrets.QA_EC2_VEHICLE_HOST }}:3003,http://${{ secrets.QA_EC2_GATEWAY_HOST }}:3006,http://${{ secrets.QA_EC2_PARKING_HOST }}:3004,http://${{ secrets.QA_EC2_RESERVATION_HOST }}:3005"
-
-            if [ "${{ matrix.name }}" = "auth" ]; then
-              patch_env USER_SERVICE_URL  "http://${{ secrets.QA_EC2_USER_HOST }}:3001"
-              patch_env FRONTEND_URL      "http://${{ secrets.QA_EC2_FRONTEND_HOST }}:3002"
-              patch_env CORS_ORIGINS      "$CORS_LIST"
-            fi
-
-            if [ "${{ matrix.name }}" = "user" ] || [ "${{ matrix.name }}" = "vehicle" ]; then
-              patch_env USER_DATABASE_URL    "postgresql://admin:admin@${{ secrets.QA_EC2_AUTH_HOST }}:5432/userdb"
-              patch_env VEHICLE_DATABASE_URL "postgresql://admin:admin@${{ secrets.QA_EC2_AUTH_HOST }}:5432/vehicledb"
-              patch_env REDIS_URL            "redis://${{ secrets.QA_EC2_AUTH_HOST }}:6379"
-              patch_env CORS_ORIGINS         "$CORS_LIST"
-            fi
-
-            if [ "${{ matrix.name }}" = "gateway" ]; then
-              patch_env REDIS_URL            "redis://${{ secrets.QA_EC2_AUTH_HOST }}:6379"
-              patch_env AUTH_SERVICE_URL     "http://${{ secrets.QA_EC2_AUTH_HOST }}:3000"
-              patch_env USER_SERVICE_URL     "http://${{ secrets.QA_EC2_USER_HOST }}:3001"
-              patch_env VEHICLE_SERVICE_URL  "http://${{ secrets.QA_EC2_VEHICLE_HOST }}:3003"
-              patch_env PARKING_SERVICE_URL  "http://${{ secrets.QA_EC2_PARKING_HOST }}:3004"
-              patch_env RESERVATION_SERVICE_URL "http://${{ secrets.QA_EC2_RESERVATION_HOST }}:3005"
-              patch_env CORS_ORIGINS         "$CORS_LIST"
-            fi
-
-            if [ "${{ matrix.name }}" = "parking" ]; then
-              patch_env PARKING_DATABASE_URL "postgresql://admin:admin@${{ secrets.QA_EC2_AUTH_HOST }}:5432/parkingdb"
-              patch_env REDIS_URL            "redis://${{ secrets.QA_EC2_AUTH_HOST }}:6379"
-              patch_env KAFKA_BROKERS        "${{ secrets.QA_EC2_AUTH_HOST }}:9092"
-              patch_env CORS_ORIGINS         "$CORS_LIST"
-            fi
-
-            if [ "${{ matrix.name }}" = "reservation" ]; then
-              patch_env RESERVATION_DATABASE_URL "postgresql://admin:admin@${{ secrets.QA_EC2_AUTH_HOST }}:5432/reservationdb"
-              patch_env REDIS_URL            "redis://${{ secrets.QA_EC2_AUTH_HOST }}:6379"
-              patch_env KAFKA_BROKERS        "${{ secrets.QA_EC2_AUTH_HOST }}:9092"
-              patch_env PARKING_SERVICE_URL  "http://${{ secrets.QA_EC2_PARKING_HOST }}:3004"
-              patch_env USER_SERVICE_URL     "http://${{ secrets.QA_EC2_USER_HOST }}:3001"
-              patch_env VEHICLE_SERVICE_URL  "http://${{ secrets.QA_EC2_VEHICLE_HOST }}:3003"
-              patch_env CORS_ORIGINS         "$CORS_LIST"
-            fi
-
-            # FIX: docker login explícito antes del pull
-            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-
-            # FIX: siempre -f explícito para no depender del cwd
             docker-compose -f "$COMPOSE_FILE" pull
             docker-compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
             docker-compose -f "$COMPOSE_FILE" ps

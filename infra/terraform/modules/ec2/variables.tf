@@ -38,5 +38,11 @@ variable "user_data" {
 variable "root_volume_size" {
   type        = number
   description = "The size of the root volume in GB"
-  default     = 10
+  default     = 30
+}
+
+variable "extra_tags" {
+  type        = map(string)
+  default     = {}
+  description = "Tags adicionales para discovery dinámico por el CI/CD"
 }
