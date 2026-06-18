@@ -45,18 +45,7 @@ module "auth" {
     docker_image_tag = var.environment
     service_port     = 3000
     is_auth          = true
-    env_content      = <<-EOF
-      DOCKERHUB_USER=${var.dockerhub_user}
-      PORT=3000
-      DATABASE_URL=postgresql://admin:admin@postgres:5432/smartparking
-      REDIS_URL=redis://redis:6379
-      JWT_SECRET=${var.jwt_secret}
-      JWT_REFRESH_SECRET=${var.jwt_refresh_secret}
-      INTERNAL_SERVICE_KEY=${var.internal_service_key}
-      FRONTEND_URL=${var.frontend_url}
-      USER_SERVICE_URL=${var.user_service_url}
-      CORS_ORIGINS=${var.cors_origins}
-    EOF
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
   })
 }
 
@@ -76,15 +65,7 @@ module "user" {
     docker_image_tag = var.environment
     service_port     = 3001
     is_auth          = false
-    env_content      = <<-EOF
-      DOCKERHUB_USER=${var.dockerhub_user}
-      USER_SERVICE_PORT=3001
-      USER_DATABASE_URL=postgresql://admin:admin@${var.auth_host}:5432/userdb
-      REDIS_URL=redis://${var.auth_host}:6379
-      JWT_SECRET=${var.jwt_secret}
-      INTERNAL_SERVICE_KEY=${var.internal_service_key}
-      CORS_ORIGINS=${var.cors_origins}
-    EOF
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
   })
 }
 
@@ -104,15 +85,7 @@ module "vehicle" {
     docker_image_tag = var.environment
     service_port     = 3003
     is_auth          = false
-    env_content      = <<-EOF
-      DOCKERHUB_USER=${var.dockerhub_user}
-      VEHICLE_SERVICE_PORT=3003
-      VEHICLE_DATABASE_URL=postgresql://admin:admin@${var.auth_host}:5432/vehicledb
-      REDIS_URL=redis://${var.auth_host}:6379
-      JWT_SECRET=${var.jwt_secret}
-      INTERNAL_SERVICE_KEY=${var.internal_service_key}
-      CORS_ORIGINS=${var.cors_origins}
-    EOF
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
   })
 }
 
@@ -157,19 +130,7 @@ module "gateway" {
     docker_image_tag = var.environment
     service_port     = 3006
     is_auth          = false
-    env_content      = <<-EOF
-      GATEWAY_PORT=3006
-      JWT_SECRET=${var.jwt_secret}
-      REDIS_URL=redis://${var.auth_host}:6379
-      AUTH_SERVICE_URL=http://${var.auth_host}:3000
-      USER_SERVICE_URL=http://${var.user_service_url}:3001
-      VEHICLE_SERVICE_URL=http://${var.auth_host}:3003
-      PARKING_SERVICE_URL=http://${var.auth_host}:3004
-      RESERVATION_SERVICE_URL=http://${var.auth_host}:3005
-      CORS_ORIGINS=${var.cors_origins}
-      THROTTLE_TTL=60000
-      THROTTLE_LIMIT=60
-    EOF
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
   })
 }
 
@@ -194,16 +155,7 @@ module "parking" {
     docker_image_tag = var.environment
     service_port     = 3004
     is_auth          = false
-    env_content      = <<-EOF
-      DOCKERHUB_USER=${var.dockerhub_user}
-      PARKING_SERVICE_PORT=3004
-      PARKING_DATABASE_URL=postgresql://admin:admin@${var.auth_host}:5432/parkingdb
-      REDIS_URL=redis://${var.auth_host}:6379
-      KAFKA_BROKERS=${var.auth_host}:9092
-      JWT_SECRET=${var.jwt_secret}
-      INTERNAL_SERVICE_KEY=${var.internal_service_key}
-      CORS_ORIGINS=${var.cors_origins}
-    EOF
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
   })
 }
 
@@ -223,19 +175,6 @@ module "reservation" {
     docker_image_tag = var.environment
     service_port     = 3005
     is_auth          = false
-    env_content      = <<-EOF
-      DOCKERHUB_USER=${var.dockerhub_user}
-      RESERVATION_SERVICE_PORT=3005
-      RESERVATION_DATABASE_URL=postgresql://admin:admin@${var.auth_host}:5432/reservationdb
-      REDIS_URL=redis://${var.auth_host}:6379
-      KAFKA_BROKERS=${var.auth_host}:9092
-      JWT_SECRET=${var.jwt_secret}
-      INTERNAL_SERVICE_KEY=${var.internal_service_key}
-      PARKING_SERVICE_URL=http://${var.auth_host}:3004
-      USER_SERVICE_URL=http://${var.user_service_url}:3001
-      VEHICLE_SERVICE_URL=http://${var.auth_host}:3003
-      CORS_ORIGINS=${var.cors_origins}
-      RESERVATION_EXPIRY_MINUTES=15
-    EOF
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
   })
 }

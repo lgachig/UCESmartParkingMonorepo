@@ -14,6 +14,13 @@ resource "aws_security_group" "microservice" {
     description     = "SSH from bastion only"
   }
 
+  ingress {
+    from_port = 0
+    to_port   = 0
+    protocol  = "-1"
+    self      = true
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -102,6 +109,16 @@ resource "aws_security_group_rule" "vehicle_from_reservation" {
   source_security_group_id = aws_security_group.microservice["reservation"].id
   security_group_id        = aws_security_group.microservice["vehicle"].id
   description              = "vehicle accessible from reservation"
+}
+
+resource "aws_security_group_rule" "frontend_from_auth" {
+  type                     = "ingress"
+  from_port                = 3002
+  to_port                  = 3002
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.microservice["auth"].id
+  security_group_id        = aws_security_group.microservice["frontend"].id
+  description              = "frontend accessible from auth for redirections/callbacks"
 }
 
 locals {
