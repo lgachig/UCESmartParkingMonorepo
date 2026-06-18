@@ -6,9 +6,9 @@ allowed_ssh_cidr = "0.0.0.0/0"
 dockerhub_user   = "lgachig"
 
 # Primer apply: valores temporales
-frontend_url = "http://52.200.64.142:3002"
-user_service_url = "http://172.31.30.191:3001"
-cors_origins = "http://52.200.64.142:3002,http://34.225.129.123:3006"
+frontend_url     = "http://44.220.7.33:3002"
+user_service_url = "http://32.197.96.152:3006/api"
+cors_origins     = "http://44.220.7.33:3002,http://32.197.96.152:3006"
 
 # Segundo apply: reemplazar con las Elastic IP de terraform output
 # frontend_url     = "http://54.12.34.56:3002"

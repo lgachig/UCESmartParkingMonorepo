@@ -64,22 +64,44 @@ resource "aws_security_group_rule" "private_from_gateway" {
   description              = "${each.key} accessible from gateway only"
 }
 
-
-resource "aws_security_group_rule" "inter_service" {
-  for_each = tomap({
-    auth        = 3000
-    user        = 3001
-    vehicle     = 3003
-    parking     = 3004
-    reservation = 3005
-  })
+resource "aws_security_group_rule" "user_from_auth" {
   type                     = "ingress"
-  from_port                = each.value
-  to_port                  = each.value
+  from_port                = 3001
+  to_port                  = 3001
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.microservice["auth"].id
+  security_group_id        = aws_security_group.microservice["user"].id
+  description              = "user-service accessible from auth-service"
+}
+
+resource "aws_security_group_rule" "parking_from_reservation" {
+  type                     = "ingress"
+  from_port                = 3004
+  to_port                  = 3004
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.microservice["reservation"].id
-  security_group_id        = aws_security_group.microservice[each.key].id
-  description              = "${each.key} accessible from reservation-service"
+  security_group_id        = aws_security_group.microservice["parking"].id
+  description              = "parking accessible from reservation"
+}
+
+resource "aws_security_group_rule" "user_from_reservation" {
+  type                     = "ingress"
+  from_port                = 3001
+  to_port                  = 3001
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.microservice["reservation"].id
+  security_group_id        = aws_security_group.microservice["user"].id
+  description              = "user accessible from reservation"
+}
+
+resource "aws_security_group_rule" "vehicle_from_reservation" {
+  type                     = "ingress"
+  from_port                = 3003
+  to_port                  = 3003
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.microservice["reservation"].id
+  security_group_id        = aws_security_group.microservice["vehicle"].id
+  description              = "vehicle accessible from reservation"
 }
 
 locals {
