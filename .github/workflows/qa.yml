@@ -20,7 +20,6 @@ jobs:
   ci-check:
     uses: ./.github/workflows/ci.yml
 
-  # ─── Propagar outputs de cambios desde ci-check ───────────────────────────
   get-changes:
     name: Read Changed Services
     needs: [ci-check]
@@ -45,7 +44,6 @@ jobs:
           echo "gateway=${{ needs.ci-check.outputs.gateway }}"
           echo "frontend=${{ needs.ci-check.outputs.frontend }}"
 
-  # ─── Build & Push — SOLO los servicios que cambiaron ─────────────────────
   docker-push:
     name: Build & Push (${{ matrix.name }})
     needs: [get-changes]
@@ -139,7 +137,6 @@ jobs:
           build-args: |
             NEXT_PUBLIC_GATEWAY_URL=${{ env.QA_GATEWAY_URL }}
 
-  # ─── Descubrir IPs EC2 ────────────────────────────────────────────────────
   discover-ips:
     name: Discover Private IPs
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
