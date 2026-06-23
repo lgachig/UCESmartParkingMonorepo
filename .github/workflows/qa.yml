@@ -347,6 +347,10 @@ jobs:
               echo "  ✔ ${key} configurado"
             }
 
+            echo "JWT_SECRET='${{ secrets.QA_JWT_SECRET }}'"
+            echo "JWT_REFRESH_SECRET='${{ secrets.QA_JWT_REFRESH_SECRET }}'" 
+            echo "INTERNAL_SERVICE_KEY='${{ secrets.QA_INTERNAL_SERVICE_KEY }}'"
+            
             # ── 1. VARIABLES COMUNES Y GLOBALES ──────────────────────────────────
             patch_env DOCKERHUB_USER        "${{ secrets.DOCKERHUB_USERNAME }}"
             patch_env JWT_SECRET            "${{ secrets.QA_JWT_SECRET }}"
