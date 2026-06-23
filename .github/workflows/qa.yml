@@ -369,13 +369,13 @@ jobs:
 
             if [ "${{ matrix.name }}" = "user" ]; then
               patch_env USER_SERVICE_PORT  "3001"
-              patch_env USER_DATABASE_URL  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/smartparking"
+              patch_env USER_DATABASE_URL  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb"
               patch_env REDIS_URL          "redis://${AUTH_PRIVATE_IP}:6379"
             fi
 
             if [ "${{ matrix.name }}" = "vehicle" ]; then
               patch_env VEHICLE_SERVICE_PORT  "3003"
-              patch_env VEHICLE_DATABASE_URL  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/smartparking"
+              patch_env VEHICLE_DATABASE_URL  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/vehicledb"
               patch_env REDIS_URL             "redis://${AUTH_PRIVATE_IP}:6379"
             fi
 
@@ -393,14 +393,14 @@ jobs:
 
             if [ "${{ matrix.name }}" = "parking" ]; then
               patch_env PARKING_SERVICE_PORT  "3004"
-              patch_env PARKING_DATABASE_URL  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/smartparking"
+              patch_env PARKING_DATABASE_URL  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb"
               patch_env REDIS_URL             "redis://${AUTH_PRIVATE_IP}:6379"
               patch_env KAFKA_BROKERS         "${AUTH_PRIVATE_IP}:9092"
             fi
 
             if [ "${{ matrix.name }}" = "reservation" ]; then
               patch_env RESERVATION_SERVICE_PORT   "3005"
-              patch_env RESERVATION_DATABASE_URL   "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/smartparking"
+              patch_env RESERVATION_DATABASE_URL   "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/reservationdb"
               patch_env REDIS_URL                  "redis://${AUTH_PRIVATE_IP}:6379"
               patch_env KAFKA_BROKERS              "${AUTH_PRIVATE_IP}:9092"
               patch_env PARKING_SERVICE_URL        "http://${PARKING_PRIVATE_IP}:3004"
@@ -414,3 +414,20 @@ jobs:
             docker-compose -f "$COMPOSE_FILE" pull ${{ matrix.service_name }}
             docker-compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
             docker-compose -f "$COMPOSE_FILE" ps
+
+            if [ "${{ matrix.name }}" = "auth" ]; then
+              echo "Waiting for PostgreSQL to be ready..."
+              for i in {1..30}; do
+                if docker exec smartparking-postgres pg_isready -U admin -d smartparking &>/dev/null; then
+                  echo "PostgreSQL is ready!"
+                  break
+                fi
+                sleep 1
+              done
+
+              echo "Ensuring microservice databases exist..."
+              docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE userdb;" || true
+              docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE vehicledb;" || true
+              docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE parkingdb;" || true
+              docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE reservationdb;" || true
+            fi

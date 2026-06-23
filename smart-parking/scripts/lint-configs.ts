@@ -54,9 +54,15 @@ function lintEnvFile(filePath: string) {
       }
     }
 
-    // Check database URLs point to 'smartparking' database
-    const dbUrlKeys = ['DATABASE_URL', 'USER_DATABASE_URL', 'VEHICLE_DATABASE_URL', 'PARKING_DATABASE_URL', 'RESERVATION_DATABASE_URL'];
-    if (dbUrlKeys.includes(cleanKey)) {
+    // Check database URLs point to their expected database
+    const expectedDbs: Record<string, string> = {
+      'DATABASE_URL': 'smartparking',
+      'USER_DATABASE_URL': 'userdb',
+      'VEHICLE_DATABASE_URL': 'vehicledb',
+      'PARKING_DATABASE_URL': 'parkingdb',
+      'RESERVATION_DATABASE_URL': 'reservationdb'
+    };
+    if (cleanKey in expectedDbs) {
       let dbName = '';
       try {
         const urlObj = new URL(value);
@@ -65,8 +71,9 @@ function lintEnvFile(filePath: string) {
         const lastSlash = value.lastIndexOf('/');
         dbName = lastSlash !== -1 ? value.slice(lastSlash + 1).split('?')[0] : '';
       }
-      if (dbName !== 'smartparking') {
-        logError(filePath, lineNum, `${cleanKey} points to database '${dbName || 'unknown'}' instead of the mandatory 'smartparking'`);
+      const expected = expectedDbs[cleanKey];
+      if (dbName !== expected) {
+        logError(filePath, lineNum, `${cleanKey} points to database '${dbName || 'unknown'}' instead of the expected '${expected}'`);
       }
     }
   }
