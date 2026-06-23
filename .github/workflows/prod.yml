@@ -312,4 +312,23 @@ jobs:
               docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE vehicledb;" || true
               docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE parkingdb;" || true
               docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE reservationdb;" || true
+
+              echo "Cleaning up invalid failed migrations on smartparking DB..."
+              docker exec smartparking-postgres psql -U admin -d smartparking -c "DELETE FROM _prisma_migrations WHERE migration_name = '20260601120000_init_vehicle';" || true
+
+              echo "Running auth migrations..."
+              docker-compose -f "$COMPOSE_FILE" exec -T auth-service npx prisma migrate deploy --schema prisma/auth/schema.prisma
+            fi
+
+            if [ "${{ matrix.name }}" = "user" ]; then
+              echo "Running user migrations..."
+              docker-compose -f "$COMPOSE_FILE" exec -T app npx prisma migrate deploy --config prisma.user.config.ts
+            fi
+
+            if [ "${{ matrix.name }}" = "vehicle" ]; then
+              echo "Resolving vehicle init migration if failed in vehicledb..."
+              docker-compose -f "$COMPOSE_FILE" exec -T app npx prisma migrate resolve --rolled-back 20260601120000_init_vehicle --config prisma.vehicle.config.ts || true
+
+              echo "Running vehicle migrations..."
+              docker-compose -f "$COMPOSE_FILE" exec -T app npx prisma migrate deploy --config prisma.vehicle.config.ts
             fi

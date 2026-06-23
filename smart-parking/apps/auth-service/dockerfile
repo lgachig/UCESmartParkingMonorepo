@@ -16,4 +16,4 @@ RUN npx nx build @org/auth-service
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate deploy --schema prisma/auth/schema.prisma && node apps/auth-service/dist/main.js"]
+CMD ["node", "apps/auth-service/dist/main.js"]

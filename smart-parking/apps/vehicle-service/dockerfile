@@ -16,4 +16,4 @@ RUN npx nx build @org/vehicle-service
 
 EXPOSE 3003
 
-CMD ["sh", "-c", "npx prisma migrate deploy --config prisma.vehicle.config.ts && node apps/vehicle-service/dist/main.js"]
+CMD ["node", "apps/vehicle-service/dist/main.js"]

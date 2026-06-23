@@ -22,7 +22,10 @@ export class HealthController {
 
     const results = await Promise.allSettled(
       Object.entries(services).map(async ([name, url]) => {
-        const res = await fetch(`${url}/health`).catch(() => null);
+        if (!url) return { name, up: false };
+        const cleanUrl = url.replace(/\/+$/, '');
+        const endpoint = cleanUrl.endsWith('/api') ? `${cleanUrl}/health` : `${cleanUrl}/api/health`;
+        const res = await fetch(endpoint).catch(() => null);
         return { name, up: res?.ok ?? false };
       }),
     );
