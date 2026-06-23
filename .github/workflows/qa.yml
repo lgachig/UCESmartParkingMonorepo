@@ -243,7 +243,7 @@ jobs:
           port: 22
           timeout: 120s
           command_timeout: 15m
-          script_stop: true
+          script_stop: false
           proxy_host: ${{ secrets.QA_BASTION_HOST }}
           proxy_username: ec2-user
           proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
@@ -255,7 +255,14 @@ jobs:
             PARKING_PRIVATE_IP
             RESERVATION_PRIVATE_IP
           script: |
-            set -e
+            set -ex
+
+            echo "AUTH=$AUTH_PRIVATE_IP"
+            echo "USER=$USER_PRIVATE_IP"
+            echo "VEHICLE=$VEHICLE_PRIVATE_IP"
+            echo "PARKING=$PARKING_PRIVATE_IP"
+            echo "RESERVATION=$RESERVATION_PRIVATE_IP"
+
             COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
             ENV_FILE="/opt/smartparking/.env"
 
@@ -265,6 +272,17 @@ jobs:
             chmod 644 "$ENV_FILE"
 
             # Helper para inyectar/reemplazar valores en el .env sin duplicar líneas
+            
+            echo "=== DEBUG FILES ==="
+            ls -la /opt/smartparking || true
+            ls -la "$COMPOSE_FILE" || true
+            echo "=== DEBUG DOCKER ==="
+            which docker || true
+            docker --version || true
+            which docker-compose || true
+            docker-compose --version || true
+            docker compose version || true
+
             patch_env() {
               local key="$1" val="$2"
               if [ -z "$val" ] || [ "$val" = "None" ]; then
