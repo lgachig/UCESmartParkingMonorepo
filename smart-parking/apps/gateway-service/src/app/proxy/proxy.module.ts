@@ -15,8 +15,12 @@ import { JwtGatewayGuard, GatewayUser } from '../auth/jwt-gateway.guard';
 import { IncomingMessage } from 'http';
 
 function makeProxy(target: string, pathRewrite?: Record<string, string>) {
+  let normalizedTarget = target;
+  if (target && target.endsWith('/api')) {
+    normalizedTarget = target.substring(0, target.length - 4);
+  }
   const opts: Options = {
-    target,
+    target: normalizedTarget,
     changeOrigin: true,
     pathRewrite,
     on: {

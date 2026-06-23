@@ -26,6 +26,9 @@ jobs:
 
       - run: npm ci --prefix smart-parking
 
+      - name: Lint Environment and Docker-Compose Config
+        run: cd smart-parking && npx ts-node scripts/lint-configs.ts
+
       - name: Lint auth
         run: cd smart-parking && npx nx run @org/auth-service:lint --verbose
 

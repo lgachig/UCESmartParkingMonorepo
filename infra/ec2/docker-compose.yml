@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: admin
       POSTGRES_DB: smartparking
     ports:
-      - '5433:5432'
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql
@@ -49,9 +49,6 @@ services:
       - .env
     environment:
       PORT: 3000
-      DATABASE_URL: postgresql://admin:admin@postgres:5432/smartparking
-      REDIS_URL: redis://redis:6379
-      USER_SERVICE_URL: http://user-service:3001
     ports:
       - '3000:3000'
     networks:
@@ -70,8 +67,6 @@ services:
       - .env
     environment:
       USER_SERVICE_PORT: 3001
-      USER_DATABASE_URL: postgresql://admin:admin@postgres:5432/userdb
-      REDIS_URL: redis://redis:6379
     ports:
       - '3001:3001'
     networks:
@@ -90,8 +85,6 @@ services:
       - .env
     environment:
       VEHICLE_SERVICE_PORT: 3003
-      VEHICLE_DATABASE_URL: postgresql://admin:admin@postgres:5432/vehicledb
-      REDIS_URL: redis://redis:6379
     ports:
       - '3003:3003'
     networks:

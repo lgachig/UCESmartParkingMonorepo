@@ -56,6 +56,8 @@ services:
     image: redis:7
     restart: unless-stopped
     ports: ["6379:6379"]
+    volumes:
+      - redis_data:/data
   kafka:
     image: confluentinc/cp-kafka:7.4.0
     restart: unless-stopped
@@ -83,6 +85,7 @@ services:
     depends_on: [postgres, redis]
 volumes:
   postgres_data:
+  redis_data:
 COMPOSE
 local_ip=$(hostname -I | awk '{print $1}')
 sed -i "s/_LOCAL_IP_/$local_ip/g" /opt/smartparking/docker-compose.yml

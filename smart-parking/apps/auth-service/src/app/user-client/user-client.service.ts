@@ -12,12 +12,13 @@ export class UserClientService {
   ) {}
 
   async createProfile(data: CreateProfilePayload) {
-    const userServiceUrl = this.configService.get<string>('USER_SERVICE_URL');
+    const userServiceUrl = this.configService.get<string>('USER_SERVICE_URL')!;
+    const baseUrl = userServiceUrl.endsWith('/api') ? userServiceUrl : `${userServiceUrl}/api`;
     const internalServiceKey = this.configService.get<string>(
       'INTERNAL_SERVICE_KEY',
     );
     const response = await firstValueFrom(
-      this.httpService.post(`${userServiceUrl}/api/users`, data, {
+      this.httpService.post(`${baseUrl}/users`, data, {
         headers: {
           'x-service-key': internalServiceKey,
         },

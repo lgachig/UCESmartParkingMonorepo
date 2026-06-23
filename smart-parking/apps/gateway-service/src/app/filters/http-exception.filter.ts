@@ -18,9 +18,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const message =
       exception instanceof HttpException
         ? exception.getResponse()
-        : 'Internal server error';
+        : (exception instanceof Error ? exception.message : String(exception));
 
-    this.logger.error({ path: request.url, method: request.method, error: message });
+    const stack = (exception as any)?.stack;
+    if (stack) {
+      console.error(stack);
+    } else {
+      console.error(exception);
+    }
+
+    this.logger.error({ path: request.url, method: request.method, error: message, stack: stack || undefined });
 
     response.status(status).json({
       statusCode: status,
