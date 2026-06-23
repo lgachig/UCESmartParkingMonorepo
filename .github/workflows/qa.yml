@@ -329,7 +329,7 @@ jobs:
             ls -la /opt/smartparking || true
             echo "=== DEBUG DOCKER ==="
             docker --version
-            docker compose version
+            docker-compose --version
 
             # ── Helper: inyecta/reemplaza en .env sin duplicar líneas ───────────
             # Ahora también valida que el valor no esté vacío antes de escribirlo
@@ -409,6 +409,6 @@ jobs:
 
             # ── 3. REINICIO DE CONTENEDORES ──────────────────────────────────────
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-            docker compose -f "$COMPOSE_FILE" pull ${{ matrix.service_name }}
-            docker compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
-            docker compose -f "$COMPOSE_FILE" ps
+            docker-compose -f "$COMPOSE_FILE" pull ${{ matrix.service_name }}
+            docker-compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
+            docker-compose -f "$COMPOSE_FILE" ps
