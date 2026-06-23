@@ -107,10 +107,102 @@ jobs:
             NEXT_PUBLIC_PARKING_API_URL=${{ env.QA_GATEWAY_URL }}/api
             NEXT_PUBLIC_RESERVATION_API_URL=${{ env.QA_GATEWAY_URL }}/api
 
+  # ─────────────────────────────────────────────────────────────────────────────
+  # NUEVO JOB: Descubrir y validar TODAS las IPs privadas ANTES de desplegar.
+  # Si alguna IP falta o devuelve "None", el pipeline falla aquí y ningún
+  # servicio se despliega con configuración incompleta.
+  # ─────────────────────────────────────────────────────────────────────────────
+  discover-ips:
+    name: Discover & Validate Private IPs
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    needs: docker-push
+    runs-on: ubuntu-latest
+    environment: qa
+    outputs:
+      auth_ip:        ${{ steps.ips.outputs.auth_ip }}
+      user_ip:        ${{ steps.ips.outputs.user_ip }}
+      vehicle_ip:     ${{ steps.ips.outputs.vehicle_ip }}
+      parking_ip:     ${{ steps.ips.outputs.parking_ip }}
+      reservation_ip: ${{ steps.ips.outputs.reservation_ip }}
+      gateway_ip:     ${{ steps.ips.outputs.gateway_ip }}
+      frontend_ip:    ${{ steps.ips.outputs.frontend_ip }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Discover all private IPs
+        id: ips
+        run: |
+          # ── Función helper: obtiene IP y falla si está vacía o es "None" ──────
+          get_ip() {
+            local service="$1"
+            local ip
+            ip=$(aws ec2 describe-instances \
+              --filters \
+                "Name=tag:Service,Values=${service}" \
+                "Name=tag:Environment,Values=qa" \
+                "Name=instance-state-name,Values=running" \
+              --query "Reservations[0].Instances[0].PrivateIpAddress" \
+              --output text 2>/dev/null)
+
+            # Validación estricta: vacío, "None" o "null" son todos inválidos
+            if [ -z "$ip" ] || [ "$ip" = "None" ] || [ "$ip" = "null" ]; then
+              echo "::error::No se encontró instancia EC2 corriendo con tag Service=${service} y Environment=qa"
+              return 1
+            fi
+
+            # Valida formato básico de IPv4
+            if ! echo "$ip" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
+              echo "::error::La IP obtenida para ${service} no es una IPv4 válida: '${ip}'"
+              return 1
+            fi
+
+            echo "$ip"
+          }
+
+          # ── Descubrir todas las IPs ──────────────────────────────────────────
+          echo "🔍 Descubriendo IPs privadas en QA..."
+
+          AUTH_IP=$(get_ip "auth")           || exit 1
+          USER_IP=$(get_ip "user")           || exit 1
+          VEHICLE_IP=$(get_ip "vehicle")     || exit 1
+          PARKING_IP=$(get_ip "parking")     || exit 1
+          RESERVATION_IP=$(get_ip "reservation") || exit 1
+          GATEWAY_IP=$(get_ip "gateway")     || exit 1
+          FRONTEND_IP=$(get_ip "frontend")   || exit 1
+
+          # ── Resumen visual ───────────────────────────────────────────────────
+          echo "✅ auth        → $AUTH_IP"
+          echo "✅ user        → $USER_IP"
+          echo "✅ vehicle     → $VEHICLE_IP"
+          echo "✅ parking     → $PARKING_IP"
+          echo "✅ reservation → $RESERVATION_IP"
+          echo "✅ gateway     → $GATEWAY_IP"
+          echo "✅ frontend    → $FRONTEND_IP"
+
+          # ── Exportar como outputs del job ────────────────────────────────────
+          echo "auth_ip=$AUTH_IP"               >> $GITHUB_OUTPUT
+          echo "user_ip=$USER_IP"               >> $GITHUB_OUTPUT
+          echo "vehicle_ip=$VEHICLE_IP"         >> $GITHUB_OUTPUT
+          echo "parking_ip=$PARKING_IP"         >> $GITHUB_OUTPUT
+          echo "reservation_ip=$RESERVATION_IP" >> $GITHUB_OUTPUT
+          echo "gateway_ip=$GATEWAY_IP"         >> $GITHUB_OUTPUT
+          echo "frontend_ip=$FRONTEND_IP"       >> $GITHUB_OUTPUT
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB DE DEPLOY: ahora depende de discover-ips y consume sus outputs.
+  # Las IPs llegan garantizadas como válidas; ya no se generan URLs con vacíos.
+  # ─────────────────────────────────────────────────────────────────────────────
   deploy:
     name: Deploy via Bastion (dynamic IP discovery)
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
-    needs: docker-push
+    needs: discover-ips          # <── depende del job de validación, no de docker-push
     runs-on: ubuntu-latest
     environment: qa
     strategy:
@@ -140,77 +232,29 @@ jobs:
             service_name: app
 
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
-
-      - name: Discover private IP of ${{ matrix.name }}
-        id: discover
+      # ── Las IPs vienen de los outputs del job anterior, ya validadas ─────────
+      - name: Load validated IPs from discover-ips job
         run: |
-          PRIVATE_IP=$(aws ec2 describe-instances \
-            --filters \
-              "Name=tag:Service,Values=${{ matrix.service_tag }}" \
-              "Name=tag:Environment,Values=qa" \
-              "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].PrivateIpAddress" \
-            --output text)
+          echo "AUTH_PRIVATE_IP=${{ needs.discover-ips.outputs.auth_ip }}"               >> $GITHUB_ENV
+          echo "USER_PRIVATE_IP=${{ needs.discover-ips.outputs.user_ip }}"               >> $GITHUB_ENV
+          echo "VEHICLE_PRIVATE_IP=${{ needs.discover-ips.outputs.vehicle_ip }}"         >> $GITHUB_ENV
+          echo "PARKING_PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"         >> $GITHUB_ENV
+          echo "RESERVATION_PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV
+          echo "GATEWAY_PRIVATE_IP=${{ needs.discover-ips.outputs.gateway_ip }}"         >> $GITHUB_ENV
+          echo "FRONTEND_PRIVATE_IP=${{ needs.discover-ips.outputs.frontend_ip }}"       >> $GITHUB_ENV
 
-          if [ -z "$PRIVATE_IP" ] || [ "$PRIVATE_IP" = "None" ]; then
-            echo "❌ No se encontró instancia Service=${{ matrix.service_tag }} Environment=qa"
-            exit 1
-          fi
-          echo "✅ ${{ matrix.name }} → $PRIVATE_IP"
-          echo "PRIVATE_IP=$PRIVATE_IP" >> $GITHUB_ENV
-
-          # También descubrimos la IP privada del auth (tiene postgres/redis/kafka)
-          AUTH_PRIVATE_IP=$(aws ec2 describe-instances \
-            --filters \
-              "Name=tag:Service,Values=auth" \
-              "Name=tag:Environment,Values=qa" \
-              "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].PrivateIpAddress" \
-            --output text)
-          echo "AUTH_PRIVATE_IP=$AUTH_PRIVATE_IP" >> $GITHUB_ENV
-
-          USER_PRIVATE_IP=$(aws ec2 describe-instances \
-            --filters \
-              "Name=tag:Service,Values=user" \
-              "Name=tag:Environment,Values=qa" \
-              "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].PrivateIpAddress" \
-            --output text)
-          echo "USER_PRIVATE_IP=$USER_PRIVATE_IP" >> $GITHUB_ENV
-
-          VEHICLE_PRIVATE_IP=$(aws ec2 describe-instances \
-            --filters \
-              "Name=tag:Service,Values=vehicle" \
-              "Name=tag:Environment,Values=qa" \
-              "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].PrivateIpAddress" \
-            --output text)
-          echo "VEHICLE_PRIVATE_IP=$VEHICLE_PRIVATE_IP" >> $GITHUB_ENV
-
-          PARKING_PRIVATE_IP=$(aws ec2 describe-instances \
-            --filters \
-              "Name=tag:Service,Values=parking" \
-              "Name=tag:Environment,Values=qa" \
-              "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].PrivateIpAddress" \
-            --output text)
-          echo "PARKING_PRIVATE_IP=$PARKING_PRIVATE_IP" >> $GITHUB_ENV
-
-          RESERVATION_PRIVATE_IP=$(aws ec2 describe-instances \
-            --filters \
-              "Name=tag:Service,Values=reservation" \
-              "Name=tag:Environment,Values=qa" \
-              "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].PrivateIpAddress" \
-            --output text)
-          echo "RESERVATION_PRIVATE_IP=$RESERVATION_PRIVATE_IP" >> $GITHUB_ENV
+      - name: Resolve target IP for this matrix service
+        run: |
+          # Selecciona la IP del servicio que toca desplegar en esta iteración
+          case "${{ matrix.name }}" in
+            auth)        echo "PRIVATE_IP=${{ needs.discover-ips.outputs.auth_ip }}"        >> $GITHUB_ENV ;;
+            user)        echo "PRIVATE_IP=${{ needs.discover-ips.outputs.user_ip }}"        >> $GITHUB_ENV ;;
+            vehicle)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.vehicle_ip }}"     >> $GITHUB_ENV ;;
+            parking)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"     >> $GITHUB_ENV ;;
+            reservation) echo "PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV ;;
+            gateway)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.gateway_ip }}"     >> $GITHUB_ENV ;;
+            frontend)    echo "PRIVATE_IP=${{ needs.discover-ips.outputs.frontend_ip }}"    >> $GITHUB_ENV ;;
+          esac
 
       - name: Setup SSH key
         run: |
@@ -227,7 +271,7 @@ jobs:
                    -o ConnectTimeout=10 \
                    -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.QA_BASTION_HOST }}" \
                    ec2-user@${{ env.PRIVATE_IP }} "echo OK" 2>/dev/null; then
-              echo "✅ SSH conectado"
+              echo "✅ SSH conectado a ${{ matrix.name }} (${{ env.PRIVATE_IP }})"
               break
             fi
             echo "⏳ Intento $i/10 — esperando..."
@@ -243,25 +287,35 @@ jobs:
           port: 22
           timeout: 120s
           command_timeout: 15m
-          script_stop: false
+          script_stop: true           # <── true: aborta ante el primer error en el script
           proxy_host: ${{ secrets.QA_BASTION_HOST }}
           proxy_username: ec2-user
           proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
           proxy_port: 22
-          envs: |
-            AUTH_PRIVATE_IP
-            USER_PRIVATE_IP
-            VEHICLE_PRIVATE_IP
-            PARKING_PRIVATE_IP
-            RESERVATION_PRIVATE_IP
+          # Las IPs llegan como variables de entorno al script remoto
+          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP
           script: |
-            set -ex
+            set -euo pipefail   # -e: falla ante error; -u: falla con variable sin definir; -o pipefail
 
-            echo "AUTH=$AUTH_PRIVATE_IP"
-            echo "USER=$USER_PRIVATE_IP"
-            echo "VEHICLE=$VEHICLE_PRIVATE_IP"
-            echo "PARKING=$PARKING_PRIVATE_IP"
-            echo "RESERVATION=$RESERVATION_PRIVATE_IP"
+            # ── Validación defensiva en el servidor (segunda línea de defensa) ──
+            validate_ip() {
+              local name="$1" ip="$2"
+              if [ -z "$ip" ] || [ "$ip" = "None" ] || [ "$ip" = "null" ]; then
+                echo "❌ ERROR: La IP de ${name} llegó vacía o inválida: '${ip}'"
+                exit 1
+              fi
+              if ! echo "$ip" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
+                echo "❌ ERROR: Formato IPv4 inválido para ${name}: '${ip}'"
+                exit 1
+              fi
+              echo "✅ ${name} IP válida: ${ip}"
+            }
+
+            validate_ip "auth"        "$AUTH_PRIVATE_IP"
+            validate_ip "user"        "$USER_PRIVATE_IP"
+            validate_ip "vehicle"     "$VEHICLE_PRIVATE_IP"
+            validate_ip "parking"     "$PARKING_PRIVATE_IP"
+            validate_ip "reservation" "$RESERVATION_PRIVATE_IP"
 
             COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
             ENV_FILE="/opt/smartparking/.env"
@@ -271,22 +325,18 @@ jobs:
             touch "$ENV_FILE"
             chmod 644 "$ENV_FILE"
 
-            # Helper para inyectar/reemplazar valores en el .env sin duplicar líneas
-            
             echo "=== DEBUG FILES ==="
             ls -la /opt/smartparking || true
-            ls -la "$COMPOSE_FILE" || true
             echo "=== DEBUG DOCKER ==="
-            which docker || true
-            docker --version || true
-            which docker-compose || true
-            docker-compose --version || true
-            docker compose version || true
+            docker --version
+            docker compose version
 
+            # ── Helper: inyecta/reemplaza en .env sin duplicar líneas ───────────
+            # Ahora también valida que el valor no esté vacío antes de escribirlo
             patch_env() {
               local key="$1" val="$2"
-              if [ -z "$val" ] || [ "$val" = "None" ]; then
-                echo "❌ Error: Valor vacío para la clave $key"
+              if [ -z "$val" ] || [ "$val" = "None" ] || [ "$val" = "null" ]; then
+                echo "❌ ERROR: Valor vacío o inválido para la clave ${key}: '${val}'"
                 exit 1
               fi
               if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
@@ -294,6 +344,7 @@ jobs:
               else
                 echo "${key}=${val}" >> "$ENV_FILE"
               fi
+              echo "  ✔ ${key} configurado"
             }
 
             # ── 1. VARIABLES COMUNES Y GLOBALES ──────────────────────────────────
@@ -301,67 +352,63 @@ jobs:
             patch_env JWT_SECRET            "${{ secrets.QA_JWT_SECRET }}"
             patch_env JWT_REFRESH_SECRET    "${{ secrets.QA_JWT_REFRESH_SECRET }}"
             patch_env INTERNAL_SERVICE_KEY  "${{ secrets.QA_INTERNAL_SERVICE_KEY }}"
-            
-            # 🌟 CORS_ORIGINS: Mandado dinámicamente usando las Elastic IPs de tus Secrets
+
             CORS_LIST="http://${{ secrets.QA_FRONTEND_EIP }}:3002,http://${{ secrets.QA_GATEWAY_EIP }}:3006"
             patch_env CORS_ORIGINS "$CORS_LIST"
 
-            # ── 2. INYECCIÓN ESPECÍFICA POR SERVICIO (IPs PRIVADAS) ──────────────
-            
+            # ── 2. INYECCIÓN ESPECÍFICA POR SERVICIO ─────────────────────────────
             if [ "${{ matrix.name }}" = "auth" ]; then
-              patch_env PORT              3000
+              patch_env PORT              "3000"
               patch_env DATABASE_URL      "postgresql://admin:admin@postgres:5432/smartparking"
               patch_env REDIS_URL         "redis://redis:6379"
-              # 🌟 Mandado desde el CI/CD usando la EIP del frontend
               patch_env FRONTEND_URL      "http://${{ secrets.QA_FRONTEND_EIP }}:3002"
-              # 🌟 Apunta internamente por la red privada de AWS al microservicio de usuarios
-              patch_env USER_SERVICE_URL  "http://$USER_PRIVATE_IP:3001"
+              patch_env USER_SERVICE_URL  "http://${USER_PRIVATE_IP}:3001"
             fi
 
             if [ "${{ matrix.name }}" = "user" ]; then
-              patch_env USER_SERVICE_PORT  3001
-              patch_env USER_DATABASE_URL  "postgresql://admin:admin@$AUTH_PRIVATE_IP:5432/userdb"
-              patch_env REDIS_URL          "redis://$AUTH_PRIVATE_IP:6379"
+              patch_env USER_SERVICE_PORT  "3001"
+              patch_env USER_DATABASE_URL  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb"
+              patch_env REDIS_URL          "redis://${AUTH_PRIVATE_IP}:6379"
             fi
 
             if [ "${{ matrix.name }}" = "vehicle" ]; then
-              patch_env VEHICLE_SERVICE_PORT  3003
-              patch_env VEHICLE_DATABASE_URL  "postgresql://admin:admin@$AUTH_PRIVATE_IP:5432/vehicledb"
-              patch_env REDIS_URL             "redis://$AUTH_PRIVATE_IP:6379"
+              patch_env VEHICLE_SERVICE_PORT  "3003"
+              patch_env VEHICLE_DATABASE_URL  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/vehicledb"
+              patch_env REDIS_URL             "redis://${AUTH_PRIVATE_IP}:6379"
             fi
 
             if [ "${{ matrix.name }}" = "gateway" ]; then
-              patch_env GATEWAY_PORT           3006
-              patch_env REDIS_URL              "redis://$AUTH_PRIVATE_IP:6379"
-              patch_env AUTH_SERVICE_URL       "http://$AUTH_PRIVATE_IP:3000"
-              patch_env USER_SERVICE_URL       "http://$USER_PRIVATE_IP:3001"
-              patch_env VEHICLE_SERVICE_URL    "http://$VEHICLE_PRIVATE_IP:3003"
-              patch_env PARKING_SERVICE_URL    "http://$PARKING_PRIVATE_IP:3004"
-              patch_env RESERVATION_SERVICE_URL "http://$RESERVATION_PRIVATE_IP:3005"
-              patch_env THROTTLE_TTL           60000
-              patch_env THROTTLE_LIMIT          60
+              patch_env GATEWAY_PORT              "3006"
+              patch_env REDIS_URL                 "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env AUTH_SERVICE_URL          "http://${AUTH_PRIVATE_IP}:3000"
+              patch_env USER_SERVICE_URL          "http://${USER_PRIVATE_IP}:3001"
+              patch_env VEHICLE_SERVICE_URL       "http://${VEHICLE_PRIVATE_IP}:3003"
+              patch_env PARKING_SERVICE_URL       "http://${PARKING_PRIVATE_IP}:3004"
+              patch_env RESERVATION_SERVICE_URL   "http://${RESERVATION_PRIVATE_IP}:3005"
+              patch_env THROTTLE_TTL              "60000"
+              patch_env THROTTLE_LIMIT            "60"
             fi
 
             if [ "${{ matrix.name }}" = "parking" ]; then
-              patch_env PARKING_SERVICE_PORT  3004
-              patch_env PARKING_DATABASE_URL  "postgresql://admin:admin@$AUTH_PRIVATE_IP:5432/parkingdb"
-              patch_env REDIS_URL             "redis://$AUTH_PRIVATE_IP:6379"
-              patch_env KAFKA_BROKERS         "$AUTH_PRIVATE_IP:9092"
+              patch_env PARKING_SERVICE_PORT  "3004"
+              patch_env PARKING_DATABASE_URL  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb"
+              patch_env REDIS_URL             "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env KAFKA_BROKERS         "${AUTH_PRIVATE_IP}:9092"
             fi
 
             if [ "${{ matrix.name }}" = "reservation" ]; then
-              patch_env RESERVATION_SERVICE_PORT   3005
-              patch_env RESERVATION_DATABASE_URL   "postgresql://admin:admin@$AUTH_PRIVATE_IP:5432/reservationdb"
-              patch_env REDIS_URL                  "redis://$AUTH_PRIVATE_IP:6379"
-              patch_env KAFKA_BROKERS              "$AUTH_PRIVATE_IP:9092"
-              patch_env PARKING_SERVICE_URL        "http://$PARKING_PRIVATE_IP:3004"
-              patch_env USER_SERVICE_URL           "http://$USER_PRIVATE_IP:3001"
-              patch_env VEHICLE_SERVICE_URL        "http://$VEHICLE_PRIVATE_IP:3003"
-              patch_env RESERVATION_EXPIRY_MINUTES 15
+              patch_env RESERVATION_SERVICE_PORT   "3005"
+              patch_env RESERVATION_DATABASE_URL   "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/reservationdb"
+              patch_env REDIS_URL                  "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env KAFKA_BROKERS              "${AUTH_PRIVATE_IP}:9092"
+              patch_env PARKING_SERVICE_URL        "http://${PARKING_PRIVATE_IP}:3004"
+              patch_env USER_SERVICE_URL           "http://${USER_PRIVATE_IP}:3001"
+              patch_env VEHICLE_SERVICE_URL        "http://${VEHICLE_PRIVATE_IP}:3003"
+              patch_env RESERVATION_EXPIRY_MINUTES "15"
             fi
 
             # ── 3. REINICIO DE CONTENEDORES ──────────────────────────────────────
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-            docker-compose -f "$COMPOSE_FILE" pull
-            docker-compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
-            docker-compose -f "$COMPOSE_FILE" ps
+            docker compose -f "$COMPOSE_FILE" pull ${{ matrix.service_name }}
+            docker compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
+            docker compose -f "$COMPOSE_FILE" ps
