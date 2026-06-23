@@ -27,9 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: qa
     env:
-      # ── URLs del frontend (build-time args de Next.js) ──────────────────────
-      # Todas apuntan al Gateway público. Solo necesitas la EIP del gateway.
-      QA_GATEWAY_URL: ${{ vars.QA_GATEWAY_URL }}
+      QA_GATEWAY_URL: ${{ secrets.QA_GATEWAY_URL }}
     steps:
       - uses: actions/checkout@v4
 
