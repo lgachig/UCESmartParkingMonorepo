@@ -12,17 +12,11 @@ import { ApiExcludeController } from '@nestjs/swagger';
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
 import { Request, Response, NextFunction } from 'express';
 import { JwtGatewayGuard, GatewayUser } from '../auth/jwt-gateway.guard';
-import { IncomingMessage } from 'http';
 
-function makeProxy(target: string, pathRewrite?: Record<string, string>) {
-  let normalizedTarget = target;
-  if (target && target.endsWith('/api')) {
-    normalizedTarget = target.substring(0, target.length - 4);
-  }
+function makeProxy(target: string) {
   const opts: Options = {
-    target: normalizedTarget,
+    target,
     changeOrigin: true,
-    pathRewrite,
     on: {
       proxyReq: (proxyReq, req) => {
         const user: GatewayUser | undefined = (req as any).user;
@@ -32,10 +26,12 @@ function makeProxy(target: string, pathRewrite?: Record<string, string>) {
           proxyReq.setHeader('x-user-role', user.role);
         }
       },
-      error: (_err, _req, res) => {
+      error: (err, _req, res) => {
+        Logger.error(`Proxy error: ${(err as Error).message}`, 'ProxyModule');
         (res as Response).status(502).json({
           statusCode: 502,
-          message: 'Upstream service unavailable',
+          message: 'Servicio no disponible. Intenta de nuevo en unos instantes.',
+          error: 'Bad Gateway',
         });
       },
     },
@@ -43,13 +39,14 @@ function makeProxy(target: string, pathRewrite?: Record<string, string>) {
   return createProxyMiddleware(opts);
 }
 
-// ─── Auth Service (no JWT required — login, register, refresh) ──────────────
 @ApiExcludeController()
-@Controller('auth')
+@Controller('api/auth')
 export class AuthProxyController {
   private readonly proxy;
   constructor(private readonly cfg: ConfigService) {
-    this.proxy = makeProxy(cfg.get<string>('AUTH_SERVICE_URL')!);
+    const target = cfg.get<string>('AUTH_SERVICE_URL')!;
+    Logger.log(`AuthProxy → ${target}`, 'ProxyModule');
+    this.proxy = makeProxy(target);
   }
   @All('*')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
@@ -57,14 +54,15 @@ export class AuthProxyController {
   }
 }
 
-// ─── User Service ────────────────────────────────────────────────────────────
 @ApiExcludeController()
-@Controller('users')
+@Controller('api/users')
 @UseGuards(JwtGatewayGuard)
 export class UserProxyController {
   private readonly proxy;
   constructor(private readonly cfg: ConfigService) {
-    this.proxy = makeProxy(cfg.get<string>('USER_SERVICE_URL')!);
+    const target = cfg.get<string>('USER_SERVICE_URL')!;
+    Logger.log(`UserProxy → ${target}`, 'ProxyModule');
+    this.proxy = makeProxy(target);
   }
   @All('*')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
@@ -72,14 +70,15 @@ export class UserProxyController {
   }
 }
 
-// ─── Vehicle Service ─────────────────────────────────────────────────────────
 @ApiExcludeController()
-@Controller('vehicles')
+@Controller('api/vehicles')
 @UseGuards(JwtGatewayGuard)
 export class VehicleProxyController {
   private readonly proxy;
   constructor(private readonly cfg: ConfigService) {
-    this.proxy = makeProxy(cfg.get<string>('VEHICLE_SERVICE_URL')!);
+    const target = cfg.get<string>('VEHICLE_SERVICE_URL')!;
+    Logger.log(`VehicleProxy → ${target}`, 'ProxyModule');
+    this.proxy = makeProxy(target);
   }
   @All('*')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
@@ -87,30 +86,32 @@ export class VehicleProxyController {
   }
 }
 
-// ─── Parking Service ─────────────────────────────────────────────────────────
 @ApiExcludeController()
-@Controller('parking')
+@Controller('api/parking')
 @UseGuards(JwtGatewayGuard)
 export class ParkingProxyController {
   private readonly proxy;
   constructor(private readonly cfg: ConfigService) {
-    this.proxy = makeProxy(cfg.get<string>('PARKING_SERVICE_URL')!);
+    const target = cfg.get<string>('PARKING_SERVICE_URL')!;
+    Logger.log(`ParkingProxy → ${target}`, 'ProxyModule');
+    this.proxy = makeProxy(target);
   }
-  
   @All('*')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     this.proxy(req, res, next);
   }
 }
 
-// ─── Reservation Service ─────────────────────────────────────────────────────
+// ─── Reservation Service ──────────────────────────────────────────────────────
 @ApiExcludeController()
-@Controller('reservations')
+@Controller('api/reservations')
 @UseGuards(JwtGatewayGuard)
 export class ReservationProxyController {
   private readonly proxy;
   constructor(private readonly cfg: ConfigService) {
-    this.proxy = makeProxy(cfg.get<string>('RESERVATION_SERVICE_URL')!);
+    const target = cfg.get<string>('RESERVATION_SERVICE_URL')!;
+    Logger.log(`ReservationProxy → ${target}`, 'ProxyModule');
+    this.proxy = makeProxy(target);
   }
   @All('*')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {

@@ -20,100 +20,132 @@ jobs:
   ci-check:
     uses: ./.github/workflows/ci.yml
 
-  docker-push:
-    name: Build & Push to Docker Hub
+  # ─── Propagar outputs de cambios desde ci-check ───────────────────────────
+  get-changes:
+    name: Read Changed Services
     needs: [ci-check]
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      auth:        ${{ needs.ci-check.outputs.auth }}
+      user:        ${{ needs.ci-check.outputs.user }}
+      vehicle:     ${{ needs.ci-check.outputs.vehicle }}
+      parking:     ${{ needs.ci-check.outputs.parking }}
+      reservation: ${{ needs.ci-check.outputs.reservation }}
+      gateway:     ${{ needs.ci-check.outputs.gateway }}
+      frontend:    ${{ needs.ci-check.outputs.frontend }}
+    steps:
+      - name: Echo changes
+        run: |
+          echo "auth=${{ needs.ci-check.outputs.auth }}"
+          echo "user=${{ needs.ci-check.outputs.user }}"
+          echo "vehicle=${{ needs.ci-check.outputs.vehicle }}"
+          echo "parking=${{ needs.ci-check.outputs.parking }}"
+          echo "reservation=${{ needs.ci-check.outputs.reservation }}"
+          echo "gateway=${{ needs.ci-check.outputs.gateway }}"
+          echo "frontend=${{ needs.ci-check.outputs.frontend }}"
+
+  # ─── Build & Push — SOLO los servicios que cambiaron ─────────────────────
+  docker-push:
+    name: Build & Push (${{ matrix.name }})
+    needs: [get-changes]
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     environment: qa
     env:
       QA_GATEWAY_URL: ${{ secrets.QA_GATEWAY_URL }}
-    steps:
-      - uses: actions/checkout@v4
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: auth
+            changed: ${{ needs.get-changes.outputs.auth }}
+            dockerfile: smart-parking/apps/auth-service/dockerfile
+            context: ./smart-parking
+            image_suffix: auth
+          - name: user
+            changed: ${{ needs.get-changes.outputs.user }}
+            dockerfile: smart-parking/apps/user-service/dockerfile
+            context: ./smart-parking
+            image_suffix: user
+          - name: vehicle
+            changed: ${{ needs.get-changes.outputs.vehicle }}
+            dockerfile: smart-parking/apps/vehicle-service/dockerfile
+            context: ./smart-parking
+            image_suffix: vehicle
+          - name: gateway
+            changed: ${{ needs.get-changes.outputs.gateway }}
+            dockerfile: smart-parking/apps/gateway-service/dockerfile
+            context: ./smart-parking
+            image_suffix: gateway
+          - name: parking
+            changed: ${{ needs.get-changes.outputs.parking }}
+            dockerfile: smart-parking/apps/parking-service/dockerfile
+            context: ./smart-parking
+            image_suffix: parking
+          - name: reservation
+            changed: ${{ needs.get-changes.outputs.reservation }}
+            dockerfile: smart-parking/apps/reservation-service/dockerfile
+            context: ./smart-parking
+            image_suffix: reservation
+          - name: frontend
+            changed: ${{ needs.get-changes.outputs.frontend }}
+            dockerfile: smart-parking/apps/frontend/dockerfile
+            context: ./smart-parking/apps/frontend
+            image_suffix: frontend
 
-      - name: Verify QA_GATEWAY_URL
-        run: |
-          if [ -z "$QA_GATEWAY_URL" ]; then
-            echo "::error::Falta QA_GATEWAY_URL — ponla en GitHub Environment qa → Variables"
-            exit 1
-          fi
-          echo "QA_GATEWAY_URL=$QA_GATEWAY_URL"
+    steps:
+      - name: Skip if unchanged
+        if: matrix.changed != 'true'
+        run: echo "Skip ${{ matrix.name }} — sin cambios."
+
+      - uses: actions/checkout@v4
+        if: matrix.changed == 'true'
 
       - uses: docker/setup-buildx-action@v3
+        if: matrix.changed == 'true'
+
       - uses: docker/login-action@v3
+        if: matrix.changed == 'true'
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push auth-service
+      - name: Push ${{ matrix.name }}
+        if: matrix.changed == 'true' && matrix.name != 'frontend'
         uses: docker/build-push-action@v6
         with:
-          context: ./smart-parking
-          file: ./smart-parking/apps/auth-service/dockerfile
+          context: ${{ matrix.context }}
+          file: ./${{ matrix.dockerfile }}
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-auth:qa
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-${{ matrix.image_suffix }}:qa
 
-      - name: Push user-service
+      - name: Verify QA_GATEWAY_URL
+        if: matrix.changed == 'true' && matrix.name == 'frontend'
+        run: |
+          if [ -z "$QA_GATEWAY_URL" ]; then
+            echo "::error::Falta QA_GATEWAY_URL — configúrala en GitHub Environments qa"
+            exit 1
+          fi
+
+      - name: Push frontend (con GATEWAY URLs)
+        if: matrix.changed == 'true' && matrix.name == 'frontend'
         uses: docker/build-push-action@v6
         with:
-          context: ./smart-parking
-          file: ./smart-parking/apps/user-service/dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-user:qa
-
-      - name: Push vehicle-service
-        uses: docker/build-push-action@v6
-        with:
-          context: ./smart-parking
-          file: ./smart-parking/apps/vehicle-service/dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-vehicle:qa
-
-      - name: Push gateway-service
-        uses: docker/build-push-action@v6
-        with:
-          context: ./smart-parking
-          file: ./smart-parking/apps/gateway-service/dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-gateway:qa
-
-      - name: Push parking-service
-        uses: docker/build-push-action@v6
-        with:
-          context: ./smart-parking
-          file: ./smart-parking/apps/parking-service/dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-parking:qa
-
-      - name: Push reservation-service
-        uses: docker/build-push-action@v6
-        with:
-          context: ./smart-parking
-          file: ./smart-parking/apps/reservation-service/dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-reservation:qa
-
-      - name: Push frontend
-        uses: docker/build-push-action@v6
-        with:
-          context: ./smart-parking/apps/frontend
-          file: ./smart-parking/apps/frontend/dockerfile
+          context: ${{ matrix.context }}
+          file: ./${{ matrix.dockerfile }}
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-frontend:qa
           build-args: |
-            NEXT_PUBLIC_AUTH_API_URL=${{ env.QA_GATEWAY_URL }}/api
-            NEXT_PUBLIC_USER_API_URL=${{ env.QA_GATEWAY_URL }}/api
-            NEXT_PUBLIC_VEHICLE_API_URL=${{ env.QA_GATEWAY_URL }}/api
-            NEXT_PUBLIC_PARKING_API_URL=${{ env.QA_GATEWAY_URL }}/api
-            NEXT_PUBLIC_RESERVATION_API_URL=${{ env.QA_GATEWAY_URL }}/api
+            NEXT_PUBLIC_AUTH_API_URL=${{ env.QA_GATEWAY_URL }}
+            NEXT_PUBLIC_USER_API_URL=${{ env.QA_GATEWAY_URL }}
+            NEXT_PUBLIC_VEHICLE_API_URL=${{ env.QA_GATEWAY_URL }}
+            NEXT_PUBLIC_PARKING_API_URL=${{ env.QA_GATEWAY_URL }}
+            NEXT_PUBLIC_RESERVATION_API_URL=${{ env.QA_GATEWAY_URL }}
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # NUEVO JOB: Descubrir y validar TODAS las IPs privadas ANTES de desplegar.
-  # Si alguna IP falta o devuelve "None", el pipeline falla aquí y ningún
-  # servicio se despliega con configuración incompleta.
-  # ─────────────────────────────────────────────────────────────────────────────
+  # ─── Descubrir IPs EC2 ────────────────────────────────────────────────────
   discover-ips:
-    name: Discover & Validate Private IPs
+    name: Discover Private IPs
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     needs: docker-push
     runs-on: ubuntu-latest
@@ -136,57 +168,29 @@ jobs:
           aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: us-east-1
 
-      - name: Discover all private IPs
+      - name: Get IPs
         id: ips
         run: |
-          # ── Función helper: obtiene IP y falla si está vacía o es "None" ──────
           get_ip() {
-            local service="$1"
+            local svc="$1"
             local ip
             ip=$(aws ec2 describe-instances \
-              --filters \
-                "Name=tag:Service,Values=${service}" \
-                "Name=tag:Environment,Values=qa" \
-                "Name=instance-state-name,Values=running" \
-              --query "Reservations[0].Instances[0].PrivateIpAddress" \
-              --output text 2>/dev/null)
-
-            # Validación estricta: vacío, "None" o "null" son todos inválidos
+              --filters "Name=tag:Service,Values=${svc}" "Name=tag:Environment,Values=qa" \
+                        "Name=instance-state-name,Values=running" \
+              --query "Reservations[0].Instances[0].PrivateIpAddress" --output text 2>/dev/null)
             if [ -z "$ip" ] || [ "$ip" = "None" ] || [ "$ip" = "null" ]; then
-              echo "::error::No se encontró instancia EC2 corriendo con tag Service=${service} y Environment=qa"
-              return 1
+              echo "::error::No EC2 running for Service=${svc}"; return 1
             fi
-
-            # Valida formato básico de IPv4
-            if ! echo "$ip" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
-              echo "::error::La IP obtenida para ${service} no es una IPv4 válida: '${ip}'"
-              return 1
-            fi
-
             echo "$ip"
           }
-
-          # ── Descubrir todas las IPs ──────────────────────────────────────────
-          echo "🔍 Descubriendo IPs privadas en QA..."
-
-          AUTH_IP=$(get_ip "auth")           || exit 1
-          USER_IP=$(get_ip "user")           || exit 1
-          VEHICLE_IP=$(get_ip "vehicle")     || exit 1
-          PARKING_IP=$(get_ip "parking")     || exit 1
+          AUTH_IP=$(get_ip "auth")               || exit 1
+          USER_IP=$(get_ip "user")               || exit 1
+          VEHICLE_IP=$(get_ip "vehicle")         || exit 1
+          PARKING_IP=$(get_ip "parking")         || exit 1
           RESERVATION_IP=$(get_ip "reservation") || exit 1
-          GATEWAY_IP=$(get_ip "gateway")     || exit 1
-          FRONTEND_IP=$(get_ip "frontend")   || exit 1
+          GATEWAY_IP=$(get_ip "gateway")         || exit 1
+          FRONTEND_IP=$(get_ip "frontend")       || exit 1
 
-          # ── Resumen visual ───────────────────────────────────────────────────
-          echo "✅ auth        → $AUTH_IP"
-          echo "✅ user        → $USER_IP"
-          echo "✅ vehicle     → $VEHICLE_IP"
-          echo "✅ parking     → $PARKING_IP"
-          echo "✅ reservation → $RESERVATION_IP"
-          echo "✅ gateway     → $GATEWAY_IP"
-          echo "✅ frontend    → $FRONTEND_IP"
-
-          # ── Exportar como outputs del job ────────────────────────────────────
           echo "auth_ip=$AUTH_IP"               >> $GITHUB_OUTPUT
           echo "user_ip=$USER_IP"               >> $GITHUB_OUTPUT
           echo "vehicle_ip=$VEHICLE_IP"         >> $GITHUB_OUTPUT
@@ -195,14 +199,13 @@ jobs:
           echo "gateway_ip=$GATEWAY_IP"         >> $GITHUB_OUTPUT
           echo "frontend_ip=$FRONTEND_IP"       >> $GITHUB_OUTPUT
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # JOB DE DEPLOY: ahora depende de discover-ips y consume sus outputs.
-  # Las IPs llegan garantizadas como válidas; ya no se generan URLs con vacíos.
-  # ─────────────────────────────────────────────────────────────────────────────
+          echo "auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | reservation=$RESERVATION_IP | gateway=$GATEWAY_IP | frontend=$FRONTEND_IP"
+
+  # ─── Deploy ───────────────────────────────────────────────────────────────
   deploy:
-    name: Deploy via Bastion (dynamic IP discovery)
+    name: Deploy ${{ matrix.name }}
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
-    needs: discover-ips          # <── depende del job de validación, no de docker-push
+    needs: [get-changes, discover-ips]
     runs-on: ubuntu-latest
     environment: qa
     strategy:
@@ -210,30 +213,48 @@ jobs:
       matrix:
         include:
           - name: auth
-            service_tag: auth
             service_name: auth-service
+            image_suffix: auth
+            app_port: '3000'
+            changed: ${{ needs.get-changes.outputs.auth }}
           - name: user
-            service_tag: user
             service_name: app
+            image_suffix: user
+            app_port: '3001'
+            changed: ${{ needs.get-changes.outputs.user }}
           - name: vehicle
-            service_tag: vehicle
             service_name: app
-          - name: frontend
-            service_tag: frontend
-            service_name: app
+            image_suffix: vehicle
+            app_port: '3003'
+            changed: ${{ needs.get-changes.outputs.vehicle }}
           - name: gateway
-            service_tag: gateway
             service_name: app
+            image_suffix: gateway
+            app_port: '3006'
+            changed: ${{ needs.get-changes.outputs.gateway }}
           - name: parking
-            service_tag: parking
             service_name: app
+            image_suffix: parking
+            app_port: '3004'
+            changed: ${{ needs.get-changes.outputs.parking }}
           - name: reservation
-            service_tag: reservation
             service_name: app
+            image_suffix: reservation
+            app_port: '3005'
+            changed: ${{ needs.get-changes.outputs.reservation }}
+          - name: frontend
+            service_name: app
+            image_suffix: frontend
+            app_port: '3002'
+            changed: ${{ needs.get-changes.outputs.frontend }}
 
     steps:
-      # ── Las IPs vienen de los outputs del job anterior, ya validadas ─────────
-      - name: Load validated IPs from discover-ips job
+      - name: Skip if unchanged
+        if: matrix.changed != 'true'
+        run: echo "Skip ${{ matrix.name }}."
+
+      - name: Load IPs
+        if: matrix.changed == 'true'
         run: |
           echo "AUTH_PRIVATE_IP=${{ needs.discover-ips.outputs.auth_ip }}"               >> $GITHUB_ENV
           echo "USER_PRIVATE_IP=${{ needs.discover-ips.outputs.user_ip }}"               >> $GITHUB_ENV
@@ -243,9 +264,9 @@ jobs:
           echo "GATEWAY_PRIVATE_IP=${{ needs.discover-ips.outputs.gateway_ip }}"         >> $GITHUB_ENV
           echo "FRONTEND_PRIVATE_IP=${{ needs.discover-ips.outputs.frontend_ip }}"       >> $GITHUB_ENV
 
-      - name: Resolve target IP for this matrix service
+      - name: Resolve target IP
+        if: matrix.changed == 'true'
         run: |
-          # Selecciona la IP del servicio que toca desplegar en esta iteración
           case "${{ matrix.name }}" in
             auth)        echo "PRIVATE_IP=${{ needs.discover-ips.outputs.auth_ip }}"        >> $GITHUB_ENV ;;
             user)        echo "PRIVATE_IP=${{ needs.discover-ips.outputs.user_ip }}"        >> $GITHUB_ENV ;;
@@ -256,29 +277,26 @@ jobs:
             frontend)    echo "PRIVATE_IP=${{ needs.discover-ips.outputs.frontend_ip }}"    >> $GITHUB_ENV ;;
           esac
 
-      - name: Setup SSH key
+      - name: Setup SSH
+        if: matrix.changed == 'true'
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.QA_EC2_SSH_KEY }}" > ~/.ssh/qa.pem
           chmod 400 ~/.ssh/qa.pem
           ssh-keyscan -H ${{ secrets.QA_BASTION_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Wait for SSH connectivity
+      - name: Wait SSH
+        if: matrix.changed == 'true'
         run: |
           for i in $(seq 1 10); do
-            if ssh -i ~/.ssh/qa.pem \
-                   -o StrictHostKeyChecking=no \
-                   -o ConnectTimeout=10 \
-                   -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.QA_BASTION_HOST }}" \
-                   ec2-user@${{ env.PRIVATE_IP }} "echo OK" 2>/dev/null; then
-              echo "✅ SSH conectado a ${{ matrix.name }} (${{ env.PRIVATE_IP }})"
-              break
-            fi
-            echo "⏳ Intento $i/10 — esperando..."
-            sleep 15
+            ssh -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+              -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.QA_BASTION_HOST }}" \
+              ec2-user@${{ env.PRIVATE_IP }} "echo OK" 2>/dev/null && break
+            echo "⏳ $i/10..."; sleep 15
           done
 
-      - name: Deploy ${{ matrix.name }} — inject .env + pull + restart
+      - name: Deploy ${{ matrix.name }} via SSH
+        if: matrix.changed == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ env.PRIVATE_IP }}
@@ -287,78 +305,44 @@ jobs:
           port: 22
           timeout: 120s
           command_timeout: 15m
-          script_stop: true           # <── true: aborta ante el primer error en el script
+          script_stop: true
           proxy_host: ${{ secrets.QA_BASTION_HOST }}
           proxy_username: ec2-user
           proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
           proxy_port: 22
-          # Las IPs llegan como variables de entorno al script remoto
-          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP
+          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,GATEWAY_PRIVATE_IP,FRONTEND_PRIVATE_IP
           script: |
-            set -euo pipefail   # -e: falla ante error; -u: falla con variable sin definir; -o pipefail
-
-            # ── Validación defensiva en el servidor (segunda línea de defensa) ──
-            validate_ip() {
-              local name="$1" ip="$2"
-              if [ -z "$ip" ] || [ "$ip" = "None" ] || [ "$ip" = "null" ]; then
-                echo "❌ ERROR: La IP de ${name} llegó vacía o inválida: '${ip}'"
-                exit 1
-              fi
-              if ! echo "$ip" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
-                echo "❌ ERROR: Formato IPv4 inválido para ${name}: '${ip}'"
-                exit 1
-              fi
-              echo "✅ ${name} IP válida: ${ip}"
-            }
-
-            validate_ip "auth"        "$AUTH_PRIVATE_IP"
-            validate_ip "user"        "$USER_PRIVATE_IP"
-            validate_ip "vehicle"     "$VEHICLE_PRIVATE_IP"
-            validate_ip "parking"     "$PARKING_PRIVATE_IP"
-            validate_ip "reservation" "$RESERVATION_PRIVATE_IP"
+            set -euo pipefail
 
             COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
             ENV_FILE="/opt/smartparking/.env"
-
             sudo mkdir -p /opt/smartparking
             sudo chown ec2-user:ec2-user /opt/smartparking
-            touch "$ENV_FILE"
-            chmod 644 "$ENV_FILE"
+            touch "$ENV_FILE" && chmod 644 "$ENV_FILE"
 
-            echo "=== DEBUG FILES ==="
-            ls -la /opt/smartparking || true
-            echo "=== DEBUG DOCKER ==="
-            docker --version
-            docker-compose --version
-
-            # ── Helper: inyecta/reemplaza en .env sin duplicar líneas ───────────
-            # Ahora también valida que el valor no esté vacío antes de escribirlo
             patch_env() {
-              local key="$1"
-              local val="$2"
+              local key="$1" val="$2"
               if [ -z "$val" ] || [ "$val" = "None" ] || [ "$val" = "null" ]; then
-                echo "❌ ERROR: Valor vacío o inválido para la clave ${key}"
-                exit 1
+                echo "❌ Valor vacío para $key"; exit 1
               fi
               sudo sed -i "/^${key}=/d" "$ENV_FILE"
               printf '%s=%s\n' "$key" "$val" >> "$ENV_FILE"
-              echo "  ✔ ${key} configurado"
+              echo "  ✔ $key"
             }
 
-            echo "JWT_SECRET='${{ secrets.QA_JWT_SECRET }}'"
-            echo "JWT_REFRESH_SECRET='${{ secrets.QA_JWT_REFRESH_SECRET }}'" 
-            echo "INTERNAL_SERVICE_KEY='${{ secrets.QA_INTERNAL_SERVICE_KEY }}'"
-            
-            # ── 1. VARIABLES COMUNES Y GLOBALES ──────────────────────────────────
-            patch_env DOCKERHUB_USER        "${{ secrets.DOCKERHUB_USERNAME }}"
-            patch_env JWT_SECRET            "${{ secrets.QA_JWT_SECRET }}"
-            patch_env JWT_REFRESH_SECRET    "${{ secrets.QA_JWT_REFRESH_SECRET }}"
-            patch_env INTERNAL_SERVICE_KEY  "${{ secrets.QA_INTERNAL_SERVICE_KEY }}"
+            # Variables comunes
+            patch_env DOCKERHUB_USER       "${{ secrets.DOCKERHUB_USERNAME }}"
+            patch_env JWT_SECRET           "${{ secrets.QA_JWT_SECRET }}"
+            patch_env JWT_REFRESH_SECRET   "${{ secrets.QA_JWT_REFRESH_SECRET }}"
+            patch_env INTERNAL_SERVICE_KEY "${{ secrets.QA_INTERNAL_SERVICE_KEY }}"
+            patch_env CORS_ORIGINS         "http://${{ secrets.QA_FRONTEND_EIP }}:3002,http://${{ secrets.QA_GATEWAY_EIP }}:3006"
 
-            CORS_LIST="http://${{ secrets.QA_FRONTEND_EIP }}:3002,http://${{ secrets.QA_GATEWAY_EIP }}:3006"
-            patch_env CORS_ORIGINS "$CORS_LIST"
+            # FIX CRITICO: APP_IMAGE y APP_PORT para que el servicio "app" del compose sepa
+            # qué imagen correr y en qué puerto escuchar.
+            patch_env APP_IMAGE "${{ secrets.DOCKERHUB_USERNAME }}/smartparking-${{ matrix.image_suffix }}:qa"
+            patch_env APP_PORT  "${{ matrix.app_port }}"
 
-            # ── 2. INYECCIÓN ESPECÍFICA POR SERVICIO ─────────────────────────────
+            # Variables específicas por servicio
             if [ "${{ matrix.name }}" = "auth" ]; then
               patch_env PORT              "3000"
               patch_env DATABASE_URL      "postgresql://admin:admin@postgres:5432/smartparking"
@@ -368,34 +352,35 @@ jobs:
             fi
 
             if [ "${{ matrix.name }}" = "user" ]; then
-              patch_env USER_SERVICE_PORT  "3001"
-              patch_env USER_DATABASE_URL  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb"
-              patch_env REDIS_URL          "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env USER_SERVICE_PORT "3001"
+              patch_env USER_DATABASE_URL "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb"
+              patch_env REDIS_URL         "redis://${AUTH_PRIVATE_IP}:6379"
             fi
 
             if [ "${{ matrix.name }}" = "vehicle" ]; then
-              patch_env VEHICLE_SERVICE_PORT  "3003"
-              patch_env VEHICLE_DATABASE_URL  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/vehicledb"
-              patch_env REDIS_URL             "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env VEHICLE_SERVICE_PORT "3003"
+              patch_env VEHICLE_DATABASE_URL "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/vehicledb"
+              patch_env REDIS_URL            "redis://${AUTH_PRIVATE_IP}:6379"
             fi
 
             if [ "${{ matrix.name }}" = "gateway" ]; then
-              patch_env GATEWAY_PORT              "3006"
-              patch_env REDIS_URL                 "redis://${AUTH_PRIVATE_IP}:6379"
-              patch_env AUTH_SERVICE_URL          "http://${AUTH_PRIVATE_IP}:3000"
-              patch_env USER_SERVICE_URL          "http://${USER_PRIVATE_IP}:3001/api"
-              patch_env VEHICLE_SERVICE_URL       "http://${VEHICLE_PRIVATE_IP}:3003"
-              patch_env PARKING_SERVICE_URL       "http://${PARKING_PRIVATE_IP}:3004"
-              patch_env RESERVATION_SERVICE_URL   "http://${RESERVATION_PRIVATE_IP}:3005"
-              patch_env THROTTLE_TTL              "60000"
-              patch_env THROTTLE_LIMIT            "60"
+              patch_env GATEWAY_PORT            "3006"
+              patch_env REDIS_URL               "redis://${AUTH_PRIVATE_IP}:6379"
+              # FIX: URLs sin /api — el proxy reenvía la URL completa que ya incluye /api
+              patch_env AUTH_SERVICE_URL        "http://${AUTH_PRIVATE_IP}:3000"
+              patch_env USER_SERVICE_URL        "http://${USER_PRIVATE_IP}:3001"
+              patch_env VEHICLE_SERVICE_URL     "http://${VEHICLE_PRIVATE_IP}:3003"
+              patch_env PARKING_SERVICE_URL     "http://${PARKING_PRIVATE_IP}:3004"
+              patch_env RESERVATION_SERVICE_URL "http://${RESERVATION_PRIVATE_IP}:3005"
+              patch_env THROTTLE_TTL            "60000"
+              patch_env THROTTLE_LIMIT          "60"
             fi
 
             if [ "${{ matrix.name }}" = "parking" ]; then
-              patch_env PARKING_SERVICE_PORT  "3004"
-              patch_env PARKING_DATABASE_URL  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb"
-              patch_env REDIS_URL             "redis://${AUTH_PRIVATE_IP}:6379"
-              patch_env KAFKA_BROKERS         "${AUTH_PRIVATE_IP}:9092"
+              patch_env PARKING_SERVICE_PORT "3004"
+              patch_env PARKING_DATABASE_URL "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb"
+              patch_env REDIS_URL            "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env KAFKA_BROKERS        "${AUTH_PRIVATE_IP}:9092"
             fi
 
             if [ "${{ matrix.name }}" = "reservation" ]; then
@@ -409,44 +394,62 @@ jobs:
               patch_env RESERVATION_EXPIRY_MINUTES "15"
             fi
 
-            # ── 3. REINICIO DE CONTENEDORES ──────────────────────────────────────
+            if [ "${{ matrix.name }}" = "frontend" ]; then
+              patch_env PORT "3002"
+            fi
+
+            # Pull & restart
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
             docker-compose -f "$COMPOSE_FILE" pull ${{ matrix.service_name }}
             docker-compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
             docker-compose -f "$COMPOSE_FILE" ps
 
+            # Migraciones Prisma
             if [ "${{ matrix.name }}" = "auth" ]; then
-              echo "Waiting for PostgreSQL to be ready..."
+              echo "⏳ Esperando PostgreSQL..."
               for i in {1..30}; do
-                if docker exec smartparking-postgres pg_isready -U admin -d smartparking &>/dev/null; then
-                  echo "PostgreSQL is ready!"
-                  break
-                fi
-                sleep 1
+                docker exec smartparking-postgres pg_isready -U admin -d smartparking &>/dev/null && break
+                sleep 2
               done
 
-              echo "Ensuring microservice databases exist..."
-              docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE userdb;" || true
-              docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE vehicledb;" || true
-              docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE parkingdb;" || true
-              docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE reservationdb;" || true
+              for db in userdb vehicledb parkingdb reservationdb; do
+                docker exec smartparking-postgres psql -U admin -d smartparking \
+                  -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1 || \
+                  docker exec smartparking-postgres psql -U admin -d smartparking \
+                    -c "CREATE DATABASE ${db};" 2>/dev/null || true
+                echo "  ✔ ${db}"
+              done
 
-              echo "Cleaning up invalid failed migrations on smartparking DB..."
-              docker exec smartparking-postgres psql -U admin -d smartparking -c "DELETE FROM _prisma_migrations WHERE migration_name = '20260601120000_init_vehicle';" || true
-
-              echo "Running auth migrations..."
-              docker-compose -f "$COMPOSE_FILE" exec -T auth-service npx prisma migrate deploy --schema prisma/auth/schema.prisma
+              docker-compose -f "$COMPOSE_FILE" exec -T auth-service \
+                npx prisma migrate deploy --schema prisma/auth/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "user" ]; then
-              echo "Running user migrations..."
-              docker-compose -f "$COMPOSE_FILE" exec -T app npx prisma migrate deploy --config prisma.user.config.ts
+              docker-compose -f "$COMPOSE_FILE" exec -T app \
+                npx prisma migrate deploy --config prisma.user.config.ts
             fi
 
             if [ "${{ matrix.name }}" = "vehicle" ]; then
-              echo "Resolving vehicle init migration if failed in vehicledb..."
-              docker-compose -f "$COMPOSE_FILE" exec -T app npx prisma migrate resolve --rolled-back 20260601120000_init_vehicle --config prisma.vehicle.config.ts || true
+              # FIX MIGRACION: Limpiar registro de migración fallida del DB equivocado
+              docker exec smartparking-postgres psql -U admin -d smartparking \
+                -c "DELETE FROM _prisma_migrations WHERE migration_name = '20260601120000_init_vehicle';" \
+                2>/dev/null || true
+              docker exec smartparking-postgres psql -U admin -d vehicledb \
+                -c "DELETE FROM _prisma_migrations WHERE migration_name = '20260601120000_init_vehicle' AND finished_at IS NULL;" \
+                2>/dev/null || true
 
-              echo "Running vehicle migrations..."
-              docker-compose -f "$COMPOSE_FILE" exec -T app npx prisma migrate deploy --config prisma.vehicle.config.ts
+              docker-compose -f "$COMPOSE_FILE" exec -T app \
+                npx prisma migrate deploy --config prisma.vehicle.config.ts
             fi
+
+            if [ "${{ matrix.name }}" = "parking" ]; then
+              docker-compose -f "$COMPOSE_FILE" exec -T app \
+                npx prisma migrate deploy --config prisma.parking.config.ts
+            fi
+
+            if [ "${{ matrix.name }}" = "reservation" ]; then
+              docker-compose -f "$COMPOSE_FILE" exec -T app \
+                npx prisma migrate deploy --config prisma.reservation.config.ts
+            fi
+
+            echo "✅ ${{ matrix.name }} deployado exitosamente."

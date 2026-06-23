@@ -16,7 +16,6 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
 
-  app.setGlobalPrefix('api', { exclude: ['metrics', 'docs', 'health'] });
   app.useGlobalFilters(new HttpExceptionFilter());
   applyCors(app, configService);
   app.use(configureHelmet());
@@ -31,9 +30,7 @@ async function bootstrap() {
     .addServer('http://localhost:3006', 'Local Gateway')
     .build();
 
-  SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config), {
-    useGlobalPrefix: false,
-  });
+  SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
 
   const port = configService.get<number>('GATEWAY_PORT') || 3006;
   await app.listen(port);

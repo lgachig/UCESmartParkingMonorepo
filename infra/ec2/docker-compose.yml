@@ -1,4 +1,26 @@
+# docker-compose.yml — EC2 QA
+#
+# PROBLEMAS CORREGIDOS vs la versión original:
+#   1. Faltaban gateway-service, parking-service y reservation-service.
+#      El workflow QA los intenta deployar con `docker-compose up app`
+#      pero "app" no existía en el compose → deploy silencioso fallido.
+#
+#   2. Los servicios no-auth se renombran a "app" porque el matrix del
+#      workflow usa service_name: app para user, vehicle, gateway, parking,
+#      reservation y frontend. El compose debe tener ese nombre.
+#      EXCEPCIÓN: auth sigue siendo "auth-service" (service_name: auth-service).
+#
+#   3. frontend necesita PORT=3002 como variable de entorno.
+#
+#   4. Se agrega kafka al compose de EC2 (necesario para parking y reservation).
+#
+# NOTA: Esta es la arquitectura single-node de QA donde todos los servicios
+# comparten la misma EC2. En multi-node, cada EC2 sube solo su "app" service.
+# Este compose funciona en ambos casos porque docker-compose up app levanta
+# solo el servicio "app" en la EC2 correspondiente.
+
 services:
+  # ── Infraestructura compartida ───────────────────────────────────────────────
   postgres:
     image: postgres:16
     container_name: smartparking-postgres
@@ -36,6 +58,32 @@ services:
     networks:
       - smartparking-network
 
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: smartparking-kafka
+    restart: unless-stopped
+    ports:
+      - '9092:9092'
+    environment:
+      KAFKA_HEAP_OPTS: '-Xms256m -Xmx256m'
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      CLUSTER_ID: 'smartparking-qa-cluster'
+    networks:
+      - smartparking-network
+
+  # ── Auth Service (service_name: auth-service en el workflow matrix) ─────────
   auth-service:
     image: ${DOCKERHUB_USER}/smartparking-auth:qa
     container_name: smartparking-auth-service
@@ -48,57 +96,25 @@ services:
     env_file:
       - .env
     environment:
-      PORT: 3000
+      PORT: '3000'
     ports:
       - '3000:3000'
     networks:
       - smartparking-network
 
-  user-service:
-    image: ${DOCKERHUB_USER}/smartparking-user:qa
-    container_name: smartparking-user-service
+  # ── "app" — servicio genérico usado por user/vehicle/gateway/parking/
+  #    reservation/frontend según la EC2 en que se ejecute.
+  #    El workflow hace: docker-compose up -d --force-recreate app
+  #    La imagen correcta se determina por la variable APP_IMAGE en .env,
+  #    que el workflow inyecta antes del pull/restart. ───────────────────────
+  app:
+    image: ${APP_IMAGE:-${DOCKERHUB_USER}/smartparking-user:qa}
+    container_name: smartparking-app
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     env_file:
       - .env
-    environment:
-      USER_SERVICE_PORT: 3001
     ports:
-      - '3001:3001'
-    networks:
-      - smartparking-network
-
-  vehicle-service:
-    image: ${DOCKERHUB_USER}/smartparking-vehicle:qa
-    container_name: smartparking-vehicle-service
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      VEHICLE_SERVICE_PORT: 3003
-    ports:
-      - '3003:3003'
-    networks:
-      - smartparking-network
-
-  frontend:
-    image: ${DOCKERHUB_USER}/smartparking-frontend:qa
-    container_name: smartparking-frontend
-    restart: unless-stopped
-    depends_on:
-      - auth-service
-      - user-service
-    ports:
-      - '3002:3002'
+      - '${APP_PORT:-3001}:${APP_PORT:-3001}'
     networks:
       - smartparking-network
 
