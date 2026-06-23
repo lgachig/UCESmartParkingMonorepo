@@ -2,6 +2,21 @@ name: CI
 
 on:
   workflow_call:
+    outputs:
+      auth:
+        value: ${{ jobs.changes.outputs.auth }}
+      user:
+        value: ${{ jobs.changes.outputs.user }}
+      vehicle:
+        value: ${{ jobs.changes.outputs.vehicle }}
+      parking:
+        value: ${{ jobs.changes.outputs.parking }}
+      reservation:
+        value: ${{ jobs.changes.outputs.reservation }}
+      gateway:
+        value: ${{ jobs.changes.outputs.gateway }}
+      frontend:
+        value: ${{ jobs.changes.outputs.frontend }}
   push:
     branches: [main, QA, qa, PROD, prod, develop]
   pull_request:
@@ -11,7 +26,32 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      auth: ${{ steps.filter.outputs.auth }}
+      user: ${{ steps.filter.outputs.user }}
+      vehicle: ${{ steps.filter.outputs.vehicle }}
+      parking: ${{ steps.filter.outputs.parking }}
+      reservation: ${{ steps.filter.outputs.reservation }}
+      gateway: ${{ steps.filter.outputs.gateway }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            auth: 'smart-parking/apps/auth-service/**'
+            user: 'smart-parking/apps/user-service/**'
+            vehicle: 'smart-parking/apps/vehicle-service/**'
+            parking: 'smart-parking/apps/parking-service/**'
+            reservation: 'smart-parking/apps/reservation-service/**'
+            gateway: 'smart-parking/apps/gateway-service/**'
+            frontend: 'smart-parking/apps/frontend/**'
+
   test:
+    needs: [changes]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
