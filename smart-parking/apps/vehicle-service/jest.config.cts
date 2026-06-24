@@ -10,7 +10,7 @@ const swcJestConfig = JSON.parse(
 swcJestConfig.swcrc = false;
 
 module.exports = {
-  displayName: '@org/user-service',
+  displayName: '@org/vehicle-service',
   preset: '../../jest.preset.js',
   testEnvironment: 'node',
   transform: {

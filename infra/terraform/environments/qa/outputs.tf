@@ -1,73 +1,102 @@
-# ---------------------------------------------------------------------------
-# Copia estos valores en GitHub → Settings → Environments → qa
-# Ejecuta: terraform output (desde environments/qa)
-# ---------------------------------------------------------------------------
-
-output "auth_elastic_ip" {
-  description = "GitHub Secret: QA_EC2_AUTH_HOST (solo IP, sin http)"
-  value       = module.auth.elastic_ip
+output "bastion_public_ip" {
+  description = "GitHub Secret: QA_BASTION_HOST — jump server to reach all private instances"
+  value       = module.bastion.public_ip
 }
 
-output "user_elastic_ip" {
+output "auth_private_ip" {
+  description = "GitHub Secret: QA_EC2_AUTH_HOST"
+  value       = module.auth.private_ip
+}
+
+output "user_private_ip" {
   description = "GitHub Secret: QA_EC2_USER_HOST"
-  value       = module.user.elastic_ip
+  value       = module.user.private_ip
 }
 
-output "vehicle_elastic_ip" {
+output "vehicle_private_ip" {
   description = "GitHub Secret: QA_EC2_VEHICLE_HOST"
-  value       = module.vehicle.elastic_ip
+  value       = module.vehicle.private_ip
 }
 
 output "frontend_elastic_ip" {
   description = "GitHub Secret: QA_EC2_FRONTEND_HOST"
-  value       = module.frontend.elastic_ip
+  value       = aws_eip.frontend.public_ip
+}
+
+output "gateway_elastic_ip" {
+  description = "GitHub Secret: QA_EC2_GATEWAY_HOST"
+  value       = aws_eip.gateway.public_ip
+}
+
+output "parking_private_ip" {
+  description = "GitHub Secret: QA_EC2_PARKING_HOST"
+  value       = module.parking.private_ip
+}
+
+output "reservation_private_ip" {
+  description = "GitHub Secret: QA_EC2_RESERVATION_HOST"
+  value       = module.reservation.private_ip
 }
 
 output "qa_auth_api_url" {
   description = "GitHub Variable: QA_AUTH_API_URL"
-  value       = "http://${module.auth.elastic_ip}:3000/api"
+  value       = "http://${aws_eip.gateway.public_ip}:3006/api"
 }
 
 output "qa_user_api_url" {
   description = "GitHub Variable: QA_USER_API_URL"
-  value       = "http://${module.user.elastic_ip}:3001/api"
+  value       = "http://${aws_eip.gateway.public_ip}:3006/api"
 }
 
 output "qa_vehicle_api_url" {
   description = "GitHub Variable: QA_VEHICLE_API_URL"
-  value       = "http://${module.vehicle.elastic_ip}:3003/api"
+  value       = "http://${aws_eip.gateway.public_ip}:3006/api"
+}
+
+output "qa_parking_api_url" {
+  description = "GitHub Variable: QA_PARKING_API_URL"
+  value       = "http://${aws_eip.gateway.public_ip}:3006/api"
+}
+
+output "qa_reservation_api_url" {
+  description = "GitHub Variable: QA_RESERVATION_API_URL"
+  value       = "http://${aws_eip.gateway.public_ip}:3006/api"
+}
+
+output "qa_gateway_api_url" {
+  description = "URL pública del Gateway"
+  value       = "http://${aws_eip.gateway.public_ip}:3006/api"
 }
 
 output "qa_frontend_url" {
-  description = "URL pública del frontend"
-  value       = "http://${module.frontend.elastic_ip}:3002"
+  description = "URL pública del Frontend"
+  value       = "http://${aws_eip.frontend.public_ip}:3002"
 }
 
-output "docker_image_tag" {
-  description = "Tag usado en Docker Hub y EC2 (debe coincidir con environment en tfvars)"
-  value       = var.environment
+variable "auth_host" {
+  type        = string
+  description = "IP privada o DNS del auth EC2 (donde corren postgres, redis, kafka). Dejar en blanco en el primer apply."
+  default     = "placeholder"
 }
+
 
 output "github_setup_summary" {
-  description = "Resumen para configurar GitHub Actions (environment qa)"
+  description = "Solo 3 secrets necesarios en GitHub"
   value       = <<-EOT
-    GitHub Environment: qa
-    Rama que dispara CI/CD: QA (o qa)
+    ── SECRETS (solo estos 3 son necesarios) ────────────
+    QA_EC2_SSH_KEY   = contenido del archivo ${var.key_name}.pem
+    QA_BASTION_HOST  = ${module.bastion.public_ip}
+    DOCKERHUB_TOKEN  = tu token de Docker Hub
 
-    SECRETS (Environment secrets):
-      QA_EC2_SSH_KEY        = contenido del archivo .pem (${var.key_name})
-      QA_EC2_AUTH_HOST      = ${module.auth.elastic_ip}
-      QA_EC2_USER_HOST      = ${module.user.elastic_ip}
-      QA_EC2_VEHICLE_HOST   = ${module.vehicle.elastic_ip}
-      QA_EC2_FRONTEND_HOST  = ${module.frontend.elastic_ip}
-      DOCKERHUB_USERNAME    = ${var.dockerhub_user}
-      DOCKERHUB_TOKEN       = (token de Docker Hub)
+    ── VARIABLES ─────────────────────────────────────────
+    QA_AUTH_API_URL        = http://${aws_eip.gateway.public_ip}:3006/api
+    QA_USER_API_URL        = http://${aws_eip.gateway.public_ip}:3006/api
+    QA_VEHICLE_API_URL     = http://${aws_eip.gateway.public_ip}:3006/api
+    QA_PARKING_API_URL     = http://${aws_eip.gateway.public_ip}:3006/api
+    QA_RESERVATION_API_URL = http://${aws_eip.gateway.public_ip}:3006/api
 
-    VARIABLES (Environment variables):
-      QA_AUTH_API_URL       = http://${module.auth.elastic_ip}:3000/api
-      QA_USER_API_URL       = http://${module.user.elastic_ip}:3001/api
-      QA_VEHICLE_API_URL    = http://${module.vehicle.elastic_ip}:3003/api
-
-    Docker Hub tags: smartparking-*:${var.environment}
+    ── ACCESO PÚBLICO ────────────────────────────────────
+    Frontend: http://${aws_eip.frontend.public_ip}:3002
+    Gateway:  http://${aws_eip.gateway.public_ip}:3006
   EOT
 }

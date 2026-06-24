@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../../generated/parking-client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Faculty {
+  id        Int      @id @default(autoincrement())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  zones     Zone[]
+  slots     Slot[]
+
+  @@map("faculties")
+}
+
+model Zone {
+  id              Int      @id @default(autoincrement())
+  name            String
+  code            String
+  centerLatitude  Float    @map("center_latitude")
+  centerLongitude Float    @map("center_longitude")
+  facultyId       Int      @map("faculty_id")
+  faculty         Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  slots           Slot[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("zones")
+}
+
+enum SlotStatus {
+  AVAILABLE
+  RESERVED
+  OCCUPIED
+  MAINTENANCE
+  DISABLED
+}
+
+model Slot {
+  id        String     @id @default(uuid())
+  number    String
+  status    SlotStatus @default(AVAILABLE)
+  latitude  Float
+  longitude Float
+  zoneId    Int        @map("zone_id")
+  zone      Zone       @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  facultyId Int        @map("faculty_id")
+  faculty   Faculty    @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("slots")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String
+  authUserId String?  @map("auth_user_id")
+  slotId     String?  @map("slot_id")
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}

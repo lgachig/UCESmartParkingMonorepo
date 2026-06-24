@@ -1,0 +1,69 @@
+{
+  "name": "@org/gateway-service",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "targets": {
+      "build": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "webpack-cli build",
+          "args": ["--node-env=production"],
+          "cwd": "apps/gateway-service"
+        },
+        "configurations": {
+          "development": {
+            "args": ["--node-env=development"]
+          }
+        }
+      },
+      "serve": {
+        "continuous": true,
+        "executor": "@nx/js:node",
+        "defaultConfiguration": "development",
+        "dependsOn": ["build"],
+        "options": {
+          "buildTarget": "@org/gateway-service:build",
+          "runBuildTargetDependencies": false
+        },
+        "configurations": {
+          "development": {
+            "buildTarget": "@org/gateway-service:build:development"
+          },
+          "production": {
+            "buildTarget": "@org/gateway-service:build:production"
+          }
+        }
+      },
+      "test": {
+        "options": {
+          "passWithNoTests": true
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/swagger": "^11.4.4",
+    "@nestjs/throttler": "^6.0.0",
+    "@nestjs-modules/ioredis": "^2.0.2",
+    "ioredis": "^5.3.2",
+    "jsonwebtoken": "^9.0.2",
+    "http-proxy-middleware": "^3.0.0",
+    "nest-winston": "^1.10.0",
+    "winston": "^3.11.0",
+    "helmet": "^8.0.0",
+    "joi": "^17.12.0",
+    "prom-client": "^15.1.0",
+    "reflect-metadata": "^0.1.13",
+    "rxjs": "^7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.0.0",
+    "@types/jsonwebtoken": "^9.0.5"
+  }
+}

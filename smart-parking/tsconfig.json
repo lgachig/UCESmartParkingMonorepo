@@ -11,6 +11,15 @@
     },
     {
       "path": "./apps/vehicle-service"
+    },
+    {
+      "path": "./apps/parking-service"
+    },
+    {
+      "path": "./apps/reservation-service"
+    },
+    {
+      "path": "./apps/gateway-service"
     }
   ]
 }

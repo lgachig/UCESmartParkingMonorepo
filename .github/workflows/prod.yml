@@ -1,4 +1,3 @@
-# Rama PROD → imágenes con tag :prod → deploy a EC2 de producción / otro laboratorio
 name: PROD CI/CD
 
 on:
@@ -8,7 +7,7 @@ on:
     types: [closed]
     branches: [PROD, prod]
   workflow_dispatch:
-  
+
 concurrency:
   group: prod-pipeline-${{ github.ref }}
   cancel-in-progress: false
@@ -17,31 +16,27 @@ permissions:
   contents: read
 
 jobs:
+  ci-check:
+    uses: ./.github/workflows/ci.yml
+
   docker-push:
     name: Build & Push to Docker Hub
+    needs: [ci-check]
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     environment: prod
     env:
-      PROD_AUTH_API_URL: ${{ vars.PROD_AUTH_API_URL || secrets.PROD_AUTH_API_URL }}
-      PROD_USER_API_URL: ${{ vars.PROD_USER_API_URL || secrets.PROD_USER_API_URL }}
-      PROD_VEHICLE_API_URL: ${{ vars.PROD_VEHICLE_API_URL || secrets.PROD_VEHICLE_API_URL }}
+      PROD_GATEWAY_URL: ${{ vars.PROD_GATEWAY_URL }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify PROD API URLs (frontend build)
+      - name: Verify PROD_GATEWAY_URL
         run: |
-          missing=0
-          for name in PROD_AUTH_API_URL PROD_USER_API_URL PROD_VEHICLE_API_URL; do
-            eval "val=\$$name"
-            if [ -z "$val" ]; then
-              echo "::error::Missing $name — set in GitHub Environment prod → Variables"
-              missing=1
-            else
-              echo "$name=$val"
-            fi
-          done
-          [ "$missing" -eq 0 ] || exit 1
+          if [ -z "$PROD_GATEWAY_URL" ]; then
+            echo "::error::Falta PROD_GATEWAY_URL — ponla en GitHub Environment prod → Variables"
+            exit 1
+          fi
+          echo "PROD_GATEWAY_URL=$PROD_GATEWAY_URL"
 
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -73,6 +68,30 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-vehicle:prod
 
+      - name: Push gateway-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking
+          file: ./smart-parking/apps/gateway-service/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-gateway:prod
+
+      - name: Push parking-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking
+          file: ./smart-parking/apps/parking-service/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-parking:prod
+
+      - name: Push reservation-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking
+          file: ./smart-parking/apps/reservation-service/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-reservation:prod
+
       - name: Push frontend
         uses: docker/build-push-action@v6
         with:
@@ -81,69 +100,243 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-frontend:prod
           build-args: |
-            NEXT_PUBLIC_AUTH_API_URL=${{ env.PROD_AUTH_API_URL }}
-            NEXT_PUBLIC_USER_API_URL=${{ env.PROD_USER_API_URL }}
-            NEXT_PUBLIC_VEHICLE_API_URL=${{ env.PROD_VEHICLE_API_URL }}
+            NEXT_PUBLIC_AUTH_API_URL=${{ env.PROD_GATEWAY_URL }}/api
+            NEXT_PUBLIC_USER_API_URL=${{ env.PROD_GATEWAY_URL }}/api
+            NEXT_PUBLIC_VEHICLE_API_URL=${{ env.PROD_GATEWAY_URL }}/api
+            NEXT_PUBLIC_PARKING_API_URL=${{ env.PROD_GATEWAY_URL }}/api
+            NEXT_PUBLIC_RESERVATION_API_URL=${{ env.PROD_GATEWAY_URL }}/api
 
   deploy:
-    name: Deploy on EC2 instances
+    name: Deploy on EC2 instances (via Bastion)
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     needs: docker-push
     runs-on: ubuntu-latest
     environment: prod
+    env:
+      PROD_GATEWAY_URL: ${{ vars.PROD_GATEWAY_URL }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: auth
-            host_secret: PROD_EC2_AUTH_HOST
+            service_tag: auth
             service_name: auth-service
           - name: user
-            host_secret: PROD_EC2_USER_HOST
+            service_tag: user
             service_name: app
           - name: vehicle
-            host_secret: PROD_EC2_VEHICLE_HOST
+            service_tag: vehicle
             service_name: app
           - name: frontend
-            host_secret: PROD_EC2_FRONTEND_HOST
+            service_tag: frontend
             service_name: app
+          - name: gateway
+            service_tag: gateway
+            service_name: app
+          - name: parking
+            service_tag: parking
+            service_name: app
+          - name: reservation
+            service_tag: reservation
+            service_name: app
+
     steps:
-      - name: Deploy ${{ matrix.name }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Discover private IPs via AWS CLI
+        id: discover
+        run: |
+          discover_ip() {
+            aws ec2 describe-instances \
+              --filters \
+                "Name=tag:Service,Values=$1" \
+                "Name=tag:Environment,Values=prod" \
+                "Name=instance-state-name,Values=running" \
+              --query "Reservations[0].Instances[0].PrivateIpAddress" \
+              --output text
+          }
+
+          for svc in auth user vehicle parking reservation; do
+            ip=$(discover_ip $svc)
+            if [ -z "$ip" ] || [ "$ip" = "None" ]; then
+              echo "❌ No se encontró instancia Service=$svc Environment=prod"
+              exit 1
+            fi
+            echo "✅ $svc → $ip"
+            echo "${svc^^}_PRIVATE_IP=$ip" >> $GITHUB_ENV
+          done
+
+          TARGET_IP=$(discover_ip ${{ matrix.service_tag }})
+          echo "PRIVATE_IP=$TARGET_IP" >> $GITHUB_ENV
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_EC2_SSH_KEY }}" > ~/.ssh/prod.pem
+          chmod 400 ~/.ssh/prod.pem
+          ssh-keyscan -H ${{ secrets.PROD_BASTION_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Wait for SSH connectivity
+        run: |
+          for i in $(seq 1 10); do
+            if ssh -i ~/.ssh/prod.pem \
+                   -o StrictHostKeyChecking=no \
+                   -o ConnectTimeout=10 \
+                   -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/prod.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.PROD_BASTION_HOST }}" \
+                   ec2-user@${{ env.PRIVATE_IP }} "echo OK" 2>/dev/null; then
+              echo "✅ SSH conectado"
+              break
+            fi
+            echo "⏳ Intento $i/10 — esperando..."
+            sleep 15
+          done
+
+      - name: Deploy ${{ matrix.name }} — inject .env + pull + restart
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets[matrix.host_secret] }}
+          host: ${{ env.PRIVATE_IP }}
           username: ec2-user
           key: ${{ secrets.PROD_EC2_SSH_KEY }}
           port: 22
           timeout: 120s
           command_timeout: 15m
-          script_stop: true
+          script_stop: false
+          proxy_host: ${{ secrets.PROD_BASTION_HOST }}
+          proxy_username: ec2-user
+          proxy_key: ${{ secrets.PROD_EC2_SSH_KEY }}
+          proxy_port: 22
           script: |
-            export DOCKERHUB_USER="${{ secrets.DOCKERHUB_USERNAME }}"
-            export DOCKERHUB_TOKEN="${{ secrets.DOCKERHUB_TOKEN }}"
-            cd /opt/smartparking
+            set -e
+            COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
+            ENV_FILE="/opt/smartparking/.env"
+
+            sudo mkdir -p /opt/smartparking
+            sudo chown ec2-user:ec2-user /opt/smartparking
+            touch "$ENV_FILE"
+            chmod 644 "$ENV_FILE"
+
             patch_env() {
-              key="$1"
-              val="$2"
-              env_file="/opt/smartparking/.env"
-              if sudo grep -q "^${key}=" "$env_file" 2>/dev/null; then
-                sudo sed -i "s|^${key}=.*|${key}=${val}|" "$env_file"
+              local key="$1" val="$2"
+              if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
+                sed -i "s|^${key}=.*|${key}=${val}|" "$ENV_FILE"
               else
-                echo "${key}=${val}" | sudo tee -a "$env_file" > /dev/null
+                echo "${key}=${val}" >> "$ENV_FILE"
               fi
             }
-            CORS_LIST="http://${{ secrets.PROD_EC2_FRONTEND_HOST }}:3002,http://${{ secrets.PROD_EC2_AUTH_HOST }}:3000,http://${{ secrets.PROD_EC2_USER_HOST }}:3001,http://${{ secrets.PROD_EC2_VEHICLE_HOST }}:3003"
+
+            # ── Vars comunes ─────────────────────────────────────────────────
+            patch_env DOCKERHUB_USER       "${{ secrets.DOCKERHUB_USERNAME }}"
+            patch_env JWT_SECRET           "${{ secrets.PROD_JWT_SECRET }}"
+            patch_env JWT_REFRESH_SECRET   "${{ secrets.PROD_JWT_REFRESH_SECRET }}"
+            patch_env INTERNAL_SERVICE_KEY "${{ secrets.PROD_INTERNAL_SERVICE_KEY }}"
+
+            # ── CORS: solo frontend y gateway son públicos ───────────────────
+            CORS_LIST="http://${{ secrets.PROD_FRONTEND_EIP }}:3002,http://${{ secrets.PROD_GATEWAY_EIP }}:3006"
+            patch_env CORS_ORIGINS "$CORS_LIST"
+
+            # ── Vars por servicio — IPs privadas descubiertas dinámicamente ──
             if [ "${{ matrix.name }}" = "auth" ]; then
-              patch_env USER_SERVICE_URL "http://${{ secrets.PROD_EC2_USER_HOST }}:3001"
-              patch_env FRONTEND_URL "http://${{ secrets.PROD_EC2_FRONTEND_HOST }}:3002"
-              patch_env CORS_ORIGINS "$CORS_LIST"
+              patch_env PORT             3000
+              patch_env DATABASE_URL     "postgresql://admin:admin@postgres:5432/smartparking"
+              patch_env REDIS_URL        "redis://redis:6379"
+              patch_env FRONTEND_URL     "http://${{ secrets.PROD_FRONTEND_EIP }}:3002"
+              patch_env USER_SERVICE_URL "http://${{ env.USER_PRIVATE_IP }}:3001/api"
             fi
-            if [ "${{ matrix.name }}" = "user" ] || [ "${{ matrix.name }}" = "vehicle" ]; then
-              patch_env CORS_ORIGINS "$CORS_LIST"
+
+            if [ "${{ matrix.name }}" = "user" ]; then
+              patch_env USER_SERVICE_PORT  3001
+              patch_env USER_DATABASE_URL  "postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/userdb"
+              patch_env REDIS_URL          "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
             fi
-            if [ -n "${DOCKERHUB_TOKEN:-}" ] && [ -n "${DOCKERHUB_USER:-}" ]; then
-              echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USER}" --password-stdin
+
+            if [ "${{ matrix.name }}" = "vehicle" ]; then
+              patch_env VEHICLE_SERVICE_PORT  3003
+              patch_env VEHICLE_DATABASE_URL  "postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/vehicledb"
+              patch_env REDIS_URL             "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
             fi
-            /usr/local/bin/docker-compose pull
-            /usr/local/bin/docker-compose up -d --force-recreate ${{ matrix.service_name }}
-            /usr/local/bin/docker-compose ps
+
+            if [ "${{ matrix.name }}" = "gateway" ]; then
+              patch_env GATEWAY_PORT            3006
+              patch_env REDIS_URL               "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
+              patch_env AUTH_SERVICE_URL        "http://${{ env.AUTH_PRIVATE_IP }}:3000"
+              patch_env USER_SERVICE_URL        "http://${{ env.USER_PRIVATE_IP }}:3001/api"
+              patch_env VEHICLE_SERVICE_URL     "http://${{ env.VEHICLE_PRIVATE_IP }}:3003"
+              patch_env PARKING_SERVICE_URL     "http://${{ env.PARKING_PRIVATE_IP }}:3004"
+              patch_env RESERVATION_SERVICE_URL "http://${{ env.RESERVATION_PRIVATE_IP }}:3005/api"
+              patch_env THROTTLE_TTL            60000
+              patch_env THROTTLE_LIMIT          60
+            fi
+
+            if [ "${{ matrix.name }}" = "parking" ]; then
+              patch_env PARKING_SERVICE_PORT  3004
+              patch_env PARKING_DATABASE_URL  "postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/parkingdb"
+              patch_env REDIS_URL             "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
+              patch_env KAFKA_BROKERS         "${{ env.AUTH_PRIVATE_IP }}:9092"
+            fi
+
+            if [ "${{ matrix.name }}" = "reservation" ]; then
+              patch_env RESERVATION_SERVICE_PORT  3005
+              patch_env RESERVATION_DATABASE_URL  "postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/reservationdb"
+              patch_env REDIS_URL                 "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
+              patch_env KAFKA_BROKERS             "${{ env.AUTH_PRIVATE_IP }}:9092"
+              patch_env PARKING_SERVICE_URL       "http://${{ env.PARKING_PRIVATE_IP }}:3004"
+              patch_env USER_SERVICE_URL          "http://${{ env.USER_PRIVATE_IP }}:3001/api"
+              patch_env VEHICLE_SERVICE_URL       "http://${{ env.VEHICLE_PRIVATE_IP }}:3003"
+              patch_env RESERVATION_EXPIRY_MINUTES 15
+            fi
+
+            if [ "${{ matrix.name }}" = "frontend" ]; then
+              patch_env PORT 3002
+              patch_env NEXT_PUBLIC_GATEWAY_URL "${{ env.PROD_GATEWAY_URL }}"
+            fi
+
+            # ── Docker login, pull y restart ─────────────────────────────────
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
+              docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+            docker-compose -f "$COMPOSE_FILE" pull
+            docker-compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
+            docker-compose -f "$COMPOSE_FILE" ps
+
+            if [ "${{ matrix.name }}" = "auth" ]; then
+              echo "Waiting for PostgreSQL to be ready..."
+              pg_container=$(docker-compose -f "$COMPOSE_FILE" ps -q postgres)
+              for i in {1..30}; do
+                if docker exec "$pg_container" pg_isready -U admin -d smartparking &>/dev/null; then
+                  echo "PostgreSQL is ready!"
+                  break
+                fi
+                sleep 1
+              done
+
+              echo "Ensuring microservice databases exist..."
+              docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE userdb;" || true
+              docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE vehicledb;" || true
+              docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE parkingdb;" || true
+              docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE reservationdb;" || true
+
+              echo "Cleaning up invalid failed migrations on smartparking DB..."
+              docker exec "$pg_container" psql -U admin -d smartparking -c "DELETE FROM _prisma_migrations WHERE migration_name = '20260601120000_init_vehicle';" || true
+
+              echo "Running auth migrations..."
+              docker-compose -f "$COMPOSE_FILE" exec -T auth-service npx prisma migrate deploy --schema prisma/auth/schema.prisma
+            fi
+
+            if [ "${{ matrix.name }}" = "user" ]; then
+              echo "Running user migrations..."
+              docker-compose -f "$COMPOSE_FILE" exec -T app npx prisma migrate deploy --config prisma.user.config.ts
+            fi
+
+            if [ "${{ matrix.name }}" = "vehicle" ]; then
+              echo "Resolving vehicle init migration if failed in vehicledb..."
+              docker-compose -f "$COMPOSE_FILE" exec -T app npx prisma migrate resolve --rolled-back 20260601120000_init_vehicle --config prisma.vehicle.config.ts || true
+
+              echo "Running vehicle migrations..."
+              docker-compose -f "$COMPOSE_FILE" exec -T app npx prisma migrate deploy --config prisma.vehicle.config.ts
+            fi

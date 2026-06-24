@@ -15,7 +15,7 @@ async function bootstrap() {
   });
   const configService = app.get(ConfigService);
 
-  app.setGlobalPrefix('api', { exclude: ['metrics'] });
+  app.setGlobalPrefix('api', { exclude: ['metrics', 'docs'] });
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new TransformResponseInterceptor());
   applyCors(app, configService);
@@ -35,7 +35,9 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
 
-  SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
+  SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config), {
+    useGlobalPrefix: false,
+  });
 
   const port = configService.get<number>('VEHICLE_SERVICE_PORT') || 3003;
   await app.listen(port);

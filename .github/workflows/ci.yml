@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  workflow_call:
+    outputs:
+      auth:
+        value: ${{ jobs.changes.outputs.auth }}
+      user:
+        value: ${{ jobs.changes.outputs.user }}
+      vehicle:
+        value: ${{ jobs.changes.outputs.vehicle }}
+      parking:
+        value: ${{ jobs.changes.outputs.parking }}
+      reservation:
+        value: ${{ jobs.changes.outputs.reservation }}
+      gateway:
+        value: ${{ jobs.changes.outputs.gateway }}
+      frontend:
+        value: ${{ jobs.changes.outputs.frontend }}
+      infra:
+        value: ${{ jobs.changes.outputs.infra }}
+  push:
+    branches: [main, QA, qa, PROD, prod, develop]
+  pull_request:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      auth: ${{ steps.filter.outputs.auth }}
+      user: ${{ steps.filter.outputs.user }}
+      vehicle: ${{ steps.filter.outputs.vehicle }}
+      parking: ${{ steps.filter.outputs.parking }}
+      reservation: ${{ steps.filter.outputs.reservation }}
+      gateway: ${{ steps.filter.outputs.gateway }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+          # Agregamos infra para que cambios globales forcen deploy de todo
+        id: filter
+        with:
+          filters: |
+            auth: 'smart-parking/apps/auth-service/**'
+            user: 'smart-parking/apps/user-service/**'
+            vehicle: 'smart-parking/apps/vehicle-service/**'
+            parking: 'smart-parking/apps/parking-service/**'
+            reservation: 'smart-parking/apps/reservation-service/**'
+            gateway: 'smart-parking/apps/gateway-service/**'
+            frontend: 'smart-parking/apps/frontend/**'
+            infra:
+              - 'infra/**'
+              - '.github/workflows/**'
+              - 'docker-compose.yml'
+              - 'smart-parking/scripts/**'
+              - 'smart-parking/package.json'
+              - 'smart-parking/package-lock.json'
+
+  test:
+    needs: [changes]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: smart-parking/package-lock.json
+
+      - run: npm ci --prefix smart-parking
+
+      - name: Lint Environment and Docker-Compose Config
+        run: cd smart-parking && npx ts-node scripts/lint-configs.ts
+
+      - name: Lint auth
+        run: cd smart-parking && npx nx run @org/auth-service:lint --verbose
+
+      - name: Unit Tests
+        run: cd smart-parking && npx nx run-many --target=test --all --parallel=3 --ci --coverage
+
+      - name: Build all
+        env:
+          NEXT_PUBLIC_GATEWAY_URL: http://placeholder.build
+        run: cd smart-parking && npx nx run-many --target=build --all --parallel=3

@@ -1,0 +1,18 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY apps/gateway-service/package.json ./apps/gateway-service/
+
+RUN npm install
+
+COPY . .
+
+ENV NX_DAEMON=false
+
+RUN npx nx build @org/gateway-service
+
+EXPOSE 3006
+
+CMD ["node", "apps/gateway-service/dist/main.js"]

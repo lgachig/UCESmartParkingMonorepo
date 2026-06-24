@@ -1,23 +1,78 @@
-<!-- nx configuration start-->
-<!-- Leave the start & end comments to automatically receive updates. -->
+# UCE Smart Parking — AI Context
 
-# General Guidelines for working with Nx
+## Project
+NX monorepo. University parking management system. 15 microservices + 1 frontend.
 
-- For navigating/exploring the workspace, invoke the `nx-workspace` skill first - it has patterns for querying projects, targets, and dependencies
-- When running tasks (for example build, lint, test, e2e, etc.), always prefer running the task through `nx` (i.e. `nx run`, `nx run-many`, `nx affected`) instead of using the underlying tooling directly
-- Prefix nx commands with the workspace's package manager (e.g., `pnpm nx build`, `npm exec nx test`) - avoids using globally installed CLI
-- You have access to the Nx MCP server and its tools, use them to help the user
-- For Nx plugin best practices, check `node_modules/@nx/<plugin>/PLUGIN.md`. Not all plugins have this file - proceed without it if unavailable.
-- NEVER guess CLI flags - always check nx_docs or `--help` first when unsure
+## Stack
+- Backend: NestJS + TypeScript + Prisma ORM
+- Frontend: Next.js 14
+- DBs: PostgreSQL (per service) + Redis + MongoDB + ClickHouse + Elasticsearch
+- Messaging: Kafka + RabbitMQ + MQTT
+- Infra: AWS EC2 + Docker + Terraform + GitHub Actions
 
-## Scaffolding & Generators
+## Services & Ports
+| Service | Port | DB |
+|---|---|---|
+| auth-service | 3000 | parking_auth_db (PostgreSQL) |
+| user-service | 3001 | parking_users_db (PostgreSQL) |
+| frontend | 3002 | — |
+| vehicle-service | 3003 | parking_vehicles_db (PostgreSQL) |
+| parking-service | 3004 | parking_slots_db (PostgreSQL) |
+| reservation-service | 3005 | parking_reservations_db (PostgreSQL) |
+| gateway-service | 3006 | Redis only |
 
-- For scaffolding tasks (creating apps, libs, project structure, setup), ALWAYS invoke the `nx-generate` skill FIRST before exploring or calling MCP tools
+## Shared secrets (same value across all services)
+- JWT_SECRET — used by all services to validate tokens
+- INTERNAL_SERVICE_KEY — used for inter-service HTTP calls (header: x-service-key)
+- Redis — shared instance on auth EC2
 
-## When to use nx_docs
+## Inter-service communication
+- REST: all public endpoints through gateway
+- gRPC: auth↔user, parking↔reservation
+- Kafka: all async events (reservation.*, parking.*, payment.*)
+- RabbitMQ: payment queue, notification queue
+- MQTT: IoT sensors → parking-service → realtime-service
+- WebSocket: realtime-service → frontend clients
+- x-service-key header: internal endpoints between services
 
-- USE for: advanced config options, unfamiliar flags, migration guides, plugin configuration, edge cases
-- DON'T USE for: basic generator syntax (`nx g @nx/react:app`), standard commands, things you already know
-- The `nx-generate` skill handles generator discovery internally - don't call nx_docs just to look up generator syntax
+## Prisma
+Each service has its own schema: prisma/{service}/schema.prisma
+Each service has its own config: prisma.{service}.config.ts
+Generated clients: generated/{service}-client/
 
-<!-- nx configuration end-->
+## Roles
+ADMIN | STUDENT | PROFESSOR | GUEST
+
+## Patterns used in every service
+- GlobalPrefix: /api
+- Guards: JwtAuthGuard, RolesGuard, ServiceKeyGuard
+- Filter: HttpExceptionFilter
+- Interceptor: TransformResponseInterceptor
+- Middleware: RequestLoggerMiddleware, MetricsMiddleware
+- Health: /health (DB + Redis + Kafka)
+- Metrics: /metrics (Prometheus)
+- Docs: /docs (Swagger)
+- Audit: every action writes to audit_logs table
+- Logger: Winston to logs/{service}.log
+
+## Infrastructure
+- QA: branch QA → GitHub Actions → Docker Hub → EC2 (7 instances)
+- PROD: branch main → same pipeline → separate EC2 instances
+- Terraform: infrastructure/environments/qa/ and /prod/
+- Auth EC2 runs: PostgreSQL + Redis + Kafka (shared)
+- Each other EC2 runs: 1 microservice in Docker
+
+## Pending microservices (not yet implemented)
+- payment-service (port 3007)
+- notification-service (port 3008)
+- ai-service (port 3009)
+- analytics-service (port 3010)
+- audit-service (port 3011, centralized)
+- search-service (port 3012)
+- realtime-service (port 3013)
+
+## NX commands
+- Serve: npx nx serve {service}
+- Build: npx nx build {service}
+- Generate client: npx prisma generate --config prisma.{service}.config.ts
+- Migrate: npx prisma migrate dev --config prisma.{service}.config.ts

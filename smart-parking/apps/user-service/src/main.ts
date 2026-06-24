@@ -15,7 +15,7 @@ async function bootstrap() {
   });
   const configService = app.get(ConfigService);
 
-  app.setGlobalPrefix('api', { exclude: ['metrics'] });
+  app.setGlobalPrefix('api', { exclude: ['metrics', 'docs'] });
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new TransformResponseInterceptor());
   applyCors(app, configService);
@@ -36,7 +36,7 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document);
+  SwaggerModule.setup('docs', app, document, { useGlobalPrefix: false });
 
   const port = configService.get<number>('USER_SERVICE_PORT') || 3001;
   await app.listen(port);

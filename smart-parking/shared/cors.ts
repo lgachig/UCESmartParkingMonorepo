@@ -7,6 +7,10 @@ const DEFAULT_CORS_ORIGINS = [
   'http://localhost:3002',
   'http://localhost:3003',
   'http://127.0.0.1:3002',
+  'http://localhost:3004',
+  'http://localhost:3005',
+  'http://localhost:3006',
+  
 ];
 
 function parseOriginList(value: string | undefined): string[] {
@@ -52,9 +56,19 @@ export function applyCors(
   });
 }
 
+/** HTTP-only deploy (EC2 sin TLS). Evita HSTS y upgrade-insecure-requests que rompen Swagger. */
 export function configureHelmet() {
   return helmet({
+    strictTransportSecurity: false,
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        'upgrade-insecure-requests': null,
+      },
+    },
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
+    originAgentCluster: false,
   });
 }

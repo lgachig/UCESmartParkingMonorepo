@@ -37,6 +37,24 @@ export default [
       '**/*.mjs',
     ],
     // Override or add rules here
-    rules: {},
+    rules: {
+          '@nx/enforce-module-boundaries': [
+      'error',
+      {
+        enforceBuildableLibDependency: true,
+        allow: [
+          '^.*/eslint(\\.base)?\\.config\\.[cm]?[jt]s$',
+          '^\\.\\./\\.\\./\\.\\./shared/.*'
+        ],
+        depConstraints: [
+          {
+            sourceTag: '*',
+            onlyDependOnLibsWithTags: ['*'],
+          },
+        ],
+      },
+    ],
+    },
   },
+  
 ];

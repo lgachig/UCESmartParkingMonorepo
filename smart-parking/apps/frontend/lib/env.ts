@@ -7,19 +7,18 @@ function requireEnv(name: string, value: string | undefined): string {
   return value;
 }
 
+const gatewayUrl = requireEnv(
+  'NEXT_PUBLIC_GATEWAY_URL',
+  process.env.NEXT_PUBLIC_GATEWAY_URL,
+);
+
 export const env = {
-  authApiUrl: requireEnv(
-    'NEXT_PUBLIC_AUTH_API_URL',
-    process.env.NEXT_PUBLIC_AUTH_API_URL,
-  ),
-  userApiUrl: requireEnv(
-    'NEXT_PUBLIC_USER_API_URL',
-    process.env.NEXT_PUBLIC_USER_API_URL,
-  ),
-  vehicleApiUrl: requireEnv(
-    'NEXT_PUBLIC_VEHICLE_API_URL',
-    process.env.NEXT_PUBLIC_VEHICLE_API_URL,
-  ),
+  authApiUrl: gatewayUrl,
+  userApiUrl: gatewayUrl,
+  vehicleApiUrl: gatewayUrl,
+  reservationApiUrl: gatewayUrl,
+  parkingApiUrl: `${gatewayUrl}/parking`,
+  
   appName: process.env.NEXT_PUBLIC_APP_NAME ?? 'UCE Smart Parking',
   routes: {
     admin: process.env.NEXT_PUBLIC_ROUTE_ADMIN ?? '/admin',

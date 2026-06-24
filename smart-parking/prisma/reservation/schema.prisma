@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../../generated/reservation-client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ReservationStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  EXPIRED
+  CANCELLED
+}
+
+model Reservation {
+  id               String            @id @default(uuid())
+  userId           String            @map("user_id")
+  vehicleId        String            @map("vehicle_id")
+  slotId           String            @map("slot_id")
+  reservationCode  String            @unique @map("reservation_code")
+  status           ReservationStatus @default(PENDING)
+  reservedAt       DateTime          @default(now()) @map("reserved_at")
+  expiresAt        DateTime          @map("expires_at")
+  checkInAt        DateTime?         @map("check_in_at")
+  checkOutAt       DateTime?         @map("check_out_at")
+  durationMinutes  Int?              @map("duration_minutes")
+  cancelledAt      DateTime?         @map("cancelled_at")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([slotId])
+  @@index([vehicleId])
+  @@index([status])
+  @@map("reservations")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  action         String
+  authUserId     String?  @map("auth_user_id")
+  reservationId  String?  @map("reservation_id")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}
