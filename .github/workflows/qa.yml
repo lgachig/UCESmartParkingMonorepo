@@ -7,6 +7,11 @@ on:
     types: [closed]
     branches: [QA, qa]
   workflow_dispatch:
+    inputs:
+      force_deploy_all:
+        description: 'Force deploy all services regardless of file changes'
+        type: boolean
+        default: true
 
 concurrency:
   group: qa-pipeline-${{ github.ref }}
@@ -26,13 +31,13 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     outputs:
-      auth:        ${{ needs.ci-check.outputs.auth }}
-      user:        ${{ needs.ci-check.outputs.user }}
-      vehicle:     ${{ needs.ci-check.outputs.vehicle }}
-      parking:     ${{ needs.ci-check.outputs.parking }}
-      reservation: ${{ needs.ci-check.outputs.reservation }}
-      gateway:     ${{ needs.ci-check.outputs.gateway }}
-      frontend:    ${{ needs.ci-check.outputs.frontend }}
+      auth:        ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.auth == 'true' }}
+      user:        ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.user == 'true' }}
+      vehicle:     ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.vehicle == 'true' }}
+      parking:     ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.parking == 'true' }}
+      reservation: ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.reservation == 'true' }}
+      gateway:     ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.gateway == 'true' }}
+      frontend:    ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.frontend == 'true' }}
     steps:
       - name: Echo changes
         run: |
@@ -193,152 +198,6 @@ jobs:
           echo "frontend_ip=$FRONTEND_IP"       >> $GITHUB_OUTPUT
 
           echo "auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | reservation=$RESERVATION_IP | gateway=$GATEWAY_IP | frontend=$FRONTEND_IP"
-
-  force-deploy:
-    name: Force Deploy All
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    environment: qa
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: auth
-            service_name: auth-service
-            image_suffix: auth
-            app_port: '3000'
-          - name: user
-            service_name: app
-            image_suffix: user
-            app_port: '3001'
-          - name: vehicle
-            service_name: app
-            image_suffix: vehicle
-            app_port: '3003'
-          - name: gateway
-            service_name: app
-            image_suffix: gateway
-            app_port: '3006'
-          - name: parking
-            service_name: app
-            image_suffix: parking
-            app_port: '3004'
-          - name: reservation
-            service_name: app
-            image_suffix: reservation
-            app_port: '3005'
-          - name: frontend
-            service_name: app
-            image_suffix: frontend
-            app_port: '3002'
-
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
-
-      - name: Discover IPs
-        run: |
-          get_ip() {
-            aws ec2 describe-instances \
-              --filters "Name=tag:Service,Values=$1" "Name=tag:Environment,Values=qa" \
-                        "Name=instance-state-name,Values=running" \
-              --query "Reservations[0].Instances[0].PrivateIpAddress" --output text
-          }
-          echo "AUTH_PRIVATE_IP=$(get_ip auth)"               >> $GITHUB_ENV
-          echo "USER_PRIVATE_IP=$(get_ip user)"               >> $GITHUB_ENV
-          echo "VEHICLE_PRIVATE_IP=$(get_ip vehicle)"         >> $GITHUB_ENV
-          echo "PARKING_PRIVATE_IP=$(get_ip parking)"         >> $GITHUB_ENV
-          echo "RESERVATION_PRIVATE_IP=$(get_ip reservation)" >> $GITHUB_ENV
-          echo "GATEWAY_PRIVATE_IP=$(get_ip gateway)"         >> $GITHUB_ENV
-          echo "FRONTEND_PRIVATE_IP=$(get_ip frontend)"       >> $GITHUB_ENV
-
-      - name: Resolve target IP
-        run: |
-          case "${{ matrix.name }}" in
-            auth)        echo "PRIVATE_IP=$AUTH_PRIVATE_IP"        >> $GITHUB_ENV ;;
-            user)        echo "PRIVATE_IP=$USER_PRIVATE_IP"        >> $GITHUB_ENV ;;
-            vehicle)     echo "PRIVATE_IP=$VEHICLE_PRIVATE_IP"     >> $GITHUB_ENV ;;
-            parking)     echo "PRIVATE_IP=$PARKING_PRIVATE_IP"     >> $GITHUB_ENV ;;
-            reservation) echo "PRIVATE_IP=$RESERVATION_PRIVATE_IP" >> $GITHUB_ENV ;;
-            gateway)     echo "PRIVATE_IP=$GATEWAY_PRIVATE_IP"     >> $GITHUB_ENV ;;
-            frontend)    echo "PRIVATE_IP=$FRONTEND_PRIVATE_IP"    >> $GITHUB_ENV ;;
-          esac
-
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.QA_EC2_SSH_KEY }}" > ~/.ssh/qa.pem
-          chmod 400 ~/.ssh/qa.pem
-          ssh-keyscan -H ${{ secrets.QA_BASTION_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Deploy ${{ matrix.name }} via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ env.PRIVATE_IP }}
-          username: ec2-user
-          key: ${{ secrets.QA_EC2_SSH_KEY }}
-          port: 22
-          timeout: 120s
-          command_timeout: 15m
-          script_stop: true
-          proxy_host: ${{ secrets.QA_BASTION_HOST }}
-          proxy_username: ec2-user
-          proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
-          proxy_port: 22
-          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,GATEWAY_PRIVATE_IP,FRONTEND_PRIVATE_IP
-          script: |
-            set -euo pipefail
-
-            COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
-            ENV_FILE="/opt/smartparking/.env"
-            sudo mkdir -p /opt/smartparking
-            sudo chown ec2-user:ec2-user /opt/smartparking
-            touch "$ENV_FILE" && chmod 644 "$ENV_FILE"
-
-            patch_env() {
-              local key="$1" val="$2"
-              if [ -z "$val" ] || [ "$val" = "None" ] || [ "$val" = "null" ]; then
-                echo "❌ Valor vacío para $key"; exit 1
-              fi
-              sudo sed -i "/^${key}=/d" "$ENV_FILE"
-              printf '%s=%s\n' "$key" "$val" >> "$ENV_FILE"
-              echo "  ✔ $key"
-            }
-
-            patch_env DOCKERHUB_USER       "${{ secrets.DOCKERHUB_USERNAME }}"
-            patch_env JWT_SECRET           "${{ secrets.QA_JWT_SECRET }}"
-            patch_env JWT_REFRESH_SECRET   "${{ secrets.QA_JWT_REFRESH_SECRET }}"
-            patch_env INTERNAL_SERVICE_KEY "${{ secrets.QA_INTERNAL_SERVICE_KEY }}"
-            patch_env CORS_ORIGINS         "http://${{ secrets.QA_FRONTEND_EIP }}:3002,http://${{ secrets.QA_GATEWAY_EIP }}:3006"
-            patch_env APP_IMAGE            "${{ secrets.DOCKERHUB_USERNAME }}/smartparking-${{ matrix.image_suffix }}:qa"
-            patch_env APP_PORT             "${{ matrix.app_port }}"
-
-            if [ "${{ matrix.name }}" = "auth" ]; then
-              patch_env PORT              "3000"
-              patch_env DATABASE_URL      "postgresql://admin:admin@postgres:5432/smartparking"
-              patch_env REDIS_URL         "redis://redis:6379"
-              patch_env FRONTEND_URL      "http://${{ secrets.QA_FRONTEND_EIP }}:3002"
-              patch_env USER_SERVICE_URL  "http://${USER_PRIVATE_IP}:3001/api"
-            fi
-
-            if [ "${{ matrix.name }}" = "user" ]; then
-              patch_env USER_SERVICE_PORT "3001"
-              patch_env USER_DATABASE_URL "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb"
-              patch_env REDIS_URL         "redis://${AUTH_PRIVATE_IP}:6379"
-            fi
-
-            if [ "${{ matrix.name }}" = "vehicle" ]; then
-              patch_env VEHICLE_SERVICE_PORT "3003"
-              patch_env VEHICLE_DATABASE_URL "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/vehicledb"
-              patch_env REDIS_URL            "redis://${AUTH_PRIVATE_IP}:6379"
-            fi
-
-            if
 
   deploy:
     name: Deploy ${{ matrix.name }}

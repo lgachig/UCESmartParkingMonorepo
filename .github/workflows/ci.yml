@@ -17,6 +17,8 @@ on:
         value: ${{ jobs.changes.outputs.gateway }}
       frontend:
         value: ${{ jobs.changes.outputs.frontend }}
+      infra:
+        value: ${{ jobs.changes.outputs.infra }}
   push:
     branches: [main, QA, qa, PROD, prod, develop]
   pull_request:
@@ -36,9 +38,11 @@ jobs:
       reservation: ${{ steps.filter.outputs.reservation }}
       gateway: ${{ steps.filter.outputs.gateway }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      infra: ${{ steps.filter.outputs.infra }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
+          # Agregamos infra para que cambios globales forcen deploy de todo
         id: filter
         with:
           filters: |
@@ -49,6 +53,13 @@ jobs:
             reservation: 'smart-parking/apps/reservation-service/**'
             gateway: 'smart-parking/apps/gateway-service/**'
             frontend: 'smart-parking/apps/frontend/**'
+            infra:
+              - 'infra/**'
+              - '.github/workflows/**'
+              - 'docker-compose.yml'
+              - 'smart-parking/scripts/**'
+              - 'smart-parking/package.json'
+              - 'smart-parking/package-lock.json'
 
   test:
     needs: [changes]
