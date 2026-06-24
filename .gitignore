@@ -23,6 +23,7 @@ practicaU*.pem
 
 # Manual local con credenciales AWS — usar MANUAL-DESPLIEGUE-EC2.example.md en el repo
 MANUAL-DESPLIEGUE-EC2.md
+MANUAL-DESPLIEGUE-PROD.md
 
 # OS / IDE
 .DS_Store
