@@ -205,6 +205,8 @@ jobs:
     needs: [get-changes, discover-ips]
     runs-on: ubuntu-latest
     environment: qa
+    env:
+      QA_GATEWAY_URL: ${{ secrets.QA_GATEWAY_URL }}
     strategy:
       fail-fast: false
       matrix:
@@ -307,7 +309,7 @@ jobs:
           proxy_username: ec2-user
           proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
           proxy_port: 22
-          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,GATEWAY_PRIVATE_IP,FRONTEND_PRIVATE_IP
+          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,GATEWAY_PRIVATE_IP,FRONTEND_PRIVATE_IP,QA_GATEWAY_URL
           script: |
             set -euo pipefail
 
@@ -393,6 +395,7 @@ jobs:
 
             if [ "${{ matrix.name }}" = "frontend" ]; then
               patch_env PORT "3002"
+              patch_env NEXT_PUBLIC_GATEWAY_URL "$QA_GATEWAY_URL"
             fi
 
             # Pull & restart

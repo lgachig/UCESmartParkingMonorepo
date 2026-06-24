@@ -112,6 +112,8 @@ jobs:
     needs: docker-push
     runs-on: ubuntu-latest
     environment: prod
+    env:
+      PROD_GATEWAY_URL: ${{ vars.PROD_GATEWAY_URL }}
     strategy:
       fail-fast: false
       matrix:
@@ -287,6 +289,11 @@ jobs:
               patch_env USER_SERVICE_URL          "http://${{ env.USER_PRIVATE_IP }}:3001/api"
               patch_env VEHICLE_SERVICE_URL       "http://${{ env.VEHICLE_PRIVATE_IP }}:3003"
               patch_env RESERVATION_EXPIRY_MINUTES 15
+            fi
+
+            if [ "${{ matrix.name }}" = "frontend" ]; then
+              patch_env PORT 3002
+              patch_env NEXT_PUBLIC_GATEWAY_URL "${{ env.PROD_GATEWAY_URL }}"
             fi
 
             # ── Docker login, pull y restart ─────────────────────────────────
