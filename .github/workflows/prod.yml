@@ -299,8 +299,9 @@ jobs:
 
             if [ "${{ matrix.name }}" = "auth" ]; then
               echo "Waiting for PostgreSQL to be ready..."
+              pg_container=$(docker-compose -f "$COMPOSE_FILE" ps -q postgres)
               for i in {1..30}; do
-                if docker exec smartparking-postgres pg_isready -U admin -d smartparking &>/dev/null; then
+                if docker exec "$pg_container" pg_isready -U admin -d smartparking &>/dev/null; then
                   echo "PostgreSQL is ready!"
                   break
                 fi
@@ -308,13 +309,13 @@ jobs:
               done
 
               echo "Ensuring microservice databases exist..."
-              docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE userdb;" || true
-              docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE vehicledb;" || true
-              docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE parkingdb;" || true
-              docker exec smartparking-postgres psql -U admin -d smartparking -c "CREATE DATABASE reservationdb;" || true
+              docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE userdb;" || true
+              docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE vehicledb;" || true
+              docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE parkingdb;" || true
+              docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE reservationdb;" || true
 
               echo "Cleaning up invalid failed migrations on smartparking DB..."
-              docker exec smartparking-postgres psql -U admin -d smartparking -c "DELETE FROM _prisma_migrations WHERE migration_name = '20260601120000_init_vehicle';" || true
+              docker exec "$pg_container" psql -U admin -d smartparking -c "DELETE FROM _prisma_migrations WHERE migration_name = '20260601120000_init_vehicle';" || true
 
               echo "Running auth migrations..."
               docker-compose -f "$COMPOSE_FILE" exec -T auth-service npx prisma migrate deploy --schema prisma/auth/schema.prisma
