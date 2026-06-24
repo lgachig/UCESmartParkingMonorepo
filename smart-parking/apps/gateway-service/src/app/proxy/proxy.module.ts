@@ -13,10 +13,11 @@ import { createProxyMiddleware, Options } from 'http-proxy-middleware';
 import { Request, Response, NextFunction } from 'express';
 import { JwtGatewayGuard, GatewayUser } from '../auth/jwt-gateway.guard';
 
-function makeProxy(target: string) {
+function makeProxy(target: string, pathRewrite?: Record<string, string>) {
   const opts: Options = {
     target,
     changeOrigin: true,
+    pathRewrite,
     on: {
       proxyReq: (proxyReq, req) => {
         const user: GatewayUser | undefined = (req as any).user;
@@ -94,7 +95,7 @@ export class ParkingProxyController {
   constructor(private readonly cfg: ConfigService) {
     const target = cfg.get<string>('PARKING_SERVICE_URL')!;
     Logger.log(`ParkingProxy → ${target}`, 'ProxyModule');
-    this.proxy = makeProxy(target);
+    this.proxy = makeProxy(target, { '^/api/parking': '/api' });
   }
   @All('*')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
