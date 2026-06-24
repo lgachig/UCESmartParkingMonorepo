@@ -164,11 +164,7 @@ services:
       context: ./smart-parking/apps/frontend
       dockerfile: dockerfile
       args:
-        NEXT_PUBLIC_AUTH_API_URL: http://localhost:3000/api
-        NEXT_PUBLIC_USER_API_URL: http://localhost:3001/api
-        NEXT_PUBLIC_VEHICLE_API_URL: http://localhost:3003/api
-        NEXT_PUBLIC_PARKING_API_URL: http://localhost:3004/api
-        NEXT_PUBLIC_RESERVATION_API_URL: http://localhost:3005/api
+        NEXT_PUBLIC_GATEWAY_URL: http://localhost:3006/api
     container_name: smartparking-frontend
     restart: unless-stopped
     depends_on:
