@@ -11,7 +11,7 @@ import { applyCors, configureHelmet } from '../../../shared/cors';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: WinstonModule.createLogger({ instance: winstonConfig }),
-    rawBody: true,
+    bodyParser: false,
   });
 
   const configService = app.get(ConfigService);
