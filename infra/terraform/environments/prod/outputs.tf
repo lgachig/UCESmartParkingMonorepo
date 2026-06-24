@@ -102,3 +102,19 @@ output "github_setup_summary" {
     Docker Hub tags: smartparking-*:${var.environment}
   EOT
 }
+
+output "alb_dns_name" {
+  description = "The DNS name of the Application Load Balancer"
+  value       = aws_lb.prod_alb.dns_name
+}
+
+output "prod_frontend_url_alb" {
+  description = "Frontend public URL via ALB"
+  value       = "http://${aws_lb.prod_alb.dns_name}"
+}
+
+output "prod_gateway_api_url_alb" {
+  description = "Gateway API URL via ALB"
+  value       = "http://${aws_lb.prod_alb.dns_name}:3006/api"
+}
+

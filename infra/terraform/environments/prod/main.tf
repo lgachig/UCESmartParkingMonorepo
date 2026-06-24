@@ -21,11 +21,9 @@ module "security_groups" {
   bastion_security_group_id = module.bastion.security_group_id
 }
 
-# Standalone Elastic IP resources for Frontend and Gateway (only 2 EIPs to respect AWS limits)
 resource "aws_eip" "frontend" { domain = "vpc" }
 resource "aws_eip" "gateway" { domain = "vpc" }
 
-# 1) Auth EC2 - runs auth-service, postgres, redis, kafka
 module "auth" {
   source             = "../../modules/ec2"
   environment        = var.environment
@@ -56,7 +54,6 @@ module "auth" {
   })
 }
 
-# 2) User EC2
 module "user" {
   source             = "../../modules/ec2"
   environment        = var.environment
@@ -83,7 +80,6 @@ module "user" {
   })
 }
 
-# 3) Vehicle EC2
 module "vehicle" {
   source             = "../../modules/ec2"
   environment        = var.environment
@@ -110,7 +106,6 @@ module "vehicle" {
   })
 }
 
-# 4) Frontend EC2
 module "frontend" {
   source             = "../../modules/ec2"
   environment        = var.environment
@@ -134,7 +129,6 @@ resource "aws_eip_association" "frontend" {
   allocation_id = aws_eip.frontend.id
 }
 
-# 5) Gateway EC2
 module "gateway" {
   source             = "../../modules/ec2"
   environment        = var.environment
@@ -170,7 +164,6 @@ resource "aws_eip_association" "gateway" {
   allocation_id = aws_eip.gateway.id
 }
 
-# 6) Parking EC2
 module "parking" {
   source             = "../../modules/ec2"
   environment        = var.environment
@@ -198,7 +191,6 @@ module "parking" {
   })
 }
 
-# 7) Reservation EC2
 module "reservation" {
   source             = "../../modules/ec2"
   environment        = var.environment
@@ -228,4 +220,270 @@ module "reservation" {
       RESERVATION_EXPIRY_MINUTES=15
       EOF
   })
+}
+
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+}
+
+resource "aws_security_group" "prod_alb_sg" {
+  name        = "prod-alb-sg"
+  description = "Security Group for Production ALB (Ports 80 & 443)"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name        = "prod-alb-sg"
+    Environment = "prod"
+  }
+}
+
+resource "aws_lb" "prod_alb" {
+  name               = "prod-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.prod_alb_sg.id]
+  subnets            = module.vpc.public_subnet_ids
+
+  tags = {
+    Name        = "prod-alb"
+    Environment = "prod"
+  }
+}
+
+resource "aws_lb_target_group" "prod_frontend_tg" {
+  name     = "prod-frontend-tg"
+  port     = 3002
+  protocol = "HTTP"
+  vpc_id   = module.vpc.vpc_id
+
+  health_check {
+    path                = "/"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    interval            = 30
+    protocol            = "HTTP"
+    matcher             = "200-399"
+  }
+
+  tags = {
+    Name        = "prod-frontend-tg"
+    Environment = "prod"
+  }
+}
+
+resource "aws_lb_target_group" "prod_gateway_tg" {
+  name     = "prod-gateway-tg"
+  port     = 3006
+  protocol = "HTTP"
+  vpc_id   = module.vpc.vpc_id
+
+  health_check {
+    path                = "/health"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    interval            = 30
+    protocol            = "HTTP"
+    matcher             = "200-399"
+  }
+
+  tags = {
+    Name        = "prod-gateway-tg"
+    Environment = "prod"
+  }
+}
+
+resource "aws_lb_listener" "frontend_http" {
+  load_balancer_arn = aws_lb.prod_alb.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.prod_frontend_tg.arn
+  }
+}
+
+resource "aws_lb_listener" "gateway_http" {
+  load_balancer_arn = aws_lb.prod_alb.arn
+  port              = 3006
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.prod_gateway_tg.arn
+  }
+}
+
+resource "aws_lb_target_group_attachment" "frontend_static" {
+  target_group_arn = aws_lb_target_group.prod_frontend_tg.arn
+  target_id        = module.frontend.instance_id
+  port             = 3002
+}
+
+resource "aws_lb_target_group_attachment" "gateway_static" {
+  target_group_arn = aws_lb_target_group.prod_gateway_tg.arn
+  target_id        = module.gateway.instance_id
+  port             = 3006
+}
+
+resource "aws_launch_template" "prod_frontend_lt" {
+  name_prefix   = "prod-frontend-lt-"
+  image_id      = data.aws_ami.amazon_linux.id
+  instance_type = var.instance_type
+  key_name      = var.key_name
+
+  network_interfaces {
+    associate_public_ip_address = true
+    security_groups             = [module.security_groups.security_group_ids["frontend"]]
+  }
+
+  user_data = base64encode(templatefile("${path.module}/templates/user-data.sh.tpl", {
+    dockerhub_user   = var.dockerhub_user
+    docker_image     = "smartparking-frontend"
+    docker_image_tag = var.environment
+    service_port     = 3002
+    is_auth          = false
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
+  }))
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name        = "prod-frontend-asg"
+      Environment = "prod"
+    }
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_launch_template" "prod_gateway_lt" {
+  name_prefix   = "prod-gateway-lt-"
+  image_id      = data.aws_ami.amazon_linux.id
+  instance_type = var.instance_type
+  key_name      = var.key_name
+
+  network_interfaces {
+    associate_public_ip_address = true
+    security_groups             = [module.security_groups.security_group_ids["gateway"]]
+  }
+
+  user_data = base64encode(templatefile("${path.module}/templates/user-data.sh.tpl", {
+    dockerhub_user   = var.dockerhub_user
+    docker_image     = "smartparking-gateway"
+    docker_image_tag = var.environment
+    service_port     = 3006
+    is_auth          = false
+    env_content      = <<-EOF
+      GATEWAY_PORT=3006
+      JWT_SECRET=${var.jwt_secret}
+      REDIS_URL=redis://${module.auth.private_ip}:6379
+      AUTH_SERVICE_URL=http://${module.auth.private_ip}:3000
+      USER_SERVICE_URL=http://${module.user.private_ip}:3001
+      VEHICLE_SERVICE_URL=http://${module.vehicle.private_ip}:3003
+      PARKING_SERVICE_URL=http://${module.parking.private_ip}:3004
+      RESERVATION_SERVICE_URL=http://${module.reservation.private_ip}:3005
+      CORS_ORIGINS=http://${aws_lb.prod_alb.dns_name},http://${aws_lb.prod_alb.dns_name}:3006,http://${aws_eip.frontend.public_ip}:3002,http://${aws_eip.gateway.public_ip}:3006
+      THROTTLE_TTL=60000
+      THROTTLE_LIMIT=60
+      EOF
+  }))
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name        = "prod-gateway-asg"
+      Environment = "prod"
+    }
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_autoscaling_group" "prod_frontend_asg" {
+  name                      = "prod-frontend-asg"
+  min_size                  = 1
+  max_size                  = 2
+  desired_capacity          = 1
+  vpc_zone_identifier       = module.vpc.public_subnet_ids
+  health_check_type         = "ELB"
+  health_check_grace_period = 120
+
+  launch_template {
+    id      = aws_launch_template.prod_frontend_lt.id
+    version = "$Latest"
+  }
+
+  target_group_arns = [aws_lb_target_group.prod_frontend_tg.arn]
+
+  tag {
+    key                 = "Name"
+    value               = "prod-frontend-asg"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Environment"
+    value               = "prod"
+    propagate_at_launch = true
+  }
+}
+
+resource "aws_autoscaling_group" "prod_gateway_asg" {
+  name                      = "prod-gateway-asg"
+  min_size                  = 1
+  max_size                  = 2
+  desired_capacity          = 1
+  vpc_zone_identifier       = module.vpc.public_subnet_ids
+  health_check_type         = "ELB"
+  health_check_grace_period = 120
+
+  launch_template {
+    id      = aws_launch_template.prod_gateway_lt.id
+    version = "$Latest"
+  }
+
+  target_group_arns = [aws_lb_target_group.prod_gateway_tg.arn]
+
+  tag {
+    key                 = "Name"
+    value               = "prod-gateway-asg"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Environment"
+    value               = "prod"
+    propagate_at_launch = true
+  }
 }

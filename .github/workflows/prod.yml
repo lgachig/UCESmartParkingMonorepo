@@ -1,11 +1,11 @@
-name: PROD CI/CD
+name: Feature-EnvPro CI/CD
 
 on:
   push:
-    branches: [PROD, prod]
+    branches: [PROD, prod, Feature-EnvPro]
   pull_request:
     types: [closed]
-    branches: [PROD, prod]
+    branches: [PROD, prod, Feature-EnvPro]
   workflow_dispatch:
 
 concurrency:
@@ -14,6 +14,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   ci-check:
@@ -26,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: prod
     env:
-      PROD_GATEWAY_URL: ${{ vars.PROD_GATEWAY_URL }}
+      PROD_GATEWAY_URL: ${{ vars.PROD_GATEWAY_URL || secrets.PROD_GATEWAY_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -100,11 +101,7 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-frontend:prod
           build-args: |
-            NEXT_PUBLIC_AUTH_API_URL=${{ env.PROD_GATEWAY_URL }}/api
-            NEXT_PUBLIC_USER_API_URL=${{ env.PROD_GATEWAY_URL }}/api
-            NEXT_PUBLIC_VEHICLE_API_URL=${{ env.PROD_GATEWAY_URL }}/api
-            NEXT_PUBLIC_PARKING_API_URL=${{ env.PROD_GATEWAY_URL }}/api
-            NEXT_PUBLIC_RESERVATION_API_URL=${{ env.PROD_GATEWAY_URL }}/api
+            NEXT_PUBLIC_GATEWAY_URL=${{ env.PROD_GATEWAY_URL }}
 
   deploy:
     name: Deploy on EC2 instances (via Bastion)
@@ -113,7 +110,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: prod
     env:
-      PROD_GATEWAY_URL: ${{ vars.PROD_GATEWAY_URL }}
+      PROD_GATEWAY_URL: ${{ vars.PROD_GATEWAY_URL || secrets.PROD_GATEWAY_URL }}
     strategy:
       fail-fast: false
       matrix:
@@ -155,7 +152,7 @@ jobs:
           discover_ip() {
             aws ec2 describe-instances \
               --filters \
-                "Name=tag:Service,Values=$1" \
+                "Name=tag:Name,Values=prod-$1" \
                 "Name=tag:Environment,Values=prod" \
                 "Name=instance-state-name,Values=running" \
               --query "Reservations[0].Instances[0].PrivateIpAddress" \
@@ -165,7 +162,7 @@ jobs:
           for svc in auth user vehicle parking reservation; do
             ip=$(discover_ip $svc)
             if [ -z "$ip" ] || [ "$ip" = "None" ]; then
-              echo "❌ No se encontró instancia Service=$svc Environment=prod"
+              echo "❌ No se encontró instancia Name=prod-$svc Environment=prod"
               exit 1
             fi
             echo "✅ $svc → $ip"
@@ -237,7 +234,10 @@ jobs:
             patch_env INTERNAL_SERVICE_KEY "${{ secrets.PROD_INTERNAL_SERVICE_KEY }}"
 
             # ── CORS: solo frontend y gateway son públicos ───────────────────
-            CORS_LIST="http://${{ secrets.PROD_FRONTEND_EIP }}:3002,http://${{ secrets.PROD_GATEWAY_EIP }}:3006"
+            # Permitimos tanto las IPs elásticas (directas) como el balanceador ALB
+            # Extraemos el host/ip del ALB desde PROD_GATEWAY_URL (ej. http://alb-dns:3006/api -> http://alb-dns)
+            ALB_FRONTEND_URL=$(echo "${{ env.PROD_GATEWAY_URL }}" | sed -E 's|:3006(/api)?$||')
+            CORS_LIST="http://${{ secrets.PROD_FRONTEND_EIP }}:3002,http://${{ secrets.PROD_GATEWAY_EIP }}:3006,${ALB_FRONTEND_URL},${{ env.PROD_GATEWAY_URL }}"
             patch_env CORS_ORIGINS "$CORS_LIST"
 
             # ── Vars por servicio — IPs privadas descubiertas dinámicamente ──
@@ -245,7 +245,7 @@ jobs:
               patch_env PORT             3000
               patch_env DATABASE_URL     "postgresql://admin:admin@postgres:5432/smartparking"
               patch_env REDIS_URL        "redis://redis:6379"
-              patch_env FRONTEND_URL     "http://${{ secrets.PROD_FRONTEND_EIP }}:3002"
+              patch_env FRONTEND_URL     "${ALB_FRONTEND_URL}"
               patch_env USER_SERVICE_URL "http://${{ env.USER_PRIVATE_IP }}:3001/api"
             fi
 
