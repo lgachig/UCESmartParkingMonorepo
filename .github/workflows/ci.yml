@@ -20,7 +20,7 @@ on:
       infra:
         value: ${{ jobs.changes.outputs.infra }}
   push:
-    branches: [main, QA, qa, PROD, prod, develop]
+    branches: [main, QA, qa, PROD, prod, develop, Feature-EnvPro]
   pull_request:
 
 permissions:
@@ -42,7 +42,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
-          # Agregamos infra para que cambios globales forcen deploy de todo
         id: filter
         with:
           filters: |
