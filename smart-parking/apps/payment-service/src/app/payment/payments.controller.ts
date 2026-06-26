@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Post,
+  RawBodyRequest,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -12,6 +22,11 @@ import { PaymentsService } from './payments.service';
 import { CalculateFeeDto, CreatePaymentDto } from './dto/payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ServiceKeyGuard } from '../auth/guards/service-key.guard';
+import { StripeService } from '../stripe/stripe.service';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { AuditService } from '../audit/audit.service';
+import { RabbitmqConsumerService } from '../rabbitmq/rabbitmq-consumer.service';
+import { Logger } from '@nestjs/common';
 
 @ApiTags('Internal')
 @ApiHeader({ name: 'x-service-key', required: true })
@@ -64,5 +79,108 @@ export class PaymentsController {
   @Get(':id')
   findById(@Param('id') id: string) {
     return this.paymentsService.findById(id);
+  }
+}
+
+@ApiTags('Stripe Webhook')
+@Controller('stripe')
+export class StripeWebhookController {
+  private readonly logger = new Logger(StripeWebhookController.name);
+
+  constructor(
+    private readonly stripeService: StripeService,
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+    private readonly consumer: RabbitmqConsumerService,
+  ) {}
+
+  @ApiOperation({ summary: 'Stripe webhook endpoint' })
+  @Post('webhook')
+  async handleWebhook(
+    @Req() req: RawBodyRequest<Request>,
+    @Headers('stripe-signature') signature: string,
+  ) {
+    const rawBody = req.rawBody;
+    if (!rawBody || !signature) {
+      return { received: false };
+    }
+
+    let event;
+    try {
+      event = await this.stripeService.constructWebhookEvent(rawBody, signature);
+    } catch (err) {
+      this.logger.error('Stripe webhook signature verification failed', err);
+      return { received: false };
+    }
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as {
+        id: string;
+        metadata: { paymentId: string; reservationId: string; userId: string };
+        payment_intent: string | { id: string };
+      };
+
+      const { paymentId, reservationId, userId } = session.metadata;
+      const paymentIntentId =
+        typeof session.payment_intent === 'string'
+          ? session.payment_intent
+          : session.payment_intent?.id;
+
+      await this.prisma.payment.update({
+        where: { id: paymentId },
+        data: {
+          status: 'COMPLETED',
+          stripePaymentIntentId: paymentIntentId,
+        },
+      });
+
+      await this.audit.log({
+        action: 'PAYMENT_COMPLETED',
+        authUserId: userId,
+        metadata: { paymentId, reservationId, stripeSessionId: session.id },
+      });
+
+      await (this.consumer as unknown as {
+        publishEvent: (key: string, data: unknown) => Promise<void>;
+      })['publishEvent']('payment.completed', {
+        paymentId,
+        reservationId,
+        userId,
+        stripeSessionId: session.id,
+      });
+
+      this.logger.log(`Payment ${paymentId} completed via Stripe webhook`);
+    }
+
+    if (event.type === 'checkout.session.expired') {
+      const session = event.data.object as {
+        metadata: { paymentId: string; reservationId: string; userId: string };
+      };
+      const { paymentId, reservationId, userId } = session.metadata;
+
+      await this.prisma.payment.update({
+        where: { id: paymentId },
+        data: { status: 'FAILED' },
+      });
+
+      await this.audit.log({
+        action: 'PAYMENT_FAILED',
+        authUserId: userId,
+        metadata: { paymentId, reservationId, reason: 'Stripe session expired' },
+      });
+
+      await (this.consumer as unknown as {
+        publishEvent: (key: string, data: unknown) => Promise<void>;
+      })['publishEvent']('payment.failed', {
+        paymentId,
+        reservationId,
+        userId,
+        reason: 'Stripe session expired',
+      });
+
+      this.logger.log(`Payment ${paymentId} failed — Stripe session expired`);
+    }
+
+    return { received: true };
   }
 }
