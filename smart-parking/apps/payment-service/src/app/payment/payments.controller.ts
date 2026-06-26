@@ -26,6 +26,7 @@ import { StripeService } from '../stripe/stripe.service';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { RabbitmqConsumerService } from '../rabbitmq/rabbitmq-consumer.service';
+import { ReceiptService } from './receipt.service';
 import { Logger } from '@nestjs/common';
 
 @ApiTags('Internal')
@@ -59,7 +60,10 @@ export class InternalPaymentsController {
 @UseGuards(JwtAuthGuard)
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly receiptService: ReceiptService,
+  ) {}
 
   @ApiOperation({ summary: 'Get my payment history' })
   @Get('my')
@@ -72,6 +76,15 @@ export class PaymentsController {
   @Get('reservation/:reservationId')
   findByReservation(@Param('reservationId') reservationId: string) {
     return this.paymentsService.findByReservationId(reservationId);
+  }
+
+  @ApiOperation({ summary: 'Get digital receipt for a payment' })
+  @ApiParam({ name: 'id', description: 'Payment UUID' })
+  @ApiResponse({ status: 200, description: 'Digital receipt' })
+  @ApiResponse({ status: 404, description: 'Receipt not found' })
+  @Get(':id/receipt')
+  getReceipt(@Param('id') id: string) {
+    return this.receiptService.getReceiptByPaymentId(id);
   }
 
   @ApiOperation({ summary: 'Get payment by ID' })
@@ -92,6 +105,7 @@ export class StripeWebhookController {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly consumer: RabbitmqConsumerService,
+    private readonly receiptService: ReceiptService,
   ) {}
 
   @ApiOperation({ summary: 'Stripe webhook endpoint' })
@@ -133,6 +147,12 @@ export class StripeWebhookController {
           stripePaymentIntentId: paymentIntentId,
         },
       });
+
+      try {
+        await this.receiptService.createForPayment(paymentId);
+      } catch (err) {
+        this.logger.error(`Failed to create receipt for payment ${paymentId}`, err);
+      }
 
       await this.audit.log({
         action: 'PAYMENT_COMPLETED',
