@@ -1,284 +1,338 @@
-# Payment Service — Contexto del Agente
+Payment Service — Agent Context
 
-> Lee CLAUDE.md global primero, luego este archivo.
-> Este servicio AÚN NO EXISTE. Debes crearlo siguiendo el patrón estándar.
+Read the global CLAUDE.md first, then this file.
+This service DOES NOT EXIST YET and must be implemented from scratch following the project’s standard architecture and conventions.
 
----
+⸻
 
-## Estado: ❌ PENDIENTE — Crear desde cero
+Status
 
-Puerto: `3007` | BD: `paymentdb` (PostgreSQL) | Kafka: ✅ producer + consumer
+🟡 IN PROGRESS — USP-091 implemented (base service + fee calculation)
 
----
+Port: 3007
 
-## Lo que hace
+Database: paymentdb (PostgreSQL)
 
-Procesa pagos de reservaciones. En QA simula el procesamiento (siempre exitoso). Al completar un pago, produce un evento Kafka que reservation-service consume para activar la reservación. Sin payment-service, las reservaciones quedan en estado PENDING para siempre.
+Message Broker: RabbitMQ
 
-**Flujo completo:**
-1. Usuario crea reservación → status PENDING
-2. Frontend llama `POST /api/payments` con el reservationId
-3. payment-service simula procesamiento → status COMPLETED
-4. Produce evento `payment.completed` a Kafka
-5. reservation-service consume el evento → cambia reservación a ACTIVE
-6. parking-service recibe confirmación → slot pasa a OCCUPIED
+Framework: NestJS + Nx
 
----
+⸻
 
-## Endpoints a implementar
+Service Purpose
 
-```
-POST /api/payments                          → crear pago (requiere JWT)
-GET  /api/payments/:id                      → consultar pago (requiere JWT)
-GET  /api/payments/reservation/:reservationId → pago de una reservación (requiere JWT)
-GET  /api/payments/my                       → mis pagos (requiere JWT)
-GET  /api/payments/admin/all                → todos los pagos (ADMIN only)
+The payment-service is responsible for calculating the parking fee during vehicle checkout, processing payments through Stripe Checkout (TEST mode), generating a digital receipt, persisting all payment information into PostgreSQL, and publishing payment events through RabbitMQ so the remaining microservices can continue the business workflow.
 
-# Interno
-POST /api/internal/payments/verify/:reservationId → verificar si reservación fue pagada
-```
+This service must follow exactly the same architecture, coding standards, folder structure, and development practices used by the existing microservices.
 
----
+⸻
 
-## Kafka
+General Workflow
 
-**Produce:**
-- `payment.completed` → pago exitoso
-  ```json
-  { "paymentId": "uuid", "reservationId": "uuid", "userId": "uuid", "amount": 2.50, "status": "COMPLETED" }
-  ```
-- `payment.failed` → pago fallido (no aplica en QA pero preparar el topic)
+1. reservation-service detects a vehicle checkout.
+2. reservation-service publishes an event to RabbitMQ.
+3. payment-service consumes the event.
+4. The parking fee is calculated automatically.
+5. A Payment record is created.
+6. A Stripe Checkout Session (TEST mode) is generated.
+7. The user completes the payment.
+8. Stripe sends a webhook notification.
+9. payment-service validates the payment.
+10. A digital receipt is generated.
+11. payment-service publishes the payment.completed event.
+12. reservation-service updates the reservation status.
+13. parking-service continues the parking workflow accordingly.
 
-**Consume:**
-- No consume en esta fase. En PROD consumiría confirmaciones de pasarela externa.
+⸻
 
----
+Environment Variables
 
-## Variables de entorno
-
-```env
 PORT=3007
 DATABASE_URL=postgresql://admin:admin@postgres:5432/paymentdb
 JWT_SECRET=your_jwt_secret
 REDIS_URL=redis://redis:6379
-KAFKA_BROKERS=kafka:29092
-INTERNAL_SERVICE_KEY=internal_service_secret_key
+RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+STRIPE_SECRET_KEY=
+STRIPE_PUBLIC_KEY=
+STRIPE_WEBHOOK_SECRET=
+INTERNAL_SERVICE_KEY=
 CORS_ORIGINS=http://localhost:3002
-RESERVATION_SERVICE_URL=http://reservation-service:3005
-```
 
----
+⸻
 
-## Prisma schema a crear
+USP-091 — Create the Payment Service and Parking Fee Calculation
 
-Archivo: `smart-parking/prisma/payment/schema.prisma`
+Objective
 
-```prisma
-generator client {
-  provider = "prisma-client-js"
-  output   = "../../generated/payment-client"
-}
+Create the new microservice using Nx + NestJS and implement the parking fee calculation logic.
 
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+Implementation
 
-model Payment {
-  id            String        @id @default(uuid())
-  reservationId String        @map("reservation_id")
-  userId        String        @map("user_id")
-  amount        Decimal       @db.Decimal(10, 2)
-  currency      String        @default("USD")
-  status        PaymentStatus @default(PENDING)
-  method        String        @default("SIMULATED")
-  reference     String?       @unique         // "PAY-XXXXXXXX"
-  processedAt   DateTime?     @map("processed_at")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt      @map("updated_at")
+Create the microservice following exactly the same structure and architecture used by the other services inside the Nx monorepo.
 
-  @@map("payments")
-}
+The implementation must include:
 
-enum PaymentStatus {
-  PENDING
-  COMPLETED
-  FAILED
-  REFUNDED
-}
-```
+* Generate the NestJS application using Nx.
+* Configure the application to run on port 3007.
+* Configure the main application module.
+* Configure environment variables.
+* Configure Prisma.
+* Configure RabbitMQ.
+* Configure Swagger.
+* Configure Winston logging.
+* Configure Prometheus metrics.
+* Configure Health Checks.
+* Create the Dockerfile.
+* Integrate the service into docker-compose.
 
----
+Implement the parking fee calculation rules.
 
-## Lógica de simulación (QA)
+Pricing Rules
 
-```typescript
-// payments.service.ts
-async createPayment(dto: CreatePaymentDto, userId: string): Promise<Payment> {
-  // 1. Verificar que la reservación existe y está PENDING
-  //    → GET reservation-service:3005/api/internal/reservations/:id
-  // 2. Generar reference: "PAY-" + 8 chars random
-  // 3. Crear Payment con status PENDING
-  // 4. Simular procesamiento (siempre exitoso en QA)
-  // 5. Actualizar status a COMPLETED, setear processedAt
-  // 6. Producir evento Kafka payment.completed
-  // 7. Retornar pago
-}
-```
+Professor
 
----
+* $0.00
 
-## DTOs a crear
+Student
 
-```typescript
-// create-payment.dto.ts
-export class CreatePaymentDto {
-  @IsUUID() reservationId: string
-  @IsNumber() @Min(0.01) amount: number
-  @IsOptional() @IsString() method?: string  // default: "SIMULATED"
-}
+* $0.15 per 30-minute block
 
-// payment-response.dto.ts
-export class PaymentResponseDto {
-  id: string
-  reservationId: string
-  userId: string
-  amount: number
-  currency: string
-  status: PaymentStatus
-  method: string
-  reference?: string
-  processedAt?: Date
-  createdAt: Date
-}
-```
+Guest
 
----
+* $0.25 per 30-minute block
 
-## Módulos a crear (estructura estándar)
+The service must
 
-```
-apps/payment-service/src/app/
-├── payments/
-│   ├── payments.module.ts
-│   ├── payments.controller.ts        ← endpoints públicos (JWT)
-│   ├── payments.controller.spec.ts
-│   ├── payments-internal.controller.ts ← /api/internal/payments/*
-│   ├── payments.service.ts
-│   ├── payments.service.spec.ts
-│   └── dto/
-│       ├── create-payment.dto.ts
-│       └── payment-response.dto.ts
-├── kafka/
-│   ├── kafka.module.ts
-│   └── kafka.service.ts              ← solo producer (no consumer en fase inicial)
-└── reservation-client/
-    ├── reservation-client.module.ts
-    └── reservation-client.service.ts ← HTTP a reservation-service para validar
-```
+* Retrieve reservation information.
+* Calculate the parking duration.
+* Round every started 30-minute block upward.
+* Calculate the final amount.
+* Create a Payment record with PENDING status.
+* Persist the calculated amount before starting the payment process.
 
----
+Acceptance Criteria
 
-## Cambios en otros servicios
+* Professors are always charged $0.
+* Students are charged correctly.
+* Guests are charged correctly.
+* The calculated amount is stored in PostgreSQL.
 
-### reservation-service — añadir consumer de Kafka
-Cuando payment-service esté listo, añadir en `reservation-service/kafka/kafka-consumer.service.ts`:
-```typescript
-// Consumir payment.completed
-// Buscar reservación por reservationId del evento
-// Cambiar status PENDING → ACTIVE
-```
+⸻
 
-### gateway-service — añadir ruta
-En `proxy.module.ts` añadir:
-```typescript
-'/payments': {
-  target: process.env.PAYMENT_SERVICE_URL,  // http://payment-service:3007
-  changeOrigin: true,
-}
-```
+USP-092 — RabbitMQ Consumer + Stripe Checkout
 
-### gateway-service — añadir env var
-```env
-PAYMENT_SERVICE_URL=http://payment-service:3007
-```
+Objective
 
-### frontend — añadir flujo de pago
-En `user/reservations/page.tsx`: después de crear reservación → modal de pago → llamar `POST /api/payments`
+Implement the RabbitMQ consumer responsible for automatically starting the payment workflow.
 
----
+Implementation
 
-## Infraestructura a crear
+Create the RabbitMQ module for payment-service.
 
-### docker-compose.yml — añadir
-```yaml
-payment-service:
-  build:
-    context: ./smart-parking
-    dockerfile: apps/payment-service/dockerfile
-  container_name: smartparking-payment
-  ports:
-    - "3007:3007"
-  environment:
-    PORT: 3007
-    DATABASE_URL: postgresql://admin:admin@postgres:5432/paymentdb
-    JWT_SECRET: ${JWT_SECRET}
-    REDIS_URL: redis://redis:6379
-    KAFKA_BROKERS: kafka:29092
-    INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
-    RESERVATION_SERVICE_URL: http://reservation-service:3005
-  depends_on:
-    postgres:
-      condition: service_healthy
-    redis:
-      condition: service_healthy
-    kafka:
-      condition: service_started
-  networks:
-    - smartparking-network
-```
+The consumer must listen for checkout events published by reservation-service.
 
-### postgres-init.sql — añadir
-```sql
-CREATE DATABASE paymentdb;
-```
+When an event is received, the service must:
 
-### Terraform QA — añadir módulo EC2
-En `infra/terraform/environments/qa/main.tf`:
-```hcl
-module "payment_service" {
-  source        = "../../modules/ec2"
-  service_name  = "payment"
-  instance_type = var.instance_type
-  subnet_id     = module.vpc.public_subnet_ids[0]
-  security_group_ids = [module.security_groups.payment_sg_id]
-  key_name      = var.key_name
-  docker_image  = "${var.dockerhub_user}/smartparking-payment"
-  docker_image_tag = "qa"
-  service_port  = 3007
-  environment_vars = {
-    PORT                  = "3007"
-    DATABASE_URL          = "postgresql://..."
-    JWT_SECRET            = var.jwt_secret
-    REDIS_URL             = "redis://${module.redis_instance.private_ip}:6379"
-    KAFKA_BROKERS         = "${module.kafka_instance.private_ip}:9092"
-    INTERNAL_SERVICE_KEY  = var.internal_service_key
-    RESERVATION_SERVICE_URL = "http://${module.reservation_service.private_ip}:3005"
-  }
-  tags = { Environment = "qa", Service = "payment" }
-}
-```
+1. Retrieve reservation information.
+2. Calculate the parking fee (USP-091).
+3. Create the Payment record.
+4. Create a Stripe Checkout Session using Stripe TEST mode.
+5. Wait for the Stripe webhook confirmation.
+6. Publish the corresponding payment event.
 
-### GitHub Actions qa.yml — añadir
-En el job `docker-push`, añadir:
-```yaml
-- name: Build and push payment-service
-  uses: docker/build-push-action@v5
-  with:
-    context: ./smart-parking
-    file: ./smart-parking/apps/payment-service/dockerfile
-    push: true
-    tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-payment:qa
-```
+Published events:
 
-En el job `deploy`, añadir payment en la matrix de servicios.
+* payment.completed
+* payment.failed
+
+The consumer must also implement:
+
+* Automatic reconnection.
+* Ack/Nack handling.
+* Idempotency.
+* Error handling.
+* Message validation.
+
+⸻
+
+USP-093 — Digital JSON Receipt
+
+Objective
+
+Generate a digital receipt after a successful payment.
+
+Implementation
+
+Once the Stripe webhook confirms a successful payment:
+
+* Create a Receipt record.
+* Associate it with the Payment.
+* Persist it in PostgreSQL.
+
+Create the endpoint:
+
+GET /api/payments/:id/receipt
+
+The response must include:
+
+* receiptNumber
+* paymentId
+* reservationId
+* vehicle
+* user
+* amount
+* currency
+* paymentMethod
+* status
+* createdAt
+
+⸻
+
+USP-094 — Dead Letter Queue
+
+Objective
+
+Implement fault tolerance for payment processing.
+
+Implementation
+
+RabbitMQ must support:
+
+* Three automatic retries.
+* Exponential backoff.
+* Dead Letter Queue (DLQ).
+
+Log every failure using Winston, including:
+
+* Error message.
+* Retry number.
+* Original message.
+* Stack trace.
+
+⸻
+
+USP-095 — PostgreSQL + Prisma
+
+Objective
+
+Implement the complete persistence layer.
+
+Implementation
+
+Create the Prisma schema including:
+
+* Payment
+* Receipt
+
+Generate:
+
+* Prisma migrations.
+* Prisma Client.
+* Relationships.
+* Indexes.
+* Constraints.
+
+Receipt must have a one-to-one relationship with Payment.
+
+⸻
+
+USP-096 — Infrastructure + Frontend Integration
+
+Objective
+
+Prepare the service for the QA environment and integrate the complete payment workflow into the frontend.
+
+Backend
+
+Implement:
+
+* Dockerfile.
+* docker-compose.
+* GitHub Actions.
+* Terraform.
+* Swagger documentation.
+* Prometheus metrics.
+* Winston logging.
+* Health Checks.
+
+Configure:
+
+* STRIPE_SECRET_KEY
+* STRIPE_PUBLIC_KEY
+* STRIPE_WEBHOOK_SECRET
+
+Only Stripe TEST credentials must be used.
+
+Never use LIVE credentials.
+
+Frontend
+
+Implement the complete payment flow.
+
+After the user performs the vehicle checkout:
+
+* Request a Stripe Checkout Session from payment-service.
+* Redirect the user automatically to Stripe Checkout.
+* Wait for the webhook confirmation.
+* Display a payment success page.
+* Display a payment cancellation page.
+* Automatically refresh the reservation status.
+* Display the generated digital receipt.
+
+Create the following pages:
+
+* /payment/success
+* /payment/cancel
+
+⸻
+
+USP-097 — Unit Tests
+
+Objective
+
+Provide test coverage for the critical business logic.
+
+Implementation
+
+Create unit tests for:
+
+* Parking Fee Calculator.
+* Payment Service.
+* Stripe Service.
+* RabbitMQ Consumer.
+* Receipt Service.
+* Controllers.
+
+Mock:
+
+* Stripe SDK.
+* RabbitMQ.
+* Prisma.
+* Reservation Service.
+
+Minimum expected coverage:
+
+80%
+
+⸻
+
+Expected Result
+
+Once all user stories are completed, the project must include:
+
+* A fully functional payment-service.
+* Nx + NestJS architecture.
+* PostgreSQL with Prisma.
+* RabbitMQ messaging.
+* Stripe Checkout integration (TEST mode).
+* Stripe webhook handling.
+* Digital receipt generation.
+* Complete frontend integration.
+* Docker support.
+* Terraform infrastructure.
+* CI/CD pipeline.
+* Swagger API documentation.
+* Prometheus metrics.
+* Winston logging.
+* Comprehensive unit tests.
+* Ready for deployment to the QA environment following the same standards as every other microservice in the project.

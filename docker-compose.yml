@@ -133,6 +133,21 @@ services:
     networks:
       - smartparking-network
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: smartparking-rabbitmq
+    restart: unless-stopped
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartparking-network
+
   parking-service:
     build:
       context: ./smart-parking
@@ -206,6 +221,41 @@ services:
       CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
     ports:
       - "3005:3005"
+    networks:
+      - smartparking-network
+
+  payment-service:
+    build:
+      context: ./smart-parking
+      dockerfile: apps/payment-service/dockerfile
+    container_name: smartparking-payment-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      reservation-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+    environment:
+      PAYMENT_SERVICE_PORT: 3007
+      PAYMENT_DATABASE_URL: postgresql://admin:admin@postgres:5432/paymentdb
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      JWT_SECRET: your_jwt_secret
+      INTERNAL_SERVICE_KEY: internal_service_secret_key
+      RESERVATION_SERVICE_URL: http://reservation-service:3005
+      USER_SERVICE_URL: http://user-service:3001
+      CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
+      STRIPE_SECRET_KEY: ''
+      STRIPE_PUBLIC_KEY: ''
+      STRIPE_WEBHOOK_SECRET: ''
+    ports:
+      - '3007:3007'
     networks:
       - smartparking-network
       
