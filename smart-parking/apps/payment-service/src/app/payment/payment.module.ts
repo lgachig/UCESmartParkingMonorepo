@@ -8,12 +8,23 @@ import { PaymentsService } from './payments.service';
 import {
   InternalPaymentsController,
   PaymentsController,
+  StripeWebhookController,
 } from './payments.controller';
+import { StripeModule } from '../stripe/stripe.module';
+import { RabbitmqConsumerService } from '../rabbitmq/rabbitmq-consumer.service';
 
 @Module({
-  imports: [PrismaModule, AuditModule, AuthModule, ClientsModule],
-  controllers: [InternalPaymentsController, PaymentsController],
-  providers: [ParkingFeeCalculatorService, PaymentsService],
-  exports: [PaymentsService, ParkingFeeCalculatorService],
+  imports: [PrismaModule, AuditModule, AuthModule, ClientsModule, StripeModule],
+  controllers: [
+    InternalPaymentsController,
+    PaymentsController,
+    StripeWebhookController,
+  ],
+  providers: [
+    ParkingFeeCalculatorService,
+    PaymentsService,
+    RabbitmqConsumerService,
+  ],
+  exports: [PaymentsService, ParkingFeeCalculatorService, RabbitmqConsumerService],
 })
 export class PaymentModule {}
