@@ -20,7 +20,7 @@ on:
       infra:
         value: ${{ jobs.changes.outputs.infra }}
   push:
-    branches: [main, QA, qa, PROD, prod, develop, Feature-EnvPro]
+    branches: []
   pull_request:
 
 permissions:

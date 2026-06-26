@@ -174,17 +174,16 @@ export class RabbitmqConsumerService implements OnModuleInit, OnModuleDestroy {
           );
 
           if (retryCount < MAX_RETRIES) {
-            // Exponential backoff: 5s, 25s, 125s
             const delayMs = Math.pow(5, retryCount + 1) * 1000;
             this.scheduleRetry(raw, retryCount + 1, delayMs, msg.properties);
-            this.channel?.ack(msg); // ack original — retry queue takes over
+            this.channel?.ack(msg); 
           } else {
             this.logger.error(
               `Max retries (${MAX_RETRIES}) exceeded for reservation ` +
               `${payload.reservationId} — sending to DLQ`,
               { originalMessage: raw },
             );
-            this.channel?.nack(msg, false, false); // → DLQ
+            this.channel?.nack(msg, false, false); 
           }
         }
       },
