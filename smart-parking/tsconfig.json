@@ -20,6 +20,9 @@
     },
     {
       "path": "./apps/gateway-service"
+    },
+    {
+      "path": "./apps/payment-service"
     }
   ]
 }

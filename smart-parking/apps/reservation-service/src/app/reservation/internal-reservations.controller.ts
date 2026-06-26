@@ -45,6 +45,13 @@ export class InternalReservationsController {
     return this.reservationsService.hasActiveReservationBySlot(slotId);
   }
 
+  @ApiOperation({ summary: 'Get reservation by ID (internal)' })
+  @ApiParam({ name: 'id', description: 'Reservation UUID' })
+  @Get(':id')
+  findById(@Param('id') id: string) {
+    return this.reservationsService.findById(id);
+  }
+
   @ApiOperation({
     summary: 'Admin cancel: force-cancel any reservation and release slot + Redis lock',
   })

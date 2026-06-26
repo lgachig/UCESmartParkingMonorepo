@@ -11,11 +11,11 @@
     "@nx/eslint": "22.7.1",
     "@nx/eslint-plugin": "22.7.1",
     "@nx/jest": "22.7.1",
-    "@nx/js": "22.7.1",
-    "@nx/nest": "^22.7.1",
-    "@nx/node": "^22.7.1",
-    "@nx/web": "22.7.1",
-    "@nx/webpack": "22.7.1",
+    "@nx/js": "22.7.5",
+    "@nx/nest": "22.7.5",
+    "@nx/node": "22.7.5",
+    "@nx/web": "22.7.5",
+    "@nx/webpack": "22.7.5",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.7",
     "@svgr/webpack": "^8.0.1",
     "@swc-node/register": "1.11.1",
@@ -24,6 +24,7 @@
     "@swc/jest": "~0.2.38",
     "@types/jest": "^30.0.0",
     "@types/node": "20.19.9",
+    "@types/amqplib": "^0.10.7",
     "@types/passport-jwt": "^4.0.1",
     "eslint": "^9.8.0",
     "eslint-config-prettier": "^10.0.0",
@@ -44,7 +45,9 @@
   "workspaces": [
     "apps/*",
     "reservation-service",
-    "reservation-service-e2e"
+    "reservation-service-e2e",
+    "apps",
+    "apps-e2e"
   ],
   "dependencies": {
     "@nestjs-modules/ioredis": "^2.2.1",
@@ -80,6 +83,7 @@
     "rxjs": "^7.8.0",
     "swagger-ui-express": "^5.0.1",
     "tsconfig-paths": "^4.2.0",
-    "winston": "^3.19.0"
+    "winston": "^3.19.0",
+    "amqplib": "^0.10.8"
   }
 }

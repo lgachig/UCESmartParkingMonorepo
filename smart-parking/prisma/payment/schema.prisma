@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../../generated/payment-client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model Payment {
+  id                    String        @id @default(uuid())
+  reservationId         String        @map("reservation_id")
+  userId                String        @map("user_id")
+  amount                Float
+  currency              String        @default("USD")
+  status                PaymentStatus @default(PENDING)
+  stripeSessionId       String?       @map("stripe_session_id")
+  stripePaymentIntentId String?       @map("stripe_payment_intent_id")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+  receipt               Receipt?
+
+  @@index([reservationId])
+  @@index([userId])
+  @@map("payments")
+}
+
+model Receipt {
+  id            String   @id @default(uuid())
+  receiptNumber String   @unique @map("receipt_number")
+  paymentId     String   @unique @map("payment_id")
+  payment       Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  reservationId String   @map("reservation_id")
+  vehicle       Json     // Contains vehicle info (plate, model, etc.)
+  user          Json     // Contains user info (email, role, name, etc.)
+  amount        Float
+  currency      String   @default("USD")
+  paymentMethod String   @map("payment_method")
+  status        String
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("receipts")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String
+  authUserId String?  @map("auth_user_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}

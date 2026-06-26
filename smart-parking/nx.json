@@ -54,7 +54,10 @@
       "exclude": [
         "apps/auth-service-e2e/**/*",
         "apps/user-service-e2e/**/*",
-        "reservation-service-e2e/**/*"
+        "reservation-service-e2e/**/*",
+        "apps-e2e/**/*",
+        "apps-e2e/**/*",
+        "apps/payment-service-e2e/**/*"
       ]
     }
   ],
