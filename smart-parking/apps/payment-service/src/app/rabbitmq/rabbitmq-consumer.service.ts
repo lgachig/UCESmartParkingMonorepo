@@ -14,8 +14,12 @@ import { AuditService } from '../audit/audit.service';
 const EXCHANGE = 'smart-parking';
 const CHECKOUT_ROUTING_KEY = 'reservation.checkout';
 const QUEUE = 'payment-service.checkout';
+const DLQ = 'payment-service.checkout.dlq';
+const DLX = 'smart-parking.dlx';
+const RETRY_QUEUE = 'payment-service.checkout.retry';
 const PAYMENT_COMPLETED_KEY = 'payment.completed';
 const PAYMENT_FAILED_KEY = 'payment.failed';
+const MAX_RETRIES = 3;
 
 interface CheckoutEventPayload {
   reservationId: string;
@@ -62,21 +66,40 @@ export class RabbitmqConsumerService implements OnModuleInit, OnModuleDestroy {
       this.channel = await this.connection.createChannel();
       await this.channel.prefetch(1);
 
+      await this.channel.assertExchange(DLX, 'direct', { durable: true });
+      await this.channel.assertQueue(DLQ, { durable: true });
+      await this.channel.bindQueue(DLQ, DLX, QUEUE);
+
       await this.channel.assertExchange(EXCHANGE, 'topic', { durable: true });
-      await this.channel.assertQueue(QUEUE, { durable: true });
+
+      await this.channel.assertQueue(QUEUE, {
+        durable: true,
+        arguments: {
+          'x-dead-letter-exchange': DLX,
+          'x-dead-letter-routing-key': QUEUE,
+        },
+      });
       await this.channel.bindQueue(QUEUE, EXCHANGE, CHECKOUT_ROUTING_KEY);
 
-      this.logger.log('RabbitMQ consumer connected and queue bound');
+      await this.channel.assertQueue(RETRY_QUEUE, {
+        durable: true,
+        arguments: {
+          'x-dead-letter-exchange': EXCHANGE,
+          'x-dead-letter-routing-key': CHECKOUT_ROUTING_KEY,
+        },
+      });
+
+      this.logger.log('RabbitMQ consumer connected — DLQ ready');
 
       this.connection.on('close', () => {
         if (!this.isShuttingDown) {
-          this.logger.warn('RabbitMQ consumer connection closed, reconnecting...');
+          this.logger.warn('RabbitMQ connection closed, reconnecting…');
           this.scheduleReconnect();
         }
       });
 
       this.connection.on('error', (err) => {
-        this.logger.error('RabbitMQ consumer connection error', err);
+        this.logger.error('RabbitMQ connection error', err);
       });
 
       await this.startConsuming();
@@ -114,38 +137,87 @@ export class RabbitmqConsumerService implements OnModuleInit, OnModuleDestroy {
       async (msg) => {
         if (!msg) return;
 
-        let payload: CheckoutEventPayload;
         const raw = msg.content.toString();
+        let payload: CheckoutEventPayload;
 
         try {
           payload = JSON.parse(raw);
         } catch {
-          this.logger.error('Invalid message format, discarding', raw);
+          this.logger.error('Invalid message format — sending to DLQ', { raw });
           this.channel?.nack(msg, false, false);
           return;
         }
 
         if (!payload?.reservationId) {
-          this.logger.error('Message missing reservationId, discarding', raw);
+          this.logger.error('Message missing reservationId — sending to DLQ', { raw });
           this.channel?.nack(msg, false, false);
           return;
         }
+
+        const retryCount: number =
+          (msg.properties.headers?.['x-retry-count'] as number) ?? 0;
 
         try {
           await this.handleCheckoutEvent(payload);
           this.channel?.ack(msg);
         } catch (err) {
+          const error = err as Error;
           this.logger.error(
-            `Error processing checkout event for reservation ${payload.reservationId}`,
-            err,
+            `Error processing checkout (attempt ${retryCount + 1}/${MAX_RETRIES}) ` +
+            `for reservation ${payload.reservationId}: ${error.message}`,
+            {
+              retryCount,
+              reservationId: payload.reservationId,
+              originalMessage: raw,
+              stack: error.stack,
+            },
           );
-          this.channel?.nack(msg, false, false);
+
+          if (retryCount < MAX_RETRIES) {
+            // Exponential backoff: 5s, 25s, 125s
+            const delayMs = Math.pow(5, retryCount + 1) * 1000;
+            this.scheduleRetry(raw, retryCount + 1, delayMs, msg.properties);
+            this.channel?.ack(msg); // ack original — retry queue takes over
+          } else {
+            this.logger.error(
+              `Max retries (${MAX_RETRIES}) exceeded for reservation ` +
+              `${payload.reservationId} — sending to DLQ`,
+              { originalMessage: raw },
+            );
+            this.channel?.nack(msg, false, false); // → DLQ
+          }
         }
       },
       { noAck: false },
     );
 
     this.logger.log(`Listening on queue: ${QUEUE}`);
+  }
+
+  private scheduleRetry(
+    raw: string,
+    retryCount: number,
+    delayMs: number,
+    originalProperties: amqp.MessageProperties,
+  ): void {
+    if (!this.channel) return;
+
+    this.logger.warn(
+      `Scheduling retry ${retryCount}/${MAX_RETRIES} in ${delayMs}ms`,
+    );
+
+    this.channel.sendToQueue(
+      RETRY_QUEUE,
+      Buffer.from(raw),
+      {
+        persistent: true,
+        expiration: String(delayMs),
+        headers: {
+          ...originalProperties.headers,
+          'x-retry-count': retryCount,
+        },
+      },
+    );
   }
 
   private async handleCheckoutEvent(
@@ -163,7 +235,8 @@ export class RabbitmqConsumerService implements OnModuleInit, OnModuleDestroy {
 
     if (existing) {
       this.logger.warn(
-        `Payment already exists for reservation ${reservationId} (id: ${existing.id}, status: ${existing.status}). Skipping.`,
+        `Payment already exists for reservation ${reservationId} ` +
+        `(id: ${existing.id}, status: ${existing.status}). Skipping.`,
       );
       return;
     }
