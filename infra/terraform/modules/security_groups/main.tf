@@ -61,6 +61,7 @@ resource "aws_security_group_rule" "private_from_gateway" {
     vehicle     = 3003
     parking     = 3004
     reservation = 3005
+    payment     = 3007
   })
   type                     = "ingress"
   from_port                = each.value

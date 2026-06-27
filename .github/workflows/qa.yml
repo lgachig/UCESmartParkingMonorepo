@@ -382,6 +382,7 @@ jobs:
               patch_env VEHICLE_SERVICE_URL     "http://${VEHICLE_PRIVATE_IP}:3003"
               patch_env PARKING_SERVICE_URL     "http://${PARKING_PRIVATE_IP}:3004"
               patch_env RESERVATION_SERVICE_URL "http://${RESERVATION_PRIVATE_IP}:3005"
+              patch_env PAYMENT_SERVICE_URL     "http://${PAYMENT_PRIVATE_IP}:3007"
               patch_env THROTTLE_TTL            "60000"
               patch_env THROTTLE_LIMIT          "60"
             fi
@@ -471,6 +472,7 @@ jobs:
             fi
 
             if [ "${{ matrix.name }}" = "payment" ]; then
+              patch_env KAFKA_BROKERS           "kafka:29092"
               patch_env PAYMENT_SERVICE_PORT    "3007"
               patch_env PAYMENT_DATABASE_URL    "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb"
               patch_env REDIS_URL               "redis://${AUTH_PRIVATE_IP}:6379"

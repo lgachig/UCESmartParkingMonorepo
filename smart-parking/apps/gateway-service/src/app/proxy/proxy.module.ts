@@ -103,7 +103,6 @@ export class ParkingProxyController {
   }
 }
 
-// ─── Reservation Service ──────────────────────────────────────────────────────
 @ApiExcludeController()
 @Controller('api/reservations')
 @UseGuards(JwtGatewayGuard)
@@ -112,6 +111,37 @@ export class ReservationProxyController {
   constructor(private readonly cfg: ConfigService) {
     const target = cfg.get<string>('RESERVATION_SERVICE_URL')!;
     Logger.log(`ReservationProxy → ${target}`, 'ProxyModule');
+    this.proxy = makeProxy(target);
+  }
+  @All('*')
+  handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+}
+
+@ApiExcludeController()
+@Controller('api/payments')
+@UseGuards(JwtGatewayGuard)
+export class PaymentProxyController {
+  private readonly proxy;
+  constructor(private readonly cfg: ConfigService) {
+    const target = cfg.get<string>('PAYMENT_SERVICE_URL')!;
+    Logger.log(`PaymentProxy → ${target}`, 'ProxyModule');
+    this.proxy = makeProxy(target);
+  }
+  @All('*')
+  handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+}
+
+@ApiExcludeController()
+@Controller('api/stripe')
+export class StripeWebhookProxyController {
+  private readonly proxy;
+  constructor(private readonly cfg: ConfigService) {
+    const target = cfg.get<string>('PAYMENT_SERVICE_URL')!;
+    Logger.log(`StripeWebhookProxy → ${target}`, 'ProxyModule');
     this.proxy = makeProxy(target);
   }
   @All('*')
@@ -131,6 +161,8 @@ import { AuthModule } from '../auth/auth.module';
     VehicleProxyController,
     ParkingProxyController,
     ReservationProxyController,
+    PaymentProxyController,
+    StripeWebhookProxyController,
   ],
 })
 export class ProxyModule {}

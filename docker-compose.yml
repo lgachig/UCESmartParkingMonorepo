@@ -250,6 +250,7 @@ services:
       INTERNAL_SERVICE_KEY: internal_service_secret_key
       RESERVATION_SERVICE_URL: http://reservation-service:3005
       USER_SERVICE_URL: http://user-service:3001
+      KAFKA_BROKERS: kafka:29092
       CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
       STRIPE_SECRET_KEY: ''
       STRIPE_PUBLIC_KEY: ''
@@ -287,6 +288,7 @@ services:
       VEHICLE_SERVICE_URL: http://vehicle-service:3003
       PARKING_SERVICE_URL: http://parking-service:3004
       RESERVATION_SERVICE_URL: http://reservation-service:3005
+      PAYMENT_SERVICE_URL: http://payment-service:3007
       CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
       THROTTLE_TTL: 60000
       THROTTLE_LIMIT: 60
