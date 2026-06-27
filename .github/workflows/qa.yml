@@ -38,6 +38,7 @@ jobs:
       reservation: ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.reservation == 'true' }}
       gateway:     ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.gateway == 'true' }}
       frontend:    ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.frontend == 'true' }}
+      payment:     ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.payment == 'true' }}
     steps:
       - name: Echo changes
         run: |
@@ -96,6 +97,11 @@ jobs:
             dockerfile: smart-parking/apps/frontend/dockerfile
             context: ./smart-parking/apps/frontend
             image_suffix: frontend
+          - name: payment
+            changed: ${{ needs.get-changes.outputs.payment }}
+            dockerfile: smart-parking/apps/payment-service/dockerfile
+            context: ./smart-parking
+            image_suffix: payment
 
     steps:
       - name: Skip if unchanged
@@ -246,6 +252,11 @@ jobs:
             image_suffix: frontend
             app_port: '3002'
             changed: ${{ needs.get-changes.outputs.frontend }}
+          - name: payment
+            service_name: app
+            image_suffix: payment
+            app_port: '3007'
+            changed: ${{ needs.get-changes.outputs.payment }}
 
     steps:
       - name: Skip if unchanged
@@ -457,6 +468,24 @@ jobs:
               echo "Running reservation migrations..."
               docker-compose -f "$COMPOSE_FILE" exec -T app \
                 npx prisma migrate deploy --config prisma.reservation.config.ts
+            fi
+
+            if [ "${{ matrix.name }}" = "payment" ]; then
+              patch_env PAYMENT_SERVICE_PORT    "3007"
+              patch_env PAYMENT_DATABASE_URL    "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb"
+              patch_env REDIS_URL               "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env RABBITMQ_URL            "amqp://guest:guest@${AUTH_PRIVATE_IP}:5672"
+              patch_env RESERVATION_SERVICE_URL "http://${RESERVATION_PRIVATE_IP}:3005"
+              patch_env USER_SERVICE_URL        "http://${USER_PRIVATE_IP}:3001/api"
+              patch_env STRIPE_SECRET_KEY       "${{ secrets.STRIPE_SECRET_KEY }}"
+              patch_env STRIPE_PUBLIC_KEY       "${{ secrets.STRIPE_PUBLIC_KEY }}"
+              patch_env STRIPE_WEBHOOK_SECRET   "${{ secrets.STRIPE_WEBHOOK_SECRET }}"
+            fi
+
+            if [ "${{ matrix.name }}" = "payment" ]; then
+              echo "Running payment migrations..."
+              docker-compose -f "$COMPOSE_FILE" exec -T app \
+                npx prisma migrate deploy --config prisma.payment.config.ts
             fi
 
             echo "✅ ${{ matrix.name }} deployado exitosamente."

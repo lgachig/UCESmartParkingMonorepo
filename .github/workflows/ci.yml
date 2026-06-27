@@ -17,6 +17,8 @@ on:
         value: ${{ jobs.changes.outputs.gateway }}
       frontend:
         value: ${{ jobs.changes.outputs.frontend }}
+      payment:
+        value: ${{ jobs.changes.outputs.payment }}
       infra:
         value: ${{ jobs.changes.outputs.infra }}
   push:
@@ -52,6 +54,7 @@ jobs:
             reservation: 'smart-parking/apps/reservation-service/**'
             gateway: 'smart-parking/apps/gateway-service/**'
             frontend: 'smart-parking/apps/frontend/**'
+            payment: 'smart-parking/apps/payment-service/**'
             infra:
               - 'infra/**'
               - '.github/workflows/**'

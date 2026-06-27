@@ -179,3 +179,22 @@ module "reservation" {
   })
 }
 
+# ── 8) Payment EC2 ────────────────────────────────────────────────────────────
+module "payment" {
+  source             = "../../modules/ec2"
+  environment        = var.environment
+  service_name       = "payment"
+  instance_type      = var.instance_type
+  key_name           = var.key_name
+  subnet_id          = element(module.vpc.public_subnet_ids, 0)
+  security_group_ids = [module.security_groups.security_group_ids["payment"]]
+  extra_tags         = { Service = "payment" }
+  user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
+    dockerhub_user   = var.dockerhub_user
+    docker_image     = "smartparking-payment"
+    docker_image_tag = var.environment
+    service_port     = 3007
+    is_auth          = false
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
+  })
+}

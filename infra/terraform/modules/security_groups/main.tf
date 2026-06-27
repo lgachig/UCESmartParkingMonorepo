@@ -1,5 +1,5 @@
 resource "aws_security_group" "microservice" {
-  for_each    = toset(["auth", "user", "vehicle", "frontend", "gateway", "parking", "reservation"])
+  for_each    = toset(["auth", "user", "vehicle", "frontend", "gateway", "parking", "reservation","payment"])
   name        = "${var.environment}-${each.value}-sg"
   description = "Security Group for ${var.environment}-${each.value}"
   vpc_id      = var.vpc_id
