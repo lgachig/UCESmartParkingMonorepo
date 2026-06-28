@@ -463,32 +463,37 @@ jobs:
 
             if [ "${{ matrix.name }}" = "user" ]; then
               echo "▶ Migraciones user → userdb"
-              docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --schema prisma/user/schema.prisma
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb" \
+                app npx prisma migrate deploy --schema prisma/user/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "vehicle" ]; then
               echo "▶ Migraciones vehicle → vehicledb"
-              docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --schema prisma/vehicle/schema.prisma
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/vehicledb" \
+                app npx prisma migrate deploy --schema prisma/vehicle/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "parking" ]; then
               echo "▶ Migraciones parking → parkingdb"
-              docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --schema prisma/parking/schema.prisma
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb" \
+                app npx prisma migrate deploy --schema prisma/parking/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "reservation" ]; then
               echo "▶ Migraciones reservation → reservationdb"
-              docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --schema prisma/reservation/schema.prisma
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/reservationdb" \
+                app npx prisma migrate deploy --schema prisma/reservation/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "payment" ]; then
               echo "▶ Migraciones payment → paymentdb"
-              docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --schema prisma/payment/schema.prisma
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb" \
+                app npx prisma migrate deploy --schema prisma/payment/schema.prisma
             fi
 
             echo "✅ ${{ matrix.name }} deployado exitosamente."
