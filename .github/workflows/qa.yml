@@ -2,10 +2,10 @@ name: QA CI/CD
 
 on:
   push:
-    branches: [QA, qa]
+    branches: [feature/USP-096-infrastructure-frontend-integration]
   pull_request:
     types: [closed]
-    branches: [QA, qa]
+    branches: [feature/USP-096-infrastructure-frontend-integration]
   workflow_dispatch:
     inputs:
       force_deploy_all:
