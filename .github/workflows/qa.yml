@@ -448,7 +448,6 @@ jobs:
                 sleep 2
               done
 
-              # Crear DBs de los demás servicios si no existen
               for db in userdb vehicledb parkingdb reservationdb paymentdb; do
                 docker exec "$pg_container" psql -U admin -d smartparking \
                   -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" 2>/dev/null | grep -q 1 || \
@@ -465,7 +464,7 @@ jobs:
               echo "▶ Migraciones user → userdb"
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb" \
-                app npx prisma migrate resolve --rolled-back 20260528223434_add_role_to_profile --schema prisma/user/schema.prisma
+                app npx prisma migrate resolve --applied 20260528223434_add_role_to_profile --schema prisma/user/schema.prisma || true
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb" \
                 app npx prisma migrate deploy --schema prisma/user/schema.prisma
@@ -493,10 +492,14 @@ jobs:
             fi
 
             if [ "${{ matrix.name }}" = "payment" ]; then
+              echo "▶ Swap para Prisma (instancia t2/t3.small sin swap)"
+              if ! swapon --show | grep -q /swapfile; then
+                sudo fallocate -l 512M /swapfile && sudo chmod 600 /swapfile
+                sudo mkswap /swapfile && sudo swapon /swapfile
+              fi
               echo "▶ Migraciones payment → paymentdb"
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb" \
-                -e NODE_OPTIONS="--max-old-space-size=256" \
                 app npx prisma migrate deploy --schema prisma/payment/schema.prisma
             fi
 
