@@ -440,38 +440,42 @@ jobs:
             # reservation → reservationdb (prisma/reservation/schema.prisma)
             # payment → paymentdb   (prisma/payment/schema.prisma)
 
-            # ── Migraciones Prisma QA ────────────────────────────────────────────
-            # Cada config .ts ya apunta al schema y DB correctos por servicio.
+            # ── Migraciones Prisma ────────────────────────────────────────────
+            # Drop + recreate schema = siempre limpio, sin conflictos de tipos/tablas
+            # Se usa psql directo al contenedor postgres (no --url que no existe aquí)
+
+            pg_container=$(docker ps --filter "name=smartparking-postgres" -q | head -1)
+
+            drop_schema() {
+              local db=$1
+              docker exec "$pg_container" psql -U admin -d "$db" \
+                -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO admin; GRANT ALL ON SCHEMA public TO public;"
+            }
 
             if [ "${{ matrix.name }}" = "auth" ]; then
               echo "⏳ Esperando PostgreSQL..."
-              pg_container=$(docker-compose -f "$COMPOSE_FILE" ps -q postgres)
               for i in $(seq 1 30); do
-                docker exec "$pg_container" pg_isready -U admin -d smartparking &>/dev/null && break
+                docker exec "$pg_container" pg_isready -U admin &>/dev/null && break
                 sleep 2
               done
 
-              # Crear las otras DBs si no existen
               for db in userdb vehicledb parkingdb reservationdb paymentdb; do
                 docker exec "$pg_container" psql -U admin -d postgres \
                   -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1 || \
                 docker exec "$pg_container" psql -U admin -d postgres \
-                  -c "CREATE DATABASE ${db};" && echo "  ✔ ${db} creada"
+                  -c "CREATE DATABASE ${db};"
+                echo "  ✔ ${db}"
               done
 
               echo "▶ Migraciones auth → smartparking"
+              drop_schema smartparking
               docker-compose -f "$COMPOSE_FILE" exec -T auth-service \
                 npx prisma migrate deploy --schema prisma/auth/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "user" ]; then
               echo "▶ Migraciones user → userdb"
-              # Resuelve la migración de auth que quedó "failed" en userdb (P3009)
-              docker-compose -f "$COMPOSE_FILE" exec -T \
-                -e USER_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb" \
-                app npx prisma migrate resolve \
-                  --applied 20260528223434_add_role_to_profile \
-                  --config prisma.user.config.ts 2>/dev/null || true
+              drop_schema userdb
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e USER_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb" \
                 app npx prisma migrate deploy --config prisma.user.config.ts
@@ -479,6 +483,7 @@ jobs:
 
             if [ "${{ matrix.name }}" = "vehicle" ]; then
               echo "▶ Migraciones vehicle → vehicledb"
+              drop_schema vehicledb
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e VEHICLE_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/vehicledb" \
                 app npx prisma migrate deploy --config prisma.vehicle.config.ts
@@ -486,48 +491,33 @@ jobs:
 
             if [ "${{ matrix.name }}" = "parking" ]; then
               echo "▶ Migraciones parking → parkingdb"
-              # Limpiar DB completamente para evitar conflictos de tipos/tablas
-              docker-compose -f "$COMPOSE_FILE" exec -T \
-                -e PARKING_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb" \
-                app npx prisma db execute \
-                  --url "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb" \
-                  --stdin <<'SQL'
-            DROP SCHEMA public CASCADE;
-            CREATE SCHEMA public;
-            GRANT ALL ON SCHEMA public TO admin;
-            GRANT ALL ON SCHEMA public TO public;
-            SQL
+              drop_schema parkingdb
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e PARKING_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb" \
                 app npx prisma migrate deploy --config prisma.parking.config.ts
             fi
 
             if [ "${{ matrix.name }}" = "reservation" ]; then
+              echo "▶ Activando swap para reservation..."
+              if ! swapon --show | grep -q /swapfile; then
+                sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+                sudo mkswap /swapfile && sudo swapon /swapfile
+              fi
               echo "▶ Migraciones reservation → reservationdb"
+              drop_schema reservationdb
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e RESERVATION_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/reservationdb" \
                 app npx prisma migrate deploy --config prisma.reservation.config.ts
             fi
 
             if [ "${{ matrix.name }}" = "payment" ]; then
-              echo "▶ Activando swap..."
+              echo "▶ Activando swap para payment..."
               if ! swapon --show | grep -q /swapfile; then
-                sudo fallocate -l 2G /swapfile
-                sudo chmod 600 /swapfile
-                sudo mkswap /swapfile
-                sudo swapon /swapfile
+                sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+                sudo mkswap /swapfile && sudo swapon /swapfile
               fi
-
               echo "▶ Migraciones payment → paymentdb"
-              docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma db execute \
-                  --url "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb" \
-                  --stdin <<'SQL'
-            DROP SCHEMA public CASCADE;
-            CREATE SCHEMA public;
-            GRANT ALL ON SCHEMA public TO admin;
-            GRANT ALL ON SCHEMA public TO public;
-            SQL
+              drop_schema paymentdb
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e PAYMENT_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb" \
                 app npx prisma migrate deploy --config prisma.payment.config.ts
