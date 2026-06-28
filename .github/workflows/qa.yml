@@ -457,7 +457,7 @@ jobs:
 
               echo "▶ Migraciones auth → smartparking"
               docker-compose -f "$COMPOSE_FILE" exec -T auth-service \
-                npx prisma migrate deploy --schema prisma/auth/schema.prisma
+                npx prisma migrate reset --force --schema prisma/auth/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "user" ]; then
@@ -492,15 +492,19 @@ jobs:
             fi
 
             if [ "${{ matrix.name }}" = "payment" ]; then
-              echo "▶ Swap para Prisma (instancia t2/t3.small sin swap)"
+              echo "▶ Swap para Prisma"
               if ! swapon --show | grep -q /swapfile; then
                 sudo fallocate -l 512M /swapfile && sudo chmod 600 /swapfile
                 sudo mkswap /swapfile && sudo swapon /swapfile
               fi
               echo "▶ Migraciones payment → paymentdb"
-              docker-compose -f "$COMPOSE_FILE" exec -T \
+              docker run --rm \
+                --memory="400m" \
                 -e DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb" \
-                app npx prisma migrate deploy --schema prisma/payment/schema.prisma
+                -v /opt/smartparking:/app \
+                -w /app \
+                node:20-alpine \
+                sh -c "npm install prisma --no-save && npx prisma migrate deploy --schema prisma/payment/schema.prisma"
             fi
 
             echo "✅ ${{ matrix.name }} deployado exitosamente."
