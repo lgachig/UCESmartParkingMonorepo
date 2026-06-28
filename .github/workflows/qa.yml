@@ -431,64 +431,64 @@ jobs:
             docker-compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
             docker-compose -f "$COMPOSE_FILE" ps
 
-            # Migraciones Prisma
+            # ── Migraciones Prisma ────────────────────────────────────────────
+            # Cada servicio corre SOLO sus propias migraciones contra SU propia DB.
+            # auth  → smartparking  (prisma/auth/schema.prisma)
+            # user  → userdb        (prisma/user/schema.prisma)
+            # vehicle → vehicledb   (prisma/vehicle/schema.prisma)
+            # parking → parkingdb   (prisma/parking/schema.prisma)
+            # reservation → reservationdb (prisma/reservation/schema.prisma)
+            # payment → paymentdb   (prisma/payment/schema.prisma)
+
             if [ "${{ matrix.name }}" = "auth" ]; then
-              echo "⏳ Esperando PostgreSQL..."
+              echo "⏳ Esperando PostgreSQL (smartparking)..."
               pg_container=$(docker-compose -f "$COMPOSE_FILE" ps -q postgres)
-              for i in {1..30}; do
-                if docker exec "$pg_container" pg_isready -U admin -d smartparking &>/dev/null; then
-                  break
-                fi
+              for i in $(seq 1 30); do
+                docker exec "$pg_container" pg_isready -U admin -d smartparking &>/dev/null && break
                 sleep 2
               done
 
+              # Crear DBs de los demás servicios si no existen
               for db in userdb vehicledb parkingdb reservationdb paymentdb; do
-                if ! docker exec "$pg_container" psql -U admin -d smartparking -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" 2>/dev/null | grep -q 1; then
-                  docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE ${db};" 2>/dev/null || true
-                fi
-                echo "  ✔ ${db}"
+                docker exec "$pg_container" psql -U admin -d smartparking \
+                  -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" 2>/dev/null | grep -q 1 || \
+                  docker exec "$pg_container" psql -U admin -d postgres -c "CREATE DATABASE ${db};" 2>/dev/null || true
+                echo "  ✔ DB ${db}"
               done
 
-              echo "Cleaning up invalid failed migrations on smartparking DB..."
-              docker exec "$pg_container" psql -U admin -d smartparking -c "DELETE FROM _prisma_migrations WHERE migration_name = '20260601120000_init_vehicle';" 2>/dev/null || true
-
-              echo "Running auth migrations..."
+              echo "▶ Migraciones auth → smartparking"
               docker-compose -f "$COMPOSE_FILE" exec -T auth-service \
                 npx prisma migrate deploy --schema prisma/auth/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "user" ]; then
-              echo "Running user migrations..."
+              echo "▶ Migraciones user → userdb"
               docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --config prisma.user.config.ts
+                npx prisma migrate deploy --schema prisma/user/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "vehicle" ]; then
-              echo "Resolving vehicle init migration if failed in vehicledb..."
+              echo "▶ Migraciones vehicle → vehicledb"
               docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate resolve --rolled-back 20260601120000_init_vehicle --config prisma.vehicle.config.ts || true
-
-              echo "Running vehicle migrations..."
-              docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --config prisma.vehicle.config.ts
+                npx prisma migrate deploy --schema prisma/vehicle/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "parking" ]; then
-              echo "Running parking migrations..."
+              echo "▶ Migraciones parking → parkingdb"
               docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --config prisma.parking.config.ts
+                npx prisma migrate deploy --schema prisma/parking/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "reservation" ]; then
-              echo "Running reservation migrations..."
+              echo "▶ Migraciones reservation → reservationdb"
               docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --config prisma.reservation.config.ts
+                npx prisma migrate deploy --schema prisma/reservation/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "payment" ]; then
-              echo "Running payment migrations..."
+              echo "▶ Migraciones payment → paymentdb"
               docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --config prisma.payment.config.ts
+                npx prisma migrate deploy --schema prisma/payment/schema.prisma
             fi
 
             echo "✅ ${{ matrix.name }} deployado exitosamente."
