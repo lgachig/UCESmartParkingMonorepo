@@ -486,12 +486,17 @@ jobs:
 
             if [ "${{ matrix.name }}" = "parking" ]; then
               echo "▶ Migraciones parking → parkingdb"
-              # Limpiar migración fallida si existe
+              # Limpiar DB completamente para evitar conflictos de tipos/tablas
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e PARKING_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb" \
-                app npx prisma migrate resolve \
-                  --rolled-back 20260628000000_init_parking \
-                  --config prisma.parking.config.ts 2>/dev/null || true
+                app npx prisma db execute \
+                  --url "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb" \
+                  --stdin <<'SQL'
+            DROP SCHEMA public CASCADE;
+            CREATE SCHEMA public;
+            GRANT ALL ON SCHEMA public TO admin;
+            GRANT ALL ON SCHEMA public TO public;
+            SQL
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e PARKING_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb" \
                 app npx prisma migrate deploy --config prisma.parking.config.ts
@@ -505,30 +510,27 @@ jobs:
             fi
 
             if [ "${{ matrix.name }}" = "payment" ]; then
-              echo "▶ Activando swap en el host..."
+              echo "▶ Activando swap..."
               if ! swapon --show | grep -q /swapfile; then
-                sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile
-                sudo mkswap /swapfile && sudo swapon /swapfile
-                echo "  ✔ Swap 1GB activado"
-              else
-                echo "  ✔ Swap ya activo"
+                sudo fallocate -l 2G /swapfile
+                sudo chmod 600 /swapfile
+                sudo mkswap /swapfile
+                sudo swapon /swapfile
               fi
 
-              echo "▶ Instalando Prisma CLI en el host EC2..."
-              export PATH="$HOME/.npm-global/bin:$PATH"
-              npm config set prefix "$HOME/.npm-global"
-              npm install -g prisma 2>/dev/null || true
-
-              echo "▶ Copiando schema de payment desde el contenedor..."
-              CONTAINER_ID=$(docker-compose -f "$COMPOSE_FILE" ps -q app)
-              docker cp "${CONTAINER_ID}:/app/prisma/payment" /tmp/prisma_payment
-              docker cp "${CONTAINER_ID}:/app/prisma.payment.config.ts" /tmp/prisma.payment.config.ts
-
-              echo "▶ Migraciones payment → paymentdb (en host, con swap)"
-              cd /tmp
-              PAYMENT_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb" \
-                prisma migrate deploy --config /tmp/prisma.payment.config.ts
-              cd -
+              echo "▶ Migraciones payment → paymentdb"
+              docker-compose -f "$COMPOSE_FILE" exec -T app \
+                npx prisma db execute \
+                  --url "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb" \
+                  --stdin <<'SQL'
+            DROP SCHEMA public CASCADE;
+            CREATE SCHEMA public;
+            GRANT ALL ON SCHEMA public TO admin;
+            GRANT ALL ON SCHEMA public TO public;
+            SQL
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e PAYMENT_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb" \
+                app npx prisma migrate deploy --config prisma.payment.config.ts
             fi
 
             echo "✅ ${{ matrix.name }} deployado exitosamente."
