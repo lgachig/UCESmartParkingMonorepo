@@ -2,10 +2,10 @@ name: QA CI/CD
 
 on:
   push:
-    branches: [feature/USP-096-infrastructure-frontend-integration]
+    branches: [QA, qa]
   pull_request:
     types: [closed]
-    branches: [feature/USP-096-infrastructure-frontend-integration]
+    branches: [QA, qa]
   workflow_dispatch:
     inputs:
       force_deploy_all:
@@ -209,10 +209,132 @@ jobs:
 
           echo "auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | reservation=$RESERVATION_IP | gateway=$GATEWAY_IP | frontend=$FRONTEND_IP | payment=$PAYMENT_IP"
 
-  deploy:
-    name: Deploy ${{ matrix.name }}
+  deploy-auth:
+    name: Deploy auth (postgres first)
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     needs: [get-changes, discover-ips]
+    runs-on: ubuntu-latest
+    environment: qa
+    steps:
+      - name: Skip if auth unchanged
+        if: needs.get-changes.outputs.auth != 'true'
+        run: echo "Auth sin cambios — postgres sigue activo."
+
+      - name: Load IPs
+        if: needs.get-changes.outputs.auth == 'true'
+        run: |
+          echo "AUTH_PRIVATE_IP=${{ needs.discover-ips.outputs.auth_ip }}" >> $GITHUB_ENV
+          echo "PRIVATE_IP=${{ needs.discover-ips.outputs.auth_ip }}" >> $GITHUB_ENV
+
+      - name: Setup SSH
+        if: needs.get-changes.outputs.auth == 'true'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.QA_EC2_SSH_KEY }}" > ~/.ssh/qa.pem
+          chmod 400 ~/.ssh/qa.pem
+          ssh-keyscan -H ${{ secrets.QA_BASTION_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Wait SSH
+        if: needs.get-changes.outputs.auth == 'true'
+        run: |
+          ok=false
+          for i in $(seq 1 10); do
+            if ssh -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+              -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.QA_BASTION_HOST }}" \
+              ec2-user@${{ env.PRIVATE_IP }} "echo OK" 2>/dev/null; then
+              ok=true
+              break
+            fi
+            echo "⏳ $i/10..."
+            sleep 15
+          done
+          [ "$ok" = "true" ] || { echo "::error::SSH timeout a auth"; exit 1; }
+
+      - name: Deploy auth via SSH
+        if: needs.get-changes.outputs.auth == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ env.PRIVATE_IP }}
+          username: ec2-user
+          key: ${{ secrets.QA_EC2_SSH_KEY }}
+          port: 22
+          timeout: 120s
+          command_timeout: 20m
+          script_stop: true
+          proxy_host: ${{ secrets.QA_BASTION_HOST }}
+          proxy_username: ec2-user
+          proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
+          proxy_port: 22
+          envs: AUTH_PRIVATE_IP
+          script: |
+            set -euo pipefail
+            COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
+            ENV_FILE="/opt/smartparking/.env"
+            sudo mkdir -p /opt/smartparking
+            sudo chown ec2-user:ec2-user /opt/smartparking
+            touch "$ENV_FILE" && chmod 644 "$ENV_FILE"
+
+            patch_env() {
+              local key="$1" val="$2"
+              [ -n "$val" ] && [ "$val" != "None" ] && [ "$val" != "null" ] || { echo "❌ Valor vacío para $key"; exit 1; }
+              sudo sed -i "/^${key}=/d" "$ENV_FILE"
+              printf '%s=%s\n' "$key" "$val" >> "$ENV_FILE"
+            }
+
+            patch_env DOCKERHUB_USER       "${{ secrets.DOCKERHUB_USERNAME }}"
+            patch_env JWT_SECRET           "${{ secrets.QA_JWT_SECRET }}"
+            patch_env JWT_REFRESH_SECRET   "${{ secrets.QA_JWT_REFRESH_SECRET }}"
+            patch_env INTERNAL_SERVICE_KEY "${{ secrets.QA_INTERNAL_SERVICE_KEY }}"
+            patch_env CORS_ORIGINS         "http://${{ secrets.QA_FRONTEND_EIP }}:3002,http://${{ secrets.QA_GATEWAY_EIP }}:3006"
+            patch_env APP_IMAGE            "${{ secrets.DOCKERHUB_USERNAME }}/smartparking-auth:qa"
+            patch_env APP_PORT               "3000"
+            patch_env PORT                   "3000"
+            patch_env DATABASE_URL           "postgresql://admin:admin@postgres:5432/smartparking"
+            patch_env REDIS_URL              "redis://redis:6379"
+            patch_env FRONTEND_URL           "http://${{ secrets.QA_FRONTEND_EIP }}:3002"
+            patch_env USER_SERVICE_URL       "http://${{ needs.discover-ips.outputs.user_ip }}:3001/api"
+
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+            docker-compose -f "$COMPOSE_FILE" pull auth-service postgres redis
+            docker-compose -f "$COMPOSE_FILE" up -d postgres redis
+
+            pg_c=$(docker-compose -f "$COMPOSE_FILE" ps -q postgres | head -1)
+            [ -n "$pg_c" ] || pg_c=$(docker ps -qf "name=smartparking-postgres" | head -1)
+            [ -n "$pg_c" ] || { echo "❌ Postgres no encontrado"; exit 1; }
+
+            for i in $(seq 1 30); do
+              docker exec "$pg_c" pg_isready -U admin &>/dev/null && break
+              [ "$i" -eq 30 ] && { echo "❌ PostgreSQL no respondió"; exit 1; }
+              sleep 2
+            done
+
+            for db in userdb vehicledb parkingdb reservationdb paymentdb smartparking; do
+              docker exec "$pg_c" psql -U admin -d postgres \
+                -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1 || \
+              docker exec "$pg_c" psql -U admin -d postgres -c "CREATE DATABASE ${db};" || true
+            done
+
+            docker exec "$pg_c" psql -U admin -d smartparking -v ON_ERROR_STOP=1 -c \
+              "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO admin; GRANT ALL ON SCHEMA public TO public;"
+
+            docker-compose -f "$COMPOSE_FILE" run --rm -T \
+              -e DATABASE_URL="postgresql://admin:admin@postgres:5432/smartparking" \
+              -e NODE_OPTIONS="--max-old-space-size=384" \
+              auth-service sh -c "npx prisma migrate deploy --config prisma.config.ts"
+
+            docker-compose -f "$COMPOSE_FILE" up -d --force-recreate auth-service
+            docker-compose -f "$COMPOSE_FILE" ps
+            echo "✅ auth deployado."
+
+  deploy:
+    name: Deploy ${{ matrix.name }}
+    if: |
+      always() &&
+      (github.event_name != 'pull_request' || github.event.pull_request.merged == true) &&
+      needs.deploy-auth.result != 'failure' &&
+      needs.get-changes.result == 'success' &&
+      needs.discover-ips.result == 'success'
+    needs: [get-changes, discover-ips, deploy-auth, docker-push]
     runs-on: ubuntu-latest
     environment: qa
     env:
@@ -221,46 +343,48 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: auth
-            service_name: auth-service
-            image_suffix: auth
-            app_port: '3000'
-            changed: ${{ needs.get-changes.outputs.auth }}
           - name: user
             service_name: app
             image_suffix: user
             app_port: '3001'
             changed: ${{ needs.get-changes.outputs.user }}
+            has_db: true
           - name: vehicle
             service_name: app
             image_suffix: vehicle
             app_port: '3003'
             changed: ${{ needs.get-changes.outputs.vehicle }}
+            has_db: true
           - name: gateway
             service_name: app
             image_suffix: gateway
             app_port: '3006'
             changed: ${{ needs.get-changes.outputs.gateway }}
+            has_db: false
           - name: parking
             service_name: app
             image_suffix: parking
             app_port: '3004'
             changed: ${{ needs.get-changes.outputs.parking }}
+            has_db: true
           - name: reservation
             service_name: app
             image_suffix: reservation
             app_port: '3005'
             changed: ${{ needs.get-changes.outputs.reservation }}
+            has_db: true
           - name: frontend
             service_name: app
             image_suffix: frontend
             app_port: '3002'
             changed: ${{ needs.get-changes.outputs.frontend }}
+            has_db: false
           - name: payment
             service_name: app
             image_suffix: payment
             app_port: '3007'
             changed: ${{ needs.get-changes.outputs.payment }}
+            has_db: true
 
     steps:
       - name: Skip if unchanged
@@ -283,7 +407,6 @@ jobs:
         if: matrix.changed == 'true'
         run: |
           case "${{ matrix.name }}" in
-            auth)        echo "PRIVATE_IP=${{ needs.discover-ips.outputs.auth_ip }}"        >> $GITHUB_ENV ;;
             user)        echo "PRIVATE_IP=${{ needs.discover-ips.outputs.user_ip }}"        >> $GITHUB_ENV ;;
             vehicle)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.vehicle_ip }}"     >> $GITHUB_ENV ;;
             parking)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"     >> $GITHUB_ENV ;;
@@ -304,12 +427,21 @@ jobs:
       - name: Wait SSH
         if: matrix.changed == 'true'
         run: |
+          ok=false
           for i in $(seq 1 10); do
-            ssh -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            if ssh -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
               -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.QA_BASTION_HOST }}" \
-              ec2-user@${{ env.PRIVATE_IP }} "echo OK" 2>/dev/null && break
-            echo "⏳ $i/10..."; sleep 15
+              ec2-user@${{ env.PRIVATE_IP }} "echo OK" 2>/dev/null; then
+              ok=true
+              break
+            fi
+            echo "⏳ $i/10..."
+            sleep 15
           done
+          if [ "$ok" != "true" ]; then
+            echo "::error::SSH timeout a ${{ matrix.name }} (${{ env.PRIVATE_IP }})"
+            exit 1
+          fi
 
       - name: Deploy ${{ matrix.name }} via SSH
         if: matrix.changed == 'true'
@@ -320,7 +452,7 @@ jobs:
           key: ${{ secrets.QA_EC2_SSH_KEY }}
           port: 22
           timeout: 120s
-          command_timeout: 15m
+          command_timeout: 20m
           script_stop: true
           proxy_host: ${{ secrets.QA_BASTION_HOST }}
           proxy_username: ec2-user
@@ -356,14 +488,6 @@ jobs:
             patch_env APP_PORT  "${{ matrix.app_port }}"
 
             # Variables específicas por servicio
-            if [ "${{ matrix.name }}" = "auth" ]; then
-              patch_env PORT              "3000"
-              patch_env DATABASE_URL      "postgresql://admin:admin@postgres:5432/smartparking"
-              patch_env REDIS_URL         "redis://redis:6379"
-              patch_env FRONTEND_URL      "http://${{ secrets.QA_FRONTEND_EIP }}:3002"
-              patch_env USER_SERVICE_URL  "http://${USER_PRIVATE_IP}:3001/api"
-            fi
-
             if [ "${{ matrix.name }}" = "user" ]; then
               patch_env USER_SERVICE_PORT "3001"
               patch_env USER_DATABASE_URL "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb"
@@ -425,102 +549,117 @@ jobs:
               patch_env NEXT_PUBLIC_GATEWAY_URL "$QA_GATEWAY_URL"
             fi
 
-            # Pull & restart
+            # Pull image (migrate BEFORE up -d)
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
             docker-compose -f "$COMPOSE_FILE" pull ${{ matrix.service_name }}
+
+            if [ "${{ matrix.has_db }}" = "true" ]; then
+              ensure_swap() {
+                if swapon --show 2>/dev/null | grep -q /swapfile; then
+                  echo "  ✔ swap ya activo"
+                  return 0
+                fi
+                if [ ! -f /swapfile ]; then
+                  sudo fallocate -l 2G /swapfile 2>/dev/null || \
+                    sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
+                  sudo chmod 600 /swapfile
+                  sudo mkswap /swapfile
+                fi
+                sudo swapon /swapfile
+                echo "  ✔ swap 2G activado"
+              }
+
+              wait_postgres() {
+                echo "⏳ Esperando Postgres en ${AUTH_PRIVATE_IP}..."
+                local i
+                for i in $(seq 1 30); do
+                  if docker run --rm -e PGPASSWORD=admin postgres:16 \
+                    psql -h "${AUTH_PRIVATE_IP}" -U admin -d postgres -c "SELECT 1" &>/dev/null; then
+                    echo "  ✔ Postgres accesible"
+                    return 0
+                  fi
+                  sleep 3
+                done
+                echo "❌ Postgres no accesible en ${AUTH_PRIVATE_IP}"; exit 1
+              }
+
+              drop_schema() {
+                local db="$1" attempt
+                echo "  🗑 Limpiando public en ${db}..."
+                for attempt in 1 2 3; do
+                  if docker run --rm -e PGPASSWORD=admin postgres:16 \
+                    psql -h "${AUTH_PRIVATE_IP}" -U admin -d "$db" -v ON_ERROR_STOP=1 -c \
+                    "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO admin; GRANT ALL ON SCHEMA public TO public;"; then
+                    echo "  ✔ ${db} limpia"
+                    return 0
+                  fi
+                  echo "  ⚠ drop_schema intento ${attempt}/3 falló, reintentando..."
+                  sleep 5
+                done
+                echo "❌ No se pudo limpiar ${db}"; exit 1
+              }
+
+              prisma_migrate() {
+                local env_key="$1" env_val="$2" prisma_config="$3" attempt
+                for attempt in 1 2 3; do
+                  if docker-compose -f "$COMPOSE_FILE" run --rm -T --no-deps \
+                    -e "${env_key}=${env_val}" \
+                    -e NODE_OPTIONS="--max-old-space-size=384" \
+                    ${{ matrix.service_name }} \
+                    sh -c "npx prisma migrate deploy --config ${prisma_config}"; then
+                    return 0
+                  fi
+                  echo "  ⚠ migrate intento ${attempt}/3 falló, reintentando..."
+                  sleep 10
+                done
+                echo "❌ migrate deploy falló tras 3 intentos"; exit 1
+              }
+
+              ensure_swap
+              wait_postgres
+
+              if [ "${{ matrix.name }}" = "user" ]; then
+                echo "▶ Migraciones user → userdb"
+                drop_schema userdb
+                prisma_migrate USER_DATABASE_URL \
+                  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb" \
+                  "prisma.user.config.ts"
+              fi
+
+              if [ "${{ matrix.name }}" = "vehicle" ]; then
+                echo "▶ Migraciones vehicle → vehicledb"
+                drop_schema vehicledb
+                prisma_migrate VEHICLE_DATABASE_URL \
+                  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/vehicledb" \
+                  "prisma.vehicle.config.ts"
+              fi
+
+              if [ "${{ matrix.name }}" = "parking" ]; then
+                echo "▶ Migraciones parking → parkingdb"
+                drop_schema parkingdb
+                prisma_migrate PARKING_DATABASE_URL \
+                  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb" \
+                  "prisma.parking.config.ts"
+              fi
+
+              if [ "${{ matrix.name }}" = "reservation" ]; then
+                echo "▶ Migraciones reservation → reservationdb"
+                drop_schema reservationdb
+                prisma_migrate RESERVATION_DATABASE_URL \
+                  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/reservationdb" \
+                  "prisma.reservation.config.ts"
+              fi
+
+              if [ "${{ matrix.name }}" = "payment" ]; then
+                echo "▶ Migraciones payment → paymentdb"
+                drop_schema paymentdb
+                prisma_migrate PAYMENT_DATABASE_URL \
+                  "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb" \
+                  "prisma.payment.config.ts"
+              fi
+            fi
+
             docker-compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
             docker-compose -f "$COMPOSE_FILE" ps
-
-            # ── Migraciones Prisma ────────────────────────────────────────────
-            # Cada servicio corre SOLO sus propias migraciones contra SU propia DB.
-            # auth  → smartparking  (prisma/auth/schema.prisma)
-            # user  → userdb        (prisma/user/schema.prisma)
-            # vehicle → vehicledb   (prisma/vehicle/schema.prisma)
-            # parking → parkingdb   (prisma/parking/schema.prisma)
-            # reservation → reservationdb (prisma/reservation/schema.prisma)
-            # payment → paymentdb   (prisma/payment/schema.prisma)
-
-            # ── Migraciones Prisma ────────────────────────────────────────────
-            # Drop + recreate schema = siempre limpio, sin conflictos de tipos/tablas
-            # Se usa psql directo al contenedor postgres (no --url que no existe aquí)
-
-            pg_container=$(docker ps --filter "name=smartparking-postgres" -q | head -1)
-
-            drop_schema() {
-              local db=$1
-              docker exec "$pg_container" psql -U admin -d "$db" \
-                -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO admin; GRANT ALL ON SCHEMA public TO public;"
-            }
-
-            if [ "${{ matrix.name }}" = "auth" ]; then
-              echo "⏳ Esperando PostgreSQL..."
-              for i in $(seq 1 30); do
-                docker exec "$pg_container" pg_isready -U admin &>/dev/null && break
-                sleep 2
-              done
-
-              for db in userdb vehicledb parkingdb reservationdb paymentdb; do
-                docker exec "$pg_container" psql -U admin -d postgres \
-                  -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1 || \
-                docker exec "$pg_container" psql -U admin -d postgres \
-                  -c "CREATE DATABASE ${db};"
-                echo "  ✔ ${db}"
-              done
-
-              echo "▶ Migraciones auth → smartparking"
-              drop_schema smartparking
-              docker-compose -f "$COMPOSE_FILE" exec -T auth-service \
-                npx prisma migrate deploy --schema prisma/auth/schema.prisma
-            fi
-
-            if [ "${{ matrix.name }}" = "user" ]; then
-              echo "▶ Migraciones user → userdb"
-              drop_schema userdb
-              docker-compose -f "$COMPOSE_FILE" exec -T \
-                -e USER_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb" \
-                app npx prisma migrate deploy --config prisma.user.config.ts
-            fi
-
-            if [ "${{ matrix.name }}" = "vehicle" ]; then
-              echo "▶ Migraciones vehicle → vehicledb"
-              drop_schema vehicledb
-              docker-compose -f "$COMPOSE_FILE" exec -T \
-                -e VEHICLE_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/vehicledb" \
-                app npx prisma migrate deploy --config prisma.vehicle.config.ts
-            fi
-
-            if [ "${{ matrix.name }}" = "parking" ]; then
-              echo "▶ Migraciones parking → parkingdb"
-              drop_schema parkingdb
-              docker-compose -f "$COMPOSE_FILE" exec -T \
-                -e PARKING_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb" \
-                app npx prisma migrate deploy --config prisma.parking.config.ts
-            fi
-
-            if [ "${{ matrix.name }}" = "reservation" ]; then
-              echo "▶ Activando swap para reservation..."
-              if ! swapon --show | grep -q /swapfile; then
-                sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
-                sudo mkswap /swapfile && sudo swapon /swapfile
-              fi
-              echo "▶ Migraciones reservation → reservationdb"
-              drop_schema reservationdb
-              docker-compose -f "$COMPOSE_FILE" exec -T \
-                -e RESERVATION_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/reservationdb" \
-                app npx prisma migrate deploy --config prisma.reservation.config.ts
-            fi
-
-            if [ "${{ matrix.name }}" = "payment" ]; then
-              echo "▶ Activando swap para payment..."
-              if ! swapon --show | grep -q /swapfile; then
-                sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
-                sudo mkswap /swapfile && sudo swapon /swapfile
-              fi
-              echo "▶ Migraciones payment → paymentdb"
-              drop_schema paymentdb
-              docker-compose -f "$COMPOSE_FILE" exec -T \
-                -e PAYMENT_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb" \
-                app npx prisma migrate deploy --config prisma.payment.config.ts
-            fi
 
             echo "✅ ${{ matrix.name }} deployado exitosamente."

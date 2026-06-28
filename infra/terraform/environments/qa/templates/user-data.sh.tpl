@@ -44,6 +44,7 @@ cat > /opt/smartparking/docker-compose.yml <<COMPOSE
 services:
   postgres:
     image: postgres:16
+    container_name: smartparking-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: admin
@@ -84,6 +85,7 @@ services:
     ports: ["5672:5672", "15672:15672"]
   auth-service:
     image: ${dockerhub_user}/${docker_image}:${docker_image_tag}
+    container_name: smartparking-auth-service
     restart: unless-stopped
     env_file: [.env]
     ports: ["${service_port}:${service_port}"]

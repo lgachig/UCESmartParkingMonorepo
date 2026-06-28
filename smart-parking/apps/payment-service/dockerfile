@@ -12,8 +12,8 @@ COPY . .
 ENV NX_DAEMON=false
 
 RUN npx prisma generate --config prisma.payment.config.ts
-RUN npx nx build payment-service
+RUN npx nx build @org/payment-service
 
 EXPOSE 3007
 
-CMD ["sh", "-c", "npx prisma db push --config prisma.payment.config.ts --accept-data-loss && node apps/payment-service/dist/main.js"]
+CMD ["node", "apps/payment-service/dist/main.js"]
