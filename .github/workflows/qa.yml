@@ -497,6 +497,9 @@ jobs:
                 sudo fallocate -l 512M /swapfile && sudo chmod 600 /swapfile
                 sudo mkswap /swapfile && sudo swapon /swapfile
               fi
+              echo "▶ Copiando prisma schema desde el contenedor"
+              docker cp smartparking-app-1:/app/prisma /opt/smartparking/prisma
+              docker cp smartparking-app-1:/app/prisma.config.ts /opt/smartparking/prisma.config.ts || true
               echo "▶ Migraciones payment → paymentdb"
               docker run --rm \
                 --memory="400m" \
