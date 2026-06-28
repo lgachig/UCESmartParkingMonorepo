@@ -465,6 +465,9 @@ jobs:
               echo "▶ Migraciones user → userdb"
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb" \
+                app npx prisma migrate resolve --rolled-back 20260528223434_add_role_to_profile --schema prisma/user/schema.prisma
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb" \
                 app npx prisma migrate deploy --schema prisma/user/schema.prisma
             fi
 
@@ -493,6 +496,7 @@ jobs:
               echo "▶ Migraciones payment → paymentdb"
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb" \
+                -e NODE_OPTIONS="--max-old-space-size=256" \
                 app npx prisma migrate deploy --schema prisma/payment/schema.prisma
             fi
 
