@@ -5,19 +5,11 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma
 
-RUN pwd
-RUN ls -la
-RUN cat package.json
-
 RUN npm install --frozen-lockfile
-
-RUN npm ls stripe
 
 COPY . .
 
 ENV NX_DAEMON=false
-
-RUN node -e "console.log(require.resolve('stripe'))"
 
 RUN npx prisma generate --config prisma.payment.config.ts
 RUN npx nx build payment-service

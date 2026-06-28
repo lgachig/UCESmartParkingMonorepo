@@ -36,6 +36,49 @@ services:
     networks:
       - smartparking-network
 
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: smartparking-kafka
+    restart: unless-stopped
+    ports:
+      - '9092:9092'
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx256m"
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      CLUSTER_ID: "smartparking-local-cluster"
+    networks:
+      - smartparking-network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: smartparking-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_VM_MEMORY_HIGH_WATERMARK: "0.4"
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit vm_memory_high_watermark 0.4"
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartparking-network
+
   auth-service:
     build:
       context: ./smart-parking
@@ -108,46 +151,6 @@ services:
     networks:
       - smartparking-network
 
-  kafka:
-    image: confluentinc/cp-kafka:7.4.0
-    container_name: smartparking-kafka
-    restart: unless-stopped
-    ports:
-      - '9092:9092'
-    environment:
-      KAFKA_HEAP_OPTS: "-Xms256m -Xmx256m"
-      KAFKA_NODE_ID: 1
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
-      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
-      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
-      CLUSTER_ID: "smartparking-local-cluster"    
-    networks:
-      - smartparking-network
-
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: smartparking-rabbitmq
-    restart: unless-stopped
-    ports:
-      - '5672:5672'
-      - '15672:15672'
-    healthcheck:
-      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - smartparking-network
-
   parking-service:
     build:
       context: ./smart-parking
@@ -174,25 +177,6 @@ services:
     networks:
       - smartparking-network
 
-  frontend:
-    build:
-      context: ./smart-parking/apps/frontend
-      dockerfile: dockerfile
-      args:
-        NEXT_PUBLIC_GATEWAY_URL: http://localhost:3006/api
-    container_name: smartparking-frontend
-    restart: unless-stopped
-    depends_on:
-      - auth-service
-      - user-service
-      - vehicle-service
-      - parking-service
-      - reservation-service
-    ports:
-      - '3002:3002'
-    networks:
-      - smartparking-network
-
   reservation-service:
     build:
       context: ./smart-parking
@@ -213,14 +197,12 @@ services:
       KAFKA_BROKERS: kafka:29092
       JWT_SECRET: your_jwt_secret
       INTERNAL_SERVICE_KEY: internal_service_secret_key
-
       PARKING_SERVICE_URL: http://parking-service:3004
       USER_SERVICE_URL: http://user-service:3001
       VEHICLE_SERVICE_URL: http://vehicle-service:3003
-
       CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
     ports:
-      - "3005:3005"
+      - '3005:3005'
     networks:
       - smartparking-network
 
@@ -241,6 +223,8 @@ services:
         condition: service_started
       user-service:
         condition: service_started
+      kafka:
+        condition: service_started
     environment:
       PAYMENT_SERVICE_PORT: 3007
       PAYMENT_DATABASE_URL: postgresql://admin:admin@postgres:5432/paymentdb
@@ -259,7 +243,27 @@ services:
       - '3007:3007'
     networks:
       - smartparking-network
-      
+
+  frontend:
+    build:
+      context: ./smart-parking/apps/frontend
+      dockerfile: dockerfile
+      args:
+        NEXT_PUBLIC_GATEWAY_URL: http://localhost:3006/api
+    container_name: smartparking-frontend
+    restart: unless-stopped
+    depends_on:
+      - auth-service
+      - user-service
+      - vehicle-service
+      - parking-service
+      - reservation-service
+      - payment-service
+    ports:
+      - '3002:3002'
+    networks:
+      - smartparking-network
+
   gateway-service:
     build:
       context: ./smart-parking
@@ -279,6 +283,8 @@ services:
         condition: service_started
       reservation-service:
         condition: service_started
+      payment-service:
+        condition: service_started
     environment:
       GATEWAY_PORT: 3006
       JWT_SECRET: your_jwt_secret
@@ -290,13 +296,15 @@ services:
       RESERVATION_SERVICE_URL: http://reservation-service:3005
       PAYMENT_SERVICE_URL: http://payment-service:3007
       CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
       THROTTLE_TTL: 60000
       THROTTLE_LIMIT: 60
     ports:
       - '3006:3006'
     networks:
       - smartparking-network
-
 
 volumes:
   postgres_data:

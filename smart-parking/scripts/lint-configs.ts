@@ -129,9 +129,9 @@ function lintComposeContent(filePath: string, content: string, startLineOffset: 
         currentSection = null;
 
         const validServices = [
-          'postgres', 'redis', 'kafka', 'auth-service', 'user-service',
+          'postgres', 'redis', 'kafka', 'rabbitmq', 'auth-service', 'user-service',
           'vehicle-service', 'parking-service', 'reservation-service',
-          'frontend', 'gateway-service', 'app'
+          'frontend', 'gateway-service', 'payment-service', 'app'
         ];
         if (!validServices.includes(serviceName)) {
           logError(filePath, lineNum, `Unknown or invalid service name: '${serviceName}'`);

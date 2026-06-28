@@ -2,10 +2,10 @@ name: QA CI/CD
 
 on:
   push:
-    branches: []
+    branches: [feature/USP-096-infrastructure-frontend-integration]
   pull_request:
     types: [closed]
-    branches: []
+    branches: [feature/USP-096-infrastructure-frontend-integration]
   workflow_dispatch:
     inputs:
       force_deploy_all:
@@ -49,6 +49,7 @@ jobs:
           echo "reservation=${{ needs.ci-check.outputs.reservation }}"
           echo "gateway=${{ needs.ci-check.outputs.gateway }}"
           echo "frontend=${{ needs.ci-check.outputs.frontend }}"
+          echo "payment=${{ needs.ci-check.outputs.payment }}"
 
   docker-push:
     name: Build & Push (${{ matrix.name }})
@@ -162,6 +163,7 @@ jobs:
       reservation_ip: ${{ steps.ips.outputs.reservation_ip }}
       gateway_ip:     ${{ steps.ips.outputs.gateway_ip }}
       frontend_ip:    ${{ steps.ips.outputs.frontend_ip }}
+      payment_ip:     ${{ steps.ips.outputs.payment_ip }}
 
     steps:
       - name: Configure AWS credentials
@@ -194,6 +196,7 @@ jobs:
           RESERVATION_IP=$(get_ip "reservation") || exit 1
           GATEWAY_IP=$(get_ip "gateway")         || exit 1
           FRONTEND_IP=$(get_ip "frontend")       || exit 1
+          PAYMENT_IP=$(get_ip "payment")         || exit 1
 
           echo "auth_ip=$AUTH_IP"               >> $GITHUB_OUTPUT
           echo "user_ip=$USER_IP"               >> $GITHUB_OUTPUT
@@ -202,8 +205,9 @@ jobs:
           echo "reservation_ip=$RESERVATION_IP" >> $GITHUB_OUTPUT
           echo "gateway_ip=$GATEWAY_IP"         >> $GITHUB_OUTPUT
           echo "frontend_ip=$FRONTEND_IP"       >> $GITHUB_OUTPUT
+          echo "payment_ip=$PAYMENT_IP"         >> $GITHUB_OUTPUT
 
-          echo "auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | reservation=$RESERVATION_IP | gateway=$GATEWAY_IP | frontend=$FRONTEND_IP"
+          echo "auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | reservation=$RESERVATION_IP | gateway=$GATEWAY_IP | frontend=$FRONTEND_IP | payment=$PAYMENT_IP"
 
   deploy:
     name: Deploy ${{ matrix.name }}
@@ -273,6 +277,7 @@ jobs:
           echo "RESERVATION_PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV
           echo "GATEWAY_PRIVATE_IP=${{ needs.discover-ips.outputs.gateway_ip }}"         >> $GITHUB_ENV
           echo "FRONTEND_PRIVATE_IP=${{ needs.discover-ips.outputs.frontend_ip }}"       >> $GITHUB_ENV
+          echo "PAYMENT_PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"         >> $GITHUB_ENV
 
       - name: Resolve target IP
         if: matrix.changed == 'true'
@@ -285,6 +290,7 @@ jobs:
             reservation) echo "PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV ;;
             gateway)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.gateway_ip }}"     >> $GITHUB_ENV ;;
             frontend)    echo "PRIVATE_IP=${{ needs.discover-ips.outputs.frontend_ip }}"    >> $GITHUB_ENV ;;
+            payment)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"     >> $GITHUB_ENV ;;
           esac
 
       - name: Setup SSH
@@ -320,7 +326,7 @@ jobs:
           proxy_username: ec2-user
           proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
           proxy_port: 22
-          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,GATEWAY_PRIVATE_IP,FRONTEND_PRIVATE_IP,QA_GATEWAY_URL
+          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,GATEWAY_PRIVATE_IP,FRONTEND_PRIVATE_IP,PAYMENT_PRIVATE_IP,QA_GATEWAY_URL
           script: |
             set -euo pipefail
 
@@ -346,9 +352,6 @@ jobs:
             patch_env JWT_REFRESH_SECRET   "${{ secrets.QA_JWT_REFRESH_SECRET }}"
             patch_env INTERNAL_SERVICE_KEY "${{ secrets.QA_INTERNAL_SERVICE_KEY }}"
             patch_env CORS_ORIGINS         "http://${{ secrets.QA_FRONTEND_EIP }}:3002,http://${{ secrets.QA_GATEWAY_EIP }}:3006"
-
-            # FIX CRITICO: APP_IMAGE y APP_PORT para que el servicio "app" del compose sepa
-            # qué imagen correr y en qué puerto escuchar.
             patch_env APP_IMAGE "${{ secrets.DOCKERHUB_USERNAME }}/smartparking-${{ matrix.image_suffix }}:qa"
             patch_env APP_PORT  "${{ matrix.app_port }}"
 
@@ -376,7 +379,6 @@ jobs:
             if [ "${{ matrix.name }}" = "gateway" ]; then
               patch_env GATEWAY_PORT            "3006"
               patch_env REDIS_URL               "redis://${AUTH_PRIVATE_IP}:6379"
-              # FIX: URLs sin /api — el proxy reenvía la URL completa que ya incluye /api
               patch_env AUTH_SERVICE_URL        "http://${AUTH_PRIVATE_IP}:3000"
               patch_env USER_SERVICE_URL        "http://${USER_PRIVATE_IP}:3001"
               patch_env VEHICLE_SERVICE_URL     "http://${VEHICLE_PRIVATE_IP}:3003"
@@ -405,6 +407,19 @@ jobs:
               patch_env RESERVATION_EXPIRY_MINUTES "15"
             fi
 
+            if [ "${{ matrix.name }}" = "payment" ]; then
+              patch_env PAYMENT_SERVICE_PORT    "3007"
+              patch_env PAYMENT_DATABASE_URL    "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb"
+              patch_env REDIS_URL               "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env RABBITMQ_URL            "amqp://guest:guest@${AUTH_PRIVATE_IP}:5672"
+              patch_env KAFKA_BROKERS           "${AUTH_PRIVATE_IP}:9092"
+              patch_env RESERVATION_SERVICE_URL "http://${RESERVATION_PRIVATE_IP}:3005"
+              patch_env USER_SERVICE_URL        "http://${USER_PRIVATE_IP}:3001/api"
+              patch_env STRIPE_SECRET_KEY       "${{ secrets.STRIPE_SECRET_KEY }}"
+              patch_env STRIPE_PUBLIC_KEY       "${{ secrets.STRIPE_PUBLIC_KEY }}"
+              patch_env STRIPE_WEBHOOK_SECRET   "${{ secrets.STRIPE_WEBHOOK_SECRET }}"
+            fi
+
             if [ "${{ matrix.name }}" = "frontend" ]; then
               patch_env PORT "3002"
               patch_env NEXT_PUBLIC_GATEWAY_URL "$QA_GATEWAY_URL"
@@ -417,7 +432,6 @@ jobs:
             docker-compose -f "$COMPOSE_FILE" ps
 
             # Migraciones Prisma
-            # Migraciones Prisma
             if [ "${{ matrix.name }}" = "auth" ]; then
               echo "⏳ Esperando PostgreSQL..."
               pg_container=$(docker-compose -f "$COMPOSE_FILE" ps -q postgres)
@@ -428,7 +442,7 @@ jobs:
                 sleep 2
               done
 
-              for db in userdb vehicledb parkingdb reservationdb; do
+              for db in userdb vehicledb parkingdb reservationdb paymentdb; do
                 if ! docker exec "$pg_container" psql -U admin -d smartparking -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" 2>/dev/null | grep -q 1; then
                   docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE ${db};" 2>/dev/null || true
                 fi
@@ -469,19 +483,6 @@ jobs:
               echo "Running reservation migrations..."
               docker-compose -f "$COMPOSE_FILE" exec -T app \
                 npx prisma migrate deploy --config prisma.reservation.config.ts
-            fi
-
-            if [ "${{ matrix.name }}" = "payment" ]; then
-              patch_env KAFKA_BROKERS           "kafka:29092"
-              patch_env PAYMENT_SERVICE_PORT    "3007"
-              patch_env PAYMENT_DATABASE_URL    "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb"
-              patch_env REDIS_URL               "redis://${AUTH_PRIVATE_IP}:6379"
-              patch_env RABBITMQ_URL            "amqp://guest:guest@${AUTH_PRIVATE_IP}:5672"
-              patch_env RESERVATION_SERVICE_URL "http://${RESERVATION_PRIVATE_IP}:3005"
-              patch_env USER_SERVICE_URL        "http://${USER_PRIVATE_IP}:3001/api"
-              patch_env STRIPE_SECRET_KEY       "${{ secrets.STRIPE_SECRET_KEY }}"
-              patch_env STRIPE_PUBLIC_KEY       "${{ secrets.STRIPE_PUBLIC_KEY }}"
-              patch_env STRIPE_WEBHOOK_SECRET   "${{ secrets.STRIPE_WEBHOOK_SECRET }}"
             fi
 
             if [ "${{ matrix.name }}" = "payment" ]; then
