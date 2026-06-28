@@ -1,11 +1,11 @@
-name: Feature-EnvPro CI/CD
+name: PROD CI/CD
 
 on:
   push:
-    branches: []
+    branches: [PROD]
   pull_request:
     types: [closed]
-    branches: []
+    branches: [PROD]
   workflow_dispatch:
 
 concurrency:
