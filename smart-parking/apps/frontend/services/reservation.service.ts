@@ -33,6 +33,16 @@ export const reservationService = {
     return data;
   },
 
+  async checkIn(id: string): Promise<Reservation> {
+    const { data } = await reservationApi.post<Reservation>(`/reservations/${id}/check-in`);
+    return data;
+  },
+
+  async checkOut(id: string): Promise<Reservation> {
+    const { data } = await reservationApi.post<Reservation>(`/reservations/${id}/check-out`);
+    return data;
+  },
+
   async adminCancelReservation(reservationId: string): Promise<Reservation> {
     const { data } = await reservationApi.patch<Reservation>(
       `/internal/reservations/${reservationId}/admin-cancel`,

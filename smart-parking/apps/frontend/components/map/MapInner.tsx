@@ -12,7 +12,8 @@ import ActionToast from './ActionToast';
 import SlotDetailCard from './SlotDetailCard';
 import { useAuth } from '@/context/AuthContext';
 import { parkingService, type Slot } from '@/services/parking.service';
-import { reservationService } from '@/services/reservation.service';
+import { reservationService, type Reservation } from '@/services/reservation.service';
+import { paymentService } from '@/services/payment.service';
 
 interface MapInnerProps {
   flyToZone?: any;
@@ -31,8 +32,27 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
   const [routeInfo, setRouteInfo] = useState<{ duration: number | null; distance: string | null }>({ duration: null, distance: null });
 
   const [myActiveSlotId, setMyActiveSlotId] = useState<string | null>(null);
+  const [myActiveReservation, setMyActiveReservation] = useState<Reservation | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const [isReleasing, setIsReleasing] = useState(false);
+
+  const syncActiveReservation = useCallback(async (slotId: string | null) => {
+    if (!slotId) {
+      setMyActiveReservation(null);
+      return;
+    }
+    try {
+      const reservations = await reservationService.getMyReservations();
+      const active = reservations.find(
+        (r) =>
+          r.slotId === slotId &&
+          (r.status === 'PENDING' || r.status === 'ACTIVE'),
+      );
+      setMyActiveReservation(active ?? null);
+    } catch {
+      setMyActiveReservation(null);
+    }
+  }, []);
 
   const fetchSlots = useCallback(async () => {
     try {
@@ -45,18 +65,21 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
         if (!mySlot || (mySlot.status !== 'RESERVED' && mySlot.status !== 'OCCUPIED')) {
           localStorage.removeItem('my_reserved_slot_id');
           setMyActiveSlotId(null);
+          setMyActiveReservation(null);
         } else {
           setMyActiveSlotId(saved);
+          await syncActiveReservation(saved);
         }
       } else {
         setMyActiveSlotId(null);
+        setMyActiveReservation(null);
       }
     } catch (err) {
       console.error('Error fetching slots:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [syncActiveReservation]);
 
   const showPopup = useCallback((msg: string, type: 'success' | 'error' | 'info' = 'success') => {
     setActionStatus({ msg, type });
@@ -146,38 +169,88 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
     }
   };
 
+  const handleCheckIn = async () => {
+    if (!myActiveReservation || myActiveReservation.status !== 'PENDING') return;
+    setIsMutating(true);
+    try {
+      await reservationService.checkIn(myActiveReservation.id);
+      if (selectedSlot) {
+        await parkingService.occupySlot(selectedSlot.id);
+      }
+      showPopup('Check-in exitoso', 'success');
+      await fetchSlots();
+      await syncActiveReservation(myActiveSlotId);
+    } catch (err: any) {
+      showPopup(err.response?.data?.message || 'Error en check-in', 'error');
+    } finally {
+      setIsMutating(false);
+    }
+  };
+
   const handleReleaseSlot = async (slotId: string) => {
     setIsReleasing(true);
     try {
+      const reservations = await reservationService.getMyReservations();
+      const active = reservations.find(
+        (r) =>
+          r.slotId === slotId &&
+          (r.status === 'PENDING' || r.status === 'ACTIVE'),
+      );
+
+      if (active?.status === 'PENDING') {
+        await reservationService.cancel(active.id);
+        try {
+          await parkingService.releaseSlot(slotId);
+        } catch {
+          /* slot may already be released */
+        }
+        localStorage.removeItem('my_reserved_slot_id');
+        setMyActiveSlotId(null);
+        setMyActiveReservation(null);
+        setSelectedSlot(null);
+        setRoutePoints([]);
+        showPopup('Reserva cancelada', 'success');
+        await fetchSlots();
+        return;
+      }
+
+      if (active?.status === 'ACTIVE') {
+        const completed = await reservationService.checkOut(active.id);
+        const checkout = await paymentService.startCheckoutFlow(completed.id);
+
+        localStorage.removeItem('my_reserved_slot_id');
+        setMyActiveSlotId(null);
+        setMyActiveReservation(null);
+        setSelectedSlot(null);
+        setRoutePoints([]);
+
+        if (checkout.free) {
+          showPopup('Sesión finalizada sin cargo', 'success');
+          await fetchSlots();
+          return;
+        }
+
+        window.location.href = checkout.url;
+        return;
+      }
+
       try {
-        // 1. Try to find the active reservation for this slot
-        const reservations = await reservationService.getMyReservations();
-        const active = reservations.find(
-          (r) => r.slotId === slotId && (r.status === 'PENDING' || r.status === 'ACTIVE')
-        );
-        if (active) {
-          await reservationService.cancel(active.id);
-        } else {
-          await parkingService.releaseSlot(slotId);
-        }
-      } catch (err: any) {
-        console.warn('Failed to cancel reservation, falling back to direct release:', err);
-        // Fallback: release slot directly if something fails or slot is already available
-        const currentSlot = slots.find((s) => s.id === slotId);
-        if (currentSlot?.status === 'AVAILABLE' || err.response?.status === 400) {
-          console.warn('Slot already released or release returned 400:', err);
-        } else {
-          await parkingService.releaseSlot(slotId);
-        }
+        await parkingService.releaseSlot(slotId);
+      } catch {
+        /* ignore */
       }
       localStorage.removeItem('my_reserved_slot_id');
       setMyActiveSlotId(null);
+      setMyActiveReservation(null);
       setSelectedSlot(null);
       setRoutePoints([]);
       showPopup('Espacio liberado', 'success');
       await fetchSlots();
     } catch (err: any) {
-      showPopup('Error al liberar', 'error');
+      showPopup(
+        err.response?.data?.message || 'Error al finalizar sesión',
+        'error',
+      );
     } finally {
       setIsReleasing(false);
     }
@@ -264,12 +337,19 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
         <SlotDetailCard
           selectedSlot={selectedSlot}
           isMineNow={!!isMineNow}
+          reservationStatus={
+            myActiveReservation &&
+            String(myActiveReservation.slotId) === String(selectedSlot.id)
+              ? myActiveReservation.status
+              : null
+          }
           routeInfo={routeInfo}
           reservasText={reservasText}
           isReleasing={isReleasing}
           isMutating={isMutating}
           hasActiveReservation={!!myActiveSlotId}
           onReserve={handleReserve}
+          onCheckIn={handleCheckIn}
           onRelease={handleReleaseSlot}
         />
       )}

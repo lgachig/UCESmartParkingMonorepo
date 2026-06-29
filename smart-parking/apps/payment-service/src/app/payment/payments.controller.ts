@@ -71,6 +71,30 @@ export class PaymentsController {
     return this.paymentsService.findMyPayments(req.user.userId);
   }
 
+  @ApiOperation({ summary: 'Create payment from a completed reservation' })
+  @ApiBody({ type: CreatePaymentDto })
+  @Post('from-reservation')
+  createFromReservation(
+    @Body() dto: CreatePaymentDto,
+    @Req() req: { user: { userId: string } },
+  ) {
+    return this.paymentsService.createFromReservationForUser(
+      dto.reservationId,
+      req.user.userId,
+    );
+  }
+
+  @ApiOperation({ summary: 'Create Stripe Checkout session for a payment' })
+  @ApiParam({ name: 'id', description: 'Payment UUID' })
+  @ApiResponse({ status: 201, description: 'Stripe Checkout session' })
+  @Post(':id/checkout')
+  createCheckout(
+    @Param('id') id: string,
+    @Req() req: { user: { userId: string } },
+  ) {
+    return this.paymentsService.createStripeCheckout(id, req.user.userId);
+  }
+
   @ApiOperation({ summary: 'Get payments by reservation ID' })
   @ApiParam({ name: 'reservationId', description: 'Reservation UUID' })
   @Get('reservation/:reservationId')

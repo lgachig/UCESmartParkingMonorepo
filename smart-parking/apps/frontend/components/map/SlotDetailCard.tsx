@@ -4,24 +4,28 @@ import type { Slot } from '@/services/parking.service';
 interface SlotDetailCardProps {
   selectedSlot: Slot | null;
   isMineNow: boolean;
+  reservationStatus?: 'PENDING' | 'ACTIVE' | null;
   routeInfo: { duration: number | null; distance: string | null } | null;
   reservasText: string;
   isReleasing: boolean;
   isMutating: boolean;
   hasActiveReservation: boolean;
   onReserve: () => Promise<void>;
+  onCheckIn: () => Promise<void>;
   onRelease: (id: string) => Promise<void>;
 }
 
 export default function SlotDetailCard({
   selectedSlot,
   isMineNow,
+  reservationStatus,
   routeInfo,
   reservasText,
   isReleasing,
   isMutating,
   hasActiveReservation,
   onReserve,
+  onCheckIn,
   onRelease,
 }: SlotDetailCardProps) {
   const canReserve = selectedSlot?.status === 'AVAILABLE' && !hasActiveReservation;
@@ -70,13 +74,31 @@ export default function SlotDetailCard({
 
       <div className="flex flex-col gap-3">
         {isMineNow ? (
-          <button
-            onClick={() => selectedSlot && onRelease(selectedSlot.id)}
-            disabled={isReleasing}
-            className="w-full py-5 bg-[#CC0000] text-white rounded-2xl font-black uppercase tracking-widest shadow-lg flex items-center justify-center gap-3"
-          >
-            {isReleasing ? <Loader2 className="animate-spin" /> : <><LogOut size={20} /> FINALIZAR SESIÓN</>}
-          </button>
+          <>
+            {reservationStatus === 'PENDING' && (
+              <button
+                onClick={onCheckIn}
+                disabled={isMutating}
+                className="w-full py-4 bg-[#003366] text-white rounded-2xl font-black uppercase tracking-widest shadow-lg flex items-center justify-center gap-3"
+              >
+                {isMutating ? <Loader2 className="animate-spin" /> : <>LLEGUE — CHECK IN</>}
+              </button>
+            )}
+            <button
+              onClick={() => selectedSlot && onRelease(selectedSlot.id)}
+              disabled={isReleasing}
+              className="w-full py-5 bg-[#CC0000] text-white rounded-2xl font-black uppercase tracking-widest shadow-lg flex items-center justify-center gap-3"
+            >
+              {isReleasing ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <>
+                  <LogOut size={20} />
+                  {reservationStatus === 'PENDING' ? 'CANCELAR RESERVA' : 'FINALIZAR SESIÓN'}
+                </>
+              )}
+            </button>
+          </>
         ) : (
           <button
             onClick={onReserve}

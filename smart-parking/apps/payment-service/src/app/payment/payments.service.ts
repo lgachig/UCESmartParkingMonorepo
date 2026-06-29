@@ -1,14 +1,17 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ReservationClientService } from '../clients/reservation-client.service';
 import { UserClientService } from '../clients/user-client.service';
+import { StripeService } from '../stripe/stripe.service';
 import {
   FeeCalculationResult,
   ParkingFeeCalculatorService,
@@ -31,6 +34,8 @@ export class PaymentsService {
     private readonly feeCalculator: ParkingFeeCalculatorService,
     private readonly reservationClient: ReservationClientService,
     private readonly userClient: UserClientService,
+    private readonly stripeService: StripeService,
+    private readonly configService: ConfigService,
   ) {}
 
   private resolveDurationMinutes(reservation: {
@@ -148,5 +153,70 @@ export class PaymentsService {
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async createFromReservationForUser(reservationId: string, userId: string) {
+    const result = await this.createFromReservation(reservationId);
+    if (result.userId !== userId) {
+      throw new ForbiddenException('You can only pay for your own reservations');
+    }
+    return result;
+  }
+
+  async createStripeCheckout(paymentId: string, userId: string) {
+    const payment = await this.findById(paymentId);
+    if (payment.userId !== userId) {
+      throw new ForbiddenException('You can only checkout your own payments');
+    }
+    if (payment.status !== 'PENDING') {
+      throw new BadRequestException(`Payment status is ${payment.status}, expected PENDING`);
+    }
+
+    const amount = Number(payment.amount);
+    const corsOrigins =
+      this.configService.get<string>('CORS_ORIGINS') || 'http://localhost:3002';
+    const baseUrl = corsOrigins.split(',')[0].trim();
+
+    if (amount === 0) {
+      await this.prisma.payment.update({
+        where: { id: paymentId },
+        data: { status: 'COMPLETED' },
+      });
+      await this.audit.log({
+        action: 'PAYMENT_COMPLETED_FREE',
+        authUserId: userId,
+        metadata: { paymentId, reservationId: payment.reservationId, amount: 0 },
+      });
+      return {
+        url: `${baseUrl}/payment/success?payment_id=${paymentId}`,
+        sessionId: '',
+        free: true,
+      };
+    }
+
+    const session = await this.stripeService.createCheckoutSession({
+      paymentId: payment.id,
+      reservationId: payment.reservationId,
+      amount,
+      currency: payment.currency,
+      userId: payment.userId,
+    });
+
+    await this.prisma.payment.update({
+      where: { id: paymentId },
+      data: { stripeSessionId: session.sessionId },
+    });
+
+    await this.audit.log({
+      action: 'STRIPE_SESSION_CREATED',
+      authUserId: userId,
+      metadata: {
+        paymentId,
+        reservationId: payment.reservationId,
+        stripeSessionId: session.sessionId,
+      },
+    });
+
+    return { url: session.url, sessionId: session.sessionId, free: false };
   }
 }
