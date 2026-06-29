@@ -4,7 +4,7 @@ import type { Slot } from '@/services/parking.service';
 interface SlotDetailCardProps {
   selectedSlot: Slot | null;
   isMineNow: boolean;
-  reservationStatus?: 'PENDING' | 'ACTIVE' | null;
+  reservationStatus?: 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'EXPIRED' | 'CANCELLED' | null;
   routeInfo: { duration: number | null; distance: string | null } | null;
   reservasText: string;
   isReleasing: boolean;
