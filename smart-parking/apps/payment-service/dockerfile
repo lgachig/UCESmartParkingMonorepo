@@ -12,7 +12,7 @@ COPY . .
 ENV NX_DAEMON=false
 
 RUN npx prisma generate --config prisma.payment.config.ts
-RUN npx nx build @org/payment-service
+RUN npx nx build payment-service
 
 EXPOSE 3007
 
