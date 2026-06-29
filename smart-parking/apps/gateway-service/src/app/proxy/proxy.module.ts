@@ -49,7 +49,12 @@ export class AuthProxyController {
     Logger.log(`AuthProxy → ${target}`, 'ProxyModule');
     this.proxy = makeProxy(target);
   }
-  @All('*')
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     this.proxy(req, res, next);
   }
@@ -65,7 +70,12 @@ export class UserProxyController {
     Logger.log(`UserProxy → ${target}`, 'ProxyModule');
     this.proxy = makeProxy(target);
   }
-  @All('*')
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     this.proxy(req, res, next);
   }
@@ -81,7 +91,12 @@ export class VehicleProxyController {
     Logger.log(`VehicleProxy → ${target}`, 'ProxyModule');
     this.proxy = makeProxy(target);
   }
-  @All('*')
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     this.proxy(req, res, next);
   }
@@ -97,7 +112,12 @@ export class ParkingProxyController {
     Logger.log(`ParkingProxy → ${target}`, 'ProxyModule');
     this.proxy = makeProxy(target, { '^/api/parking': '/api' });
   }
-  @All('*')
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     this.proxy(req, res, next);
   }
@@ -113,7 +133,12 @@ export class ReservationProxyController {
     Logger.log(`ReservationProxy → ${target}`, 'ProxyModule');
     this.proxy = makeProxy(target);
   }
-  @All('*')
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     this.proxy(req, res, next);
   }
@@ -129,7 +154,12 @@ export class PaymentProxyController {
     Logger.log(`PaymentProxy → ${target}`, 'ProxyModule');
     this.proxy = makeProxy(target);
   }
-  @All('*')
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     this.proxy(req, res, next);
   }
@@ -144,7 +174,12 @@ export class StripeWebhookProxyController {
     Logger.log(`StripeWebhookProxy → ${target}`, 'ProxyModule');
     this.proxy = makeProxy(target);
   }
-  @All('*')
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     this.proxy(req, res, next);
   }
