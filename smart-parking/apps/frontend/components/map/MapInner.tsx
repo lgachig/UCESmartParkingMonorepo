@@ -163,10 +163,16 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
 
       await parkingService.reserveSlot(selectedSlot.id);
 
-      const reservation = await reservationService.create({
-        slotId: selectedSlot.id,
-        vehicleId: vehicle.id,
-      });
+      let reservation: Reservation;
+      try {
+        reservation = await reservationService.create({
+          slotId: selectedSlot.id,
+          vehicleId: vehicle.id,
+        });
+      } catch (reservationErr: any) {
+        try { await parkingService.releaseSlot(selectedSlot.id); } catch { /* ignor */ }
+        throw reservationErr;
+      }
 
       localStorage.setItem('my_reserved_slot_id', selectedSlot.id);
       setMyActiveSlotId(selectedSlot.id);
