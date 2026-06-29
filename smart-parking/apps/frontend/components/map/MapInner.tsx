@@ -38,16 +38,11 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
   const [isReleasing, setIsReleasing] = useState(false);
 
   const syncActiveReservation = useCallback(async (slotId: string | null) => {
-    if (!slotId) {
-      setMyActiveReservation(null);
-      return;
-    }
+    if (!slotId) { setMyActiveReservation(null); return; }
     try {
       const reservations = await reservationService.getMyReservations();
       const active = reservations.find(
-        (r) =>
-          r.slotId === slotId &&
-          (r.status === 'PENDING' || r.status === 'ACTIVE'),
+        (r) => r.slotId === slotId && (r.status === 'PENDING' || r.status === 'ACTIVE'),
       );
       setMyActiveReservation(active ?? null);
     } catch {
@@ -59,7 +54,6 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
     try {
       const data = await parkingService.getSlots();
       setSlots(data);
-
       const saved = localStorage.getItem('my_reserved_slot_id');
       if (saved) {
         const mySlot = data.find((s) => s.id === saved);
@@ -89,29 +83,20 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
 
   useEffect(() => {
     fetchSlots();
-
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => {},
       { enableHighAccuracy: true }
     );
-
     const interval = setInterval(fetchSlots, 10000);
-
-    return () => {
-      navigator.geolocation.clearWatch(watchId);
-      clearInterval(interval);
-    };
+    return () => { navigator.geolocation.clearWatch(watchId); clearInterval(interval); };
   }, [fetchSlots]);
 
   useEffect(() => {
     if (!selectedSlot) return;
     const fresh = slots.find((s) => s.id === selectedSlot.id);
-    if (!fresh) {
-      setSelectedSlot(null);
-    } else if (fresh.status !== selectedSlot.status) {
-      setSelectedSlot(fresh);
-    }
+    if (!fresh) { setSelectedSlot(null); }
+    else if (fresh.status !== selectedSlot.status) { setSelectedSlot(fresh); }
   }, [slots, selectedSlot]);
 
   const calculateETA = useCallback(async (uLat: number, uLng: number, sLat: number, sLng: number) => {
@@ -119,68 +104,54 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
       const res = await fetch(`https://router.project-osrm.org/route/v1/foot/${uLng},${uLat};${sLng},${sLat}?overview=false`);
       const data = await res.json();
       if (data.routes?.[0]) {
-        setRouteInfo({
-          duration: Math.round(data.routes[0].duration / 60),
-          distance: (data.routes[0].distance / 1000).toFixed(1),
-        });
+        setRouteInfo({ duration: Math.round(data.routes[0].duration / 60), distance: (data.routes[0].distance / 1000).toFixed(1) });
       }
-    } catch (err) {
-      console.error('Error ETA:', err);
-    }
+    } catch (err) { console.error('Error ETA:', err); }
   }, []);
 
-  const trazarRutas = useCallback(
-    (destino: Slot, origen: { lat: number; lng: number } | null) => {
-      if (!origen || !destino) return;
-      calculateETA(origen.lat, origen.lng, destino.latitude, destino.longitude);
-      fetch(
-        `https://router.project-osrm.org/route/v1/foot/${origen.lng},${origen.lat};${destino.longitude},${destino.latitude}?overview=full&geometries=geojson`
-      )
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.routes?.[0]) {
-            setRoutePoints(data.routes[0].geometry.coordinates.map((c: any) => [c[1], c[0]]));
-          }
-        })
-        .catch((err) => console.error('Error fetching route:', err));
-    },
-    [calculateETA]
-  );
+  const trazarRutas = useCallback((destino: Slot, origen: { lat: number; lng: number } | null) => {
+    if (!origen || !destino) return;
+    calculateETA(origen.lat, origen.lng, destino.latitude, destino.longitude);
+    fetch(`https://router.project-osrm.org/route/v1/foot/${origen.lng},${origen.lat};${destino.longitude},${destino.latitude}?overview=full&geometries=geojson`)
+      .then((res) => res.json())
+      .then((data) => { if (data.routes?.[0]) setRoutePoints(data.routes[0].geometry.coordinates.map((c: any) => [c[1], c[0]])); })
+      .catch((err) => console.error('Error fetching route:', err));
+  }, [calculateETA]);
+
+  // ── NUEVO: extrae siempre un string del error, nunca un objeto ──
+  const extractErrorMessage = (err: any, fallback: string): string => {
+    if (typeof err?.response?.data?.message === 'string') return err.response.data.message;
+    if (typeof err?.response?.data?.error === 'string') return err.response.data.error;
+    if (typeof err?.message === 'string') return err.message;
+    return fallback;
+  };
 
   const handleReserve = async () => {
     if (!selectedSlot) return;
-    if (myActiveSlotId) {
-      showPopup('Ya tienes una reserva activa.', 'error');
-      return;
-    }
+    if (myActiveSlotId) { showPopup('Ya tienes una reserva activa.', 'error'); return; }
     setIsMutating(true);
     try {
       const vehicle = await vehicleService.getMyVehicle();
-      if (!vehicle) {
-        showPopup('Debes registrar un vehículo antes de reservar', 'error');
-        return;
-      }
+      if (!vehicle) { showPopup('Debes registrar un vehículo antes de reservar', 'error'); return; }
 
       await parkingService.reserveSlot(selectedSlot.id);
 
       let reservation: Reservation;
       try {
-        reservation = await reservationService.create({
-          slotId: selectedSlot.id,
-          vehicleId: vehicle.id,
-        });
+        reservation = await reservationService.create({ slotId: selectedSlot.id, vehicleId: vehicle.id });
       } catch (reservationErr: any) {
-        try { await parkingService.releaseSlot(selectedSlot.id); } catch { /* ignor */ }
-        throw reservationErr;
+        try { await parkingService.releaseSlot(selectedSlot.id); } catch { /* ignore */ }
+        showPopup(extractErrorMessage(reservationErr, 'No se pudo crear la reserva'), 'error');
+        return;
       }
 
       localStorage.setItem('my_reserved_slot_id', selectedSlot.id);
       setMyActiveSlotId(selectedSlot.id);
       setMyActiveReservation(reservation);
-      showPopup('Reserva exitosa', 'success');
+      showPopup('¡Reserva exitosa! Tienes 10 min para llegar.', 'success');
       await fetchSlots();
     } catch (err: any) {
-      showPopup(err.response?.data?.message || 'Error al reservar', 'error');
+      showPopup(extractErrorMessage(err, 'Error al reservar'), 'error');
     } finally {
       setIsMutating(false);
     }
@@ -191,14 +162,12 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
     setIsMutating(true);
     try {
       await reservationService.checkIn(myActiveReservation.id);
-      if (selectedSlot) {
-        await parkingService.occupySlot(selectedSlot.id);
-      }
+      if (selectedSlot) await parkingService.occupySlot(selectedSlot.id);
       showPopup('Check-in exitoso', 'success');
       await fetchSlots();
       await syncActiveReservation(myActiveSlotId);
     } catch (err: any) {
-      showPopup(err.response?.data?.message || 'Error en check-in', 'error');
+      showPopup(extractErrorMessage(err, 'Error en check-in'), 'error');
     } finally {
       setIsMutating(false);
     }
@@ -209,39 +178,49 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
     try {
       const reservations = await reservationService.getMyReservations();
       const active = reservations.find(
-        (r) =>
-          r.slotId === slotId &&
-          (r.status === 'PENDING' || r.status === 'ACTIVE'),
+        (r) => r.slotId === slotId && (r.status === 'PENDING' || r.status === 'ACTIVE'),
       );
 
       if (active?.status === 'PENDING') {
         await reservationService.cancel(active.id);
-        try {
-          await parkingService.releaseSlot(slotId);
-        } catch {
-          /* slot may already be released */
-        }
+        try { await parkingService.releaseSlot(slotId); } catch { /* ya liberado */ }
         localStorage.removeItem('my_reserved_slot_id');
-        setMyActiveSlotId(null);
-        setMyActiveReservation(null);
-        setSelectedSlot(null);
-        setRoutePoints([]);
+        setMyActiveSlotId(null); setMyActiveReservation(null); setSelectedSlot(null); setRoutePoints([]);
         showPopup('Reserva cancelada', 'success');
         await fetchSlots();
         return;
       }
 
       if (active?.status === 'ACTIVE') {
-        const completed = await reservationService.checkOut(active.id);
-        const checkout = await paymentService.startCheckoutFlow(completed.id);
+        let completed: Reservation;
+        try {
+          completed = await reservationService.checkOut(active.id);
+        } catch (err: any) {
+          showPopup(extractErrorMessage(err, 'Error al finalizar sesión'), 'error');
+          return;
+        }
 
+        let checkout;
+        try {
+          checkout = await paymentService.startCheckoutFlow(completed.id);
+        } catch {
+          // Stripe falló pero ya se hizo checkout — guardar para pagar desde Mis Reservas
+          localStorage.setItem('pending_payment_reservation_id', completed.id);
+          try { await parkingService.releaseSlot(slotId); } catch { /* ignore */ }
+          localStorage.removeItem('my_reserved_slot_id');
+          setMyActiveSlotId(null); setMyActiveReservation(null); setSelectedSlot(null); setRoutePoints([]);
+          await fetchSlots();
+          showPopup('Sesión finalizada. Paga desde "Mis Reservas".', 'info');
+          return;
+        }
+
+        localStorage.setItem('pending_payment_reservation_id', completed.id);
+        try { await parkingService.releaseSlot(slotId); } catch { /* ignore */ }
         localStorage.removeItem('my_reserved_slot_id');
-        setMyActiveSlotId(null);
-        setMyActiveReservation(null);
-        setSelectedSlot(null);
-        setRoutePoints([]);
+        setMyActiveSlotId(null); setMyActiveReservation(null); setSelectedSlot(null); setRoutePoints([]);
 
         if (checkout.free) {
+          localStorage.removeItem('pending_payment_reservation_id');
           showPopup('Sesión finalizada sin cargo', 'success');
           await fetchSlots();
           return;
@@ -251,34 +230,20 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
         return;
       }
 
-      try {
-        await parkingService.releaseSlot(slotId);
-      } catch {
-        /* ignore */
-      }
+      try { await parkingService.releaseSlot(slotId); } catch { /* ignore */ }
       localStorage.removeItem('my_reserved_slot_id');
-      setMyActiveSlotId(null);
-      setMyActiveReservation(null);
-      setSelectedSlot(null);
-      setRoutePoints([]);
+      setMyActiveSlotId(null); setMyActiveReservation(null); setSelectedSlot(null); setRoutePoints([]);
       showPopup('Espacio liberado', 'success');
       await fetchSlots();
     } catch (err: any) {
-      showPopup(
-        err.response?.data?.message || 'Error al finalizar sesión',
-        'error',
-      );
+      showPopup(extractErrorMessage(err, 'Error al finalizar sesión'), 'error');
     } finally {
       setIsReleasing(false);
     }
   };
 
   if (loading) {
-    return (
-      <div className="h-full w-full flex items-center justify-center font-black text-[#003366] animate-pulse">
-        CARGANDO MAPA...
-      </div>
-    );
+    return <div className="h-full w-full flex items-center justify-center font-black text-[#003366] animate-pulse">CARGANDO MAPA...</div>;
   }
 
   const limit = user?.role === 'PROFESSOR' ? 5 : 3;
@@ -304,34 +269,20 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
         <CoordTracker setHoverCoords={setHoverCoords} showPopup={showPopup} />
 
         {userLocation && (
-          <Circle
-            center={[userLocation.lat, userLocation.lng]}
-            radius={3}
-            pathOptions={{ color: 'white', fillColor: '#2563EB', fillOpacity: 1, weight: 3 }}
-          />
+          <Circle center={[userLocation.lat, userLocation.lng]} radius={3}
+            pathOptions={{ color: 'white', fillColor: '#2563EB', fillOpacity: 1, weight: 3 }} />
         )}
 
         {slots.map((slot) => {
           const isMine = myActiveSlotId && String(slot.id) === String(myActiveSlotId);
           const isSelected = selectedSlot?.id === slot.id;
           const color = slot.status === 'AVAILABLE' ? '#22C55E' : isMine ? '#2563EB' : '#EF4444';
-
           return (
-            <Marker
-              key={slot.id}
-              position={[slot.latitude, slot.longitude]}
+            <Marker key={slot.id} position={[slot.latitude, slot.longitude]}
               eventHandlers={{
                 click: () => {
-                  if (myActiveSlotId && !isMine) {
-                    showPopup('Ya tienes una reserva activa.', 'error');
-                    return;
-                  }
-
-                  if (slot.status !== 'AVAILABLE' && !isMine) {
-                    showPopup('Este espacio no está disponible.', 'error');
-                    return;
-                  }
-
+                  if (myActiveSlotId && !isMine) { showPopup('Ya tienes una reserva activa.', 'error'); return; }
+                  if (slot.status !== 'AVAILABLE' && !isMine) { showPopup('Este espacio no está disponible.', 'error'); return; }
                   setSuggestionDismissed?.(true);
                   setSelectedSlot(slot);
                   trazarRutas(slot, userLocation);
@@ -355,10 +306,8 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
           selectedSlot={selectedSlot}
           isMineNow={!!isMineNow}
           reservationStatus={
-            myActiveReservation &&
-            String(myActiveReservation.slotId) === String(selectedSlot.id)
-              ? myActiveReservation.status
-              : null
+            myActiveReservation && String(myActiveReservation.slotId) === String(selectedSlot.id)
+              ? myActiveReservation.status : null
           }
           routeInfo={routeInfo}
           reservasText={reservasText}
