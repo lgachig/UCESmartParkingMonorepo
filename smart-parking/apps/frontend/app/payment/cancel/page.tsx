@@ -1,45 +1,52 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { XCircle, ArrowLeft, RefreshCw } from 'lucide-react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Suspense } from 'react';
 
-export default function PaymentCancelPage() {
+function CancelContent() {
+  const searchParams = useSearchParams();
   const router = useRouter();
+  const paymentId = searchParams.get('payment_id');
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full">
-        <div className="text-center mb-6">
-          <div className="flex justify-center mb-4">
-            <XCircle className="h-16 w-16 text-red-400" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">Pago Cancelado</h1>
-          <p className="text-gray-500 mt-1">
-            No se realizó ningún cargo. Puedes intentarlo de nuevo cuando quieras.
-          </p>
+    <div className="min-h-screen animated-bg flex items-center justify-center p-4">
+      <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-8 max-w-md w-full text-white text-center shadow-2xl">
+
+        <div className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+          <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+          </svg>
         </div>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700 text-center mb-6">
-          Tu reserva permanece activa. Debes completar el pago para confirmarla.
-        </div>
+        <h1 className="text-3xl font-black mb-2">Pago cancelado</h1>
+        <p className="text-white/70 mb-2 text-sm">
+          No se realizó ningún cargo. Puedes intentarlo de nuevo cuando quieras.
+        </p>
+        {paymentId && (
+          <p className="text-white/40 text-xs mb-6">ID de pago: {paymentId}</p>
+        )}
 
-        <div className="flex flex-col gap-3">
+        <div className="space-y-3">
           <button
-            onClick={() => router.back()}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-colors"
+            onClick={() => router.push('/user')}
+            className="w-full py-3 bg-white text-[#003366] font-black rounded-2xl hover:bg-white/90 transition-all"
           >
-            <RefreshCw className="h-4 w-4" />
-            Intentar de nuevo
-          </button>
-          <button
-            onClick={() => router.push('/user/reservations')}
-            className="w-full flex items-center justify-center gap-2 text-gray-600 hover:text-gray-800 font-medium py-2.5 px-4 rounded-xl border border-gray-200 hover:border-gray-300 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Ver mis reservas
+            Volver al inicio
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PaymentCancelPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen animated-bg flex items-center justify-center">
+        <div className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+      </div>
+    }>
+      <CancelContent />
+    </Suspense>
   );
 }
