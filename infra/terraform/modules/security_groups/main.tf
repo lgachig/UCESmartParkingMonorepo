@@ -1,3 +1,7 @@
+data "aws_vpc" "selected" {
+  id = var.vpc_id
+}
+
 resource "aws_security_group" "microservice" {
   for_each    = toset(["auth", "user", "vehicle", "frontend", "gateway", "parking", "reservation","payment"])
   name        = "${var.environment}-${each.value}-sg"
@@ -168,4 +172,45 @@ resource "aws_security_group_rule" "auth_rabbitmq" {
   source_security_group_id = aws_security_group.microservice[each.value].id
   security_group_id        = aws_security_group.microservice["auth"].id
   description              = "RabbitMQ from ${each.value}"
+}
+
+# Fallback QA: tráfico intra-VPC (p. ej. migraciones Prisma desde otras EC2)
+resource "aws_security_group_rule" "auth_postgres_vpc" {
+  type              = "ingress"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  cidr_blocks       = [data.aws_vpc.selected.cidr_block]
+  security_group_id = aws_security_group.microservice["auth"].id
+  description       = "PostgreSQL from VPC"
+}
+
+resource "aws_security_group_rule" "auth_redis_vpc" {
+  type              = "ingress"
+  from_port         = 6379
+  to_port           = 6379
+  protocol          = "tcp"
+  cidr_blocks       = [data.aws_vpc.selected.cidr_block]
+  security_group_id = aws_security_group.microservice["auth"].id
+  description       = "Redis from VPC"
+}
+
+resource "aws_security_group_rule" "auth_kafka_vpc" {
+  type              = "ingress"
+  from_port         = 9092
+  to_port           = 9092
+  protocol          = "tcp"
+  cidr_blocks       = [data.aws_vpc.selected.cidr_block]
+  security_group_id = aws_security_group.microservice["auth"].id
+  description       = "Kafka from VPC"
+}
+
+resource "aws_security_group_rule" "auth_rabbitmq_vpc" {
+  type              = "ingress"
+  from_port         = 5672
+  to_port           = 5672
+  protocol          = "tcp"
+  cidr_blocks       = [data.aws_vpc.selected.cidr_block]
+  security_group_id = aws_security_group.microservice["auth"].id
+  description       = "RabbitMQ from VPC"
 }
