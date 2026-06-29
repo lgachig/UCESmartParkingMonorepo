@@ -14,6 +14,7 @@ import { useAuth } from '@/context/AuthContext';
 import { parkingService, type Slot } from '@/services/parking.service';
 import { reservationService, type Reservation } from '@/services/reservation.service';
 import { paymentService } from '@/services/payment.service';
+import { vehicleService } from '@/services/user.service';
 
 interface MapInnerProps {
   flyToZone?: any;
@@ -89,14 +90,12 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
   useEffect(() => {
     fetchSlots();
 
-    // Geolocation tracker
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => {},
       { enableHighAccuracy: true }
     );
 
-    // Poll slots every 10 seconds for real-time updates
     const interval = setInterval(fetchSlots, 10000);
 
     return () => {
@@ -105,7 +104,6 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
     };
   }, [fetchSlots]);
 
-  // Keep selected slot updated if remote state changes
   useEffect(() => {
     if (!selectedSlot) return;
     const fresh = slots.find((s) => s.id === selectedSlot.id);
@@ -157,9 +155,22 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
     }
     setIsMutating(true);
     try {
+      const vehicle = await vehicleService.getMyVehicle();
+      if (!vehicle) {
+        showPopup('Debes registrar un vehículo antes de reservar', 'error');
+        return;
+      }
+
       await parkingService.reserveSlot(selectedSlot.id);
+
+      const reservation = await reservationService.create({
+        slotId: selectedSlot.id,
+        vehicleId: vehicle.id,
+      });
+
       localStorage.setItem('my_reserved_slot_id', selectedSlot.id);
       setMyActiveSlotId(selectedSlot.id);
+      setMyActiveReservation(reservation);
       showPopup('Reserva exitosa', 'success');
       await fetchSlots();
     } catch (err: any) {
