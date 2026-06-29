@@ -123,7 +123,7 @@ resource "aws_security_group_rule" "frontend_from_auth" {
 }
 
 locals {
-  internal_sgs = toset(["user", "vehicle", "gateway", "parking", "reservation"])
+  internal_sgs = toset(["user", "vehicle", "gateway", "parking", "reservation", "payment"])
 }
 
 resource "aws_security_group_rule" "auth_postgres" {
@@ -149,7 +149,7 @@ resource "aws_security_group_rule" "auth_redis" {
 }
 
 resource "aws_security_group_rule" "auth_kafka" {
-  for_each                 = toset(["parking", "reservation"])
+  for_each                 = toset(["parking", "reservation", "payment"])
   type                     = "ingress"
   from_port                = 9092
   to_port                  = 9092
@@ -157,4 +157,15 @@ resource "aws_security_group_rule" "auth_kafka" {
   source_security_group_id = aws_security_group.microservice[each.value].id
   security_group_id        = aws_security_group.microservice["auth"].id
   description              = "Kafka from ${each.value}"
+}
+
+resource "aws_security_group_rule" "auth_rabbitmq" {
+  for_each                 = toset(["payment"])
+  type                     = "ingress"
+  from_port                = 5672
+  to_port                  = 5672
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.microservice[each.value].id
+  security_group_id        = aws_security_group.microservice["auth"].id
+  description              = "RabbitMQ from ${each.value}"
 }
