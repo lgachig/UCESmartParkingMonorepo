@@ -13,7 +13,6 @@ import {
 import { StripeModule } from '../stripe/stripe.module';
 import { RabbitmqConsumerService } from '../rabbitmq/rabbitmq-consumer.service';
 import { ReceiptService } from './receipt.service';
-import { KafkaConsumerService } from '../kafka/kafka-consumer.service';
 
 @Module({
   imports: [PrismaModule, AuditModule, AuthModule, ClientsModule, StripeModule],
@@ -27,7 +26,6 @@ import { KafkaConsumerService } from '../kafka/kafka-consumer.service';
     PaymentsService,
     RabbitmqConsumerService,
     ReceiptService,
-    KafkaConsumerService,
   ],
   exports: [PaymentsService, ParkingFeeCalculatorService, RabbitmqConsumerService, ReceiptService],
 })

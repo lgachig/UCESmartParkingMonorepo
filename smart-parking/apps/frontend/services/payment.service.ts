@@ -44,8 +44,37 @@ export const paymentService = {
     return data;
   },
 
+  async getByReservation(reservationId: string): Promise<PaymentRecord[]> {
+    const { data } = await paymentApi.get<PaymentRecord[]>(
+      `/payments/reservation/${reservationId}`,
+    );
+    return data;
+  },
+
   async startCheckoutFlow(reservationId: string): Promise<CheckoutSession> {
-    const payment = await this.createFromReservation(reservationId);
+    let payment: PaymentRecord | null = null;
+    try {
+      const payments = await this.getByReservation(reservationId);
+      const pending = payments.find((p) => p.status === 'PENDING');
+      const completed = payments.find((p) => p.status === 'COMPLETED');
+
+      if (completed) {
+        return { url: '', sessionId: '', free: true };
+      }
+      if (pending) {
+        payment = pending;
+      }
+    } catch {
+    }
+
+    if (!payment) {
+      payment = await this.createFromReservation(reservationId);
+    }
+
+    if (Number(payment.amount) === 0) {
+      return { url: '', sessionId: '', free: true };
+    }
+
     return this.createCheckoutSession(payment.id);
   },
 

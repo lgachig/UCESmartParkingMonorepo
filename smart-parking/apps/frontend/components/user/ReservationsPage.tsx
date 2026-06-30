@@ -27,6 +27,7 @@ export default function ReservationsPage() {
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState<{ [id: string]: boolean }>({});
   const [payErrors, setPayErrors] = useState<{ [id: string]: string }>({});
+  const [paidFree, setPaidFree] = useState<{ [id: string]: boolean }>({});
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -54,20 +55,27 @@ export default function ReservationsPage() {
     setPayErrors((e) => { const n = { ...e }; delete n[reservation.id]; return n; });
     try {
       const checkout = await paymentService.startCheckoutFlow(reservation.id);
-      if (checkout.free) { showToast('Pago procesado sin cargo', 'success'); await load(); return; }
-      localStorage.removeItem('pending_payment_reservation_id');
-      window.location.href = checkout.url;
+
+      if (checkout.free) {
+        showToast('Reserva sin costo — no se requiere pago', 'success');
+        setPaidFree((p) => ({ ...p, [reservation.id]: true }));
+        await load();
+        return;
+      }
+
+      if (checkout.url) {
+        window.location.href = checkout.url;
+      }
     } catch (err: any) {
-      const msg = typeof err?.response?.data?.message === 'string'
-        ? err.response.data.message : 'No se pudo iniciar el pago. Intenta de nuevo.';
+      const msg =
+        typeof err?.response?.data?.message === 'string'
+          ? err.response.data.message
+          : 'No se pudo iniciar el pago. Intenta de nuevo.';
       setPayErrors((e) => ({ ...e, [reservation.id]: msg }));
     } finally {
       setPaying((p) => ({ ...p, [reservation.id]: false }));
     }
   };
-
-  const pendingPayId = typeof window !== 'undefined' ? localStorage.getItem('pending_payment_reservation_id') : null;
-  const hasPendingBanner = reservations.some((r) => r.id === pendingPayId && r.status === 'COMPLETED');
 
   const toastBg = { success: 'bg-green-600', error: 'bg-red-600', info: 'bg-[#003366]' };
 
@@ -90,16 +98,6 @@ export default function ReservationsPage() {
         </button>
       </div>
 
-      {hasPendingBanner && (
-        <div className="mb-4 p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 flex items-start gap-3">
-          <AlertCircle size={20} className="text-amber-600 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="font-black text-amber-800 text-sm">Tienes un pago pendiente</p>
-            <p className="text-amber-700 text-xs mt-0.5">Tu sesión finalizó pero aún no pagaste. Usa el botón "Pagar" abajo.</p>
-          </div>
-        </div>
-      )}
-
       {loading && (
         <div className="flex items-center justify-center py-20">
           <Loader2 size={32} className="animate-spin text-[#003366]" />
@@ -121,11 +119,11 @@ export default function ReservationsPage() {
           const Icon = cfg.icon;
           const isPaying = paying[r.id];
           const payError = payErrors[r.id];
-          const isPendingPay = r.id === pendingPayId;
+          const wasPaidFree = paidFree[r.id];
 
           return (
             <div key={r.id}
-              className={`rounded-2xl border-2 p-4 ${cfg.bg} ${cfg.border} ${isPendingPay ? 'ring-2 ring-amber-400 ring-offset-1' : ''}`}>
+              className={`rounded-2xl border-2 p-4 ${cfg.bg} ${cfg.border}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${cfg.bg} border ${cfg.border}`}>
@@ -137,12 +135,21 @@ export default function ReservationsPage() {
                   </div>
                 </div>
 
-                {r.status === 'COMPLETED' && (
-                  <button onClick={() => handlePay(r)} disabled={isPaying}
-                    className="flex items-center gap-2 px-4 py-2 bg-[#003366] text-white text-xs font-black rounded-xl uppercase tracking-wide hover:bg-blue-900 transition-all disabled:opacity-50 flex-shrink-0">
+                {r.status === 'COMPLETED' && !wasPaidFree && (
+                  <button
+                    onClick={() => handlePay(r)}
+                    disabled={isPaying}
+                    className="flex items-center gap-2 px-4 py-2 bg-[#003366] text-white text-xs font-black rounded-xl uppercase tracking-wide hover:bg-blue-900 transition-all disabled:opacity-50 flex-shrink-0"
+                  >
                     {isPaying ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
                     {isPaying ? 'Procesando...' : 'Pagar'}
                   </button>
+                )}
+
+                {r.status === 'COMPLETED' && wasPaidFree && (
+                  <span className="flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-700 text-xs font-bold rounded-xl border border-green-200 flex-shrink-0">
+                    <CheckCircle size={12} /> Sin costo
+                  </span>
                 )}
               </div>
 
