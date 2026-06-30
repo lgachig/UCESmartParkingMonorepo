@@ -26,6 +26,7 @@ export interface PaymentRecord {
   amount: number;
   currency: string;
   status: string;
+  stripeSessionId?: string | null;
   fee?: { amount: number; currency: string; durationMinutes: number };
 }
 
@@ -52,23 +53,46 @@ export const paymentService = {
   },
 
   async startCheckoutFlow(reservationId: string): Promise<CheckoutSession> {
-    let payment: PaymentRecord | null = null;
+    let existingPayments: PaymentRecord[] = [];
     try {
-      const payments = await this.getByReservation(reservationId);
-      const pending = payments.find((p) => p.status === 'PENDING');
-      const completed = payments.find((p) => p.status === 'COMPLETED');
-
-      if (completed) {
-        return { url: '', sessionId: '', free: true };
+      existingPayments = await this.getByReservation(reservationId);
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status && status !== 404 && status !== 404) {
+        throw err;
       }
-      if (pending) {
-        payment = pending;
-      }
-    } catch {
     }
 
-    if (!payment) {
+    const completed = existingPayments.find((p) => p.status === 'COMPLETED');
+    if (completed) {
+      return { url: '', sessionId: '', free: true };
+    }
+
+    const pending = existingPayments.find((p) => p.status === 'PENDING');
+
+    if (pending) {
+      const amount = Number(pending.amount);
+      if (amount === 0) {
+        return { url: '', sessionId: '', free: true };
+      }
+      return this.createCheckoutSession(pending.id);
+    }
+
+    let payment: PaymentRecord;
+    try {
       payment = await this.createFromReservation(reservationId);
+    } catch (err: any) {
+      if (err?.response?.status === 409) {
+        const retried = await this.getByReservation(reservationId);
+        const retryPending = retried.find((p) => p.status === 'PENDING');
+        const retryCompleted = retried.find((p) => p.status === 'COMPLETED');
+        if (retryCompleted) return { url: '', sessionId: '', free: true };
+        if (retryPending) {
+          if (Number(retryPending.amount) === 0) return { url: '', sessionId: '', free: true };
+          return this.createCheckoutSession(retryPending.id);
+        }
+      }
+      throw err;
     }
 
     if (Number(payment.amount) === 0) {

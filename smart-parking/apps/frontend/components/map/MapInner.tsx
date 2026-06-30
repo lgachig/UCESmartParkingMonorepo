@@ -195,20 +195,27 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
         let checkout;
         try {
           checkout = await paymentService.startCheckoutFlow(completed.id);
-        } catch {
+        } catch (err: any) {
+          console.error('Payment flow error:', err);
           localStorage.setItem('pending_payment_reservation_id', completed.id);
-          showPopup('Sesión finalizada. Paga desde "Mis Reservas".', 'info');
+          showPopup(
+            `Sesión finalizada. Error al procesar pago: ${extractErrorMessage(err, 'inténtalo desde "Mis Reservas"')}.`,
+            'error',
+          );
           return;
         }
 
         if (checkout.free) {
-          showPopup('Sesión finalizada sin cargo', 'success');
+          showPopup('Sesión finalizada sin cargo 🎉', 'success');
           return;
         }
 
         localStorage.setItem('pending_payment_reservation_id', completed.id);
+
         if (checkout.url) {
           window.location.href = checkout.url;
+        } else {
+          showPopup('Sesión finalizada. Paga desde "Mis Reservas".', 'info');
         }
         return;
       }
