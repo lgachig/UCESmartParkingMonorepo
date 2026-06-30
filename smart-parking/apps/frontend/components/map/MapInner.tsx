@@ -118,7 +118,6 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
       .catch((err) => console.error('Error fetching route:', err));
   }, [calculateETA]);
 
-  // ── NUEVO: extrae siempre un string del error, nunca un objeto ──
   const extractErrorMessage = (err: any, fallback: string): string => {
     if (typeof err?.response?.data?.message === 'string') return err.response.data.message;
     if (typeof err?.response?.data?.error === 'string') return err.response.data.error;
@@ -134,21 +133,12 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
       const vehicle = await vehicleService.getMyVehicle();
       if (!vehicle) { showPopup('Debes registrar un vehículo antes de reservar', 'error'); return; }
 
-      await parkingService.reserveSlot(selectedSlot.id);
-
-      let reservation: Reservation;
-      try {
-        reservation = await reservationService.create({ slotId: selectedSlot.id, vehicleId: vehicle.id });
-      } catch (reservationErr: any) {
-        try { await parkingService.releaseSlot(selectedSlot.id); } catch { /* ignore */ }
-        showPopup(extractErrorMessage(reservationErr, 'No se pudo crear la reserva'), 'error');
-        return;
-      }
+      const reservation = await reservationService.create({ slotId: selectedSlot.id, vehicleId: vehicle.id });
 
       localStorage.setItem('my_reserved_slot_id', selectedSlot.id);
       setMyActiveSlotId(selectedSlot.id);
       setMyActiveReservation(reservation);
-      showPopup('¡Reserva exitosa! Tienes 10 min para llegar.', 'success');
+      showPopup('¡Reserva exitosa! Tienes 15 min para llegar.', 'success');
       await fetchSlots();
     } catch (err: any) {
       showPopup(extractErrorMessage(err, 'Error al reservar'), 'error');
@@ -162,7 +152,6 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
     setIsMutating(true);
     try {
       await reservationService.checkIn(myActiveReservation.id);
-      if (selectedSlot) await parkingService.occupySlot(selectedSlot.id);
       showPopup('Check-in exitoso', 'success');
       await fetchSlots();
       await syncActiveReservation(myActiveSlotId);
@@ -183,7 +172,6 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
 
       if (active?.status === 'PENDING') {
         await reservationService.cancel(active.id);
-        try { await parkingService.releaseSlot(slotId); } catch { /* ya liberado */ }
         localStorage.removeItem('my_reserved_slot_id');
         setMyActiveSlotId(null); setMyActiveReservation(null); setSelectedSlot(null); setRoutePoints([]);
         showPopup('Reserva cancelada', 'success');
@@ -200,37 +188,31 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
           return;
         }
 
+        localStorage.removeItem('my_reserved_slot_id');
+        setMyActiveSlotId(null); setMyActiveReservation(null); setSelectedSlot(null); setRoutePoints([]);
+        await fetchSlots();
+
         let checkout;
         try {
           checkout = await paymentService.startCheckoutFlow(completed.id);
         } catch {
-          // Stripe falló pero ya se hizo checkout — guardar para pagar desde Mis Reservas
           localStorage.setItem('pending_payment_reservation_id', completed.id);
-          try { await parkingService.releaseSlot(slotId); } catch { /* ignore */ }
-          localStorage.removeItem('my_reserved_slot_id');
-          setMyActiveSlotId(null); setMyActiveReservation(null); setSelectedSlot(null); setRoutePoints([]);
-          await fetchSlots();
           showPopup('Sesión finalizada. Paga desde "Mis Reservas".', 'info');
           return;
         }
 
-        localStorage.setItem('pending_payment_reservation_id', completed.id);
-        try { await parkingService.releaseSlot(slotId); } catch { /* ignore */ }
-        localStorage.removeItem('my_reserved_slot_id');
-        setMyActiveSlotId(null); setMyActiveReservation(null); setSelectedSlot(null); setRoutePoints([]);
-
         if (checkout.free) {
-          localStorage.removeItem('pending_payment_reservation_id');
           showPopup('Sesión finalizada sin cargo', 'success');
-          await fetchSlots();
           return;
         }
 
-        window.location.href = checkout.url;
+        localStorage.setItem('pending_payment_reservation_id', completed.id);
+        if (checkout.url) {
+          window.location.href = checkout.url;
+        }
         return;
       }
 
-      try { await parkingService.releaseSlot(slotId); } catch { /* ignore */ }
       localStorage.removeItem('my_reserved_slot_id');
       setMyActiveSlotId(null); setMyActiveReservation(null); setSelectedSlot(null); setRoutePoints([]);
       showPopup('Espacio liberado', 'success');
