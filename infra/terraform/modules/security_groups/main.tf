@@ -163,6 +163,27 @@ resource "aws_security_group_rule" "auth_kafka" {
   description              = "Kafka from ${each.value}"
 }
 
+resource "aws_security_group_rule" "reservation_from_payment" {
+  type                     = "ingress"
+  from_port                = 3005
+  to_port                  = 3005
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.microservice["payment"].id
+  security_group_id        = aws_security_group.microservice["reservation"].id
+  description              = "reservation accessible from payment (fee calculation lookup)"
+}
+
+resource "aws_security_group_rule" "user_from_payment" {
+  type                     = "ingress"
+  from_port                = 3001
+  to_port                  = 3001
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.microservice["payment"].id
+  security_group_id        = aws_security_group.microservice["user"].id
+  description              = "user accessible from payment (profile/role lookup)"
+}
+
+
 resource "aws_security_group_rule" "auth_rabbitmq" {
   for_each                 = toset(["payment"])
   type                     = "ingress"
