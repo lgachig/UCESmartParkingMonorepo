@@ -34,7 +34,7 @@ describe('ParkingFeeCalculatorService', () => {
     expect(service.calculate(Role.STUDENT, 30).amount).toBe(5);
     expect(service.calculate(Role.STUDENT, 15).amount).toBe(2.5);
     expect(service.calculate(Role.STUDENT, 90).amount).toBe(15);
-    expect(service.calculate(Role.STUDENT, 1).amount).toBe(0.07);
+    expect(service.calculate(Role.STUDENT, 1).amount).toBe(0.17);
   });
 
   it('charges guests $10 per hour, proportional to the minute', () => {
