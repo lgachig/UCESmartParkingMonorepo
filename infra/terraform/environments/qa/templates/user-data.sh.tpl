@@ -37,12 +37,14 @@ CREATE DATABASE userdb;
 CREATE DATABASE vehicledb;
 CREATE DATABASE parkingdb;
 CREATE DATABASE reservationdb;
+CREATE DATABASE paymentdb;
 SQL
 
 cat > /opt/smartparking/docker-compose.yml <<COMPOSE
 services:
   postgres:
     image: postgres:16
+    container_name: smartparking-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: admin
@@ -77,8 +79,13 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    ports: ["5672:5672", "15672:15672"]
   auth-service:
     image: ${dockerhub_user}/${docker_image}:${docker_image_tag}
+    container_name: smartparking-auth-service
     restart: unless-stopped
     env_file: [.env]
     ports: ["${service_port}:${service_port}"]

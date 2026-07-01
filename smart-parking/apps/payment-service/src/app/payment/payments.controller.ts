@@ -34,7 +34,7 @@ import { Logger } from '@nestjs/common';
 @UseGuards(ServiceKeyGuard)
 @Controller('internal/payments')
 export class InternalPaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(private readonly paymentsService: PaymentsService) { }
 
   @ApiOperation({ summary: 'Calculate parking fee for a reservation (internal)' })
   @ApiBody({ type: CalculateFeeDto })
@@ -63,12 +63,36 @@ export class PaymentsController {
   constructor(
     private readonly paymentsService: PaymentsService,
     private readonly receiptService: ReceiptService,
-  ) {}
+  ) { }
 
   @ApiOperation({ summary: 'Get my payment history' })
   @Get('my')
   findMyPayments(@Req() req: { user: { userId: string } }) {
     return this.paymentsService.findMyPayments(req.user.userId);
+  }
+
+  @ApiOperation({ summary: 'Create payment from a completed reservation' })
+  @ApiBody({ type: CreatePaymentDto })
+  @Post('from-reservation')
+  createFromReservation(
+    @Body() dto: CreatePaymentDto,
+    @Req() req: { user: { userId: string } },
+  ) {
+    return this.paymentsService.createFromReservationForUser(
+      dto.reservationId,
+      req.user.userId,
+    );
+  }
+
+  @ApiOperation({ summary: 'Create Stripe Checkout session for a payment' })
+  @ApiParam({ name: 'id', description: 'Payment UUID' })
+  @ApiResponse({ status: 201, description: 'Stripe Checkout session' })
+  @Post(':id/checkout')
+  createCheckout(
+    @Param('id') id: string,
+    @Req() req: { user: { userId: string } },
+  ) {
+    return this.paymentsService.createStripeCheckout(id, req.user.userId);
   }
 
   @ApiOperation({ summary: 'Get payments by reservation ID' })
@@ -106,7 +130,7 @@ export class StripeWebhookController {
     private readonly audit: AuditService,
     private readonly consumer: RabbitmqConsumerService,
     private readonly receiptService: ReceiptService,
-  ) {}
+  ) { }
 
   @ApiOperation({ summary: 'Stripe webhook endpoint' })
   @Post('webhook')
@@ -116,6 +140,9 @@ export class StripeWebhookController {
   ) {
     const rawBody = req.rawBody;
     if (!rawBody || !signature) {
+      this.logger.warn(
+        `Stripe webhook received without ${!rawBody ? 'rawBody' : 'signature'} — check rawBody:true is enabled and STRIPE_WEBHOOK_SECRET is set`,
+      );
       return { received: false };
     }
 

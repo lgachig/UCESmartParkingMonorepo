@@ -55,8 +55,8 @@ export class StripeService {
         reservationId: params.reservationId,
         userId: params.userId,
       },
-      success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/payment/cancel?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${baseUrl}/payment/success?payment_id=${params.paymentId}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/payment/cancel?payment_id=${params.paymentId}&session_id={CHECKOUT_SESSION_ID}`,
     });
 
     this.logger.log(

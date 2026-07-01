@@ -1,22 +1,5 @@
-/*
-  Warnings:
-
-  - You are about to drop the column `authUserId` on the `audit_logs` table. All the data in the column will be lost.
-  - You are about to drop the column `vehicleId` on the `audit_logs` table. All the data in the column will be lost.
-  - You are about to drop the `vehicles` table. If the table is not empty, all the data it contains will be lost.
-
-*/
 -- CreateEnum
 CREATE TYPE "SlotStatus" AS ENUM ('AVAILABLE', 'RESERVED', 'OCCUPIED', 'MAINTENANCE', 'DISABLED');
-
--- AlterTable
-ALTER TABLE "audit_logs" DROP COLUMN "authUserId",
-DROP COLUMN "vehicleId",
-ADD COLUMN     "auth_user_id" TEXT,
-ADD COLUMN     "slot_id" TEXT;
-
--- DropTable
-DROP TABLE "vehicles";
 
 -- CreateTable
 CREATE TABLE "faculties" (
@@ -56,6 +39,18 @@ CREATE TABLE "slots" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "slots_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "audit_logs" (
+    "id" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "auth_user_id" TEXT,
+    "slot_id" TEXT,
+    "metadata" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "audit_logs_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex

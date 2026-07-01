@@ -1,9 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
-  BLOCK_MINUTES,
-  GUEST_RATE_PER_BLOCK,
+  GUEST_RATE_PER_HOUR,
   ParkingFeeCalculatorService,
-  STUDENT_RATE_PER_BLOCK,
+  STUDENT_RATE_PER_HOUR,
 } from './parking-fee-calculator.service';
 import { Role } from '../auth/enums/role.enum';
 
@@ -21,29 +20,31 @@ describe('ParkingFeeCalculatorService', () => {
   it('charges professors $0 regardless of duration', () => {
     const result = service.calculate(Role.PROFESSOR, 120);
     expect(result.amount).toBe(0);
-    expect(result.blocks).toBe(0);
-    expect(result.ratePerBlock).toBe(0);
+    expect(result.ratePerHour).toBe(0);
   });
 
-  it('charges students $0.15 per 30-minute block (rounded up)', () => {
-    expect(service.calculate(Role.STUDENT, 1).amount).toBe(STUDENT_RATE_PER_BLOCK);
-    expect(service.calculate(Role.STUDENT, BLOCK_MINUTES).amount).toBe(
-      STUDENT_RATE_PER_BLOCK,
-    );
-    expect(service.calculate(Role.STUDENT, BLOCK_MINUTES + 1).amount).toBe(
-      STUDENT_RATE_PER_BLOCK * 2,
-    );
-    expect(service.calculate(Role.STUDENT, 90).blocks).toBe(3);
-    expect(service.calculate(Role.STUDENT, 90).amount).toBe(0.45);
+  it('charges admins $0 regardless of duration', () => {
+    const result = service.calculate(Role.ADMIN, 120);
+    expect(result.amount).toBe(0);
   });
 
-  it('charges guests $0.25 per 30-minute block (rounded up)', () => {
-    expect(service.calculate(Role.GUEST, 45).amount).toBe(GUEST_RATE_PER_BLOCK * 2);
-    expect(service.calculate(Role.GUEST, 60).amount).toBe(GUEST_RATE_PER_BLOCK * 2);
-    expect(service.calculate(Role.GUEST, 61).amount).toBe(GUEST_RATE_PER_BLOCK * 3);
+  it('charges students $10 per hour, proportional to the minute', () => {
+    expect(STUDENT_RATE_PER_HOUR).toBe(10);
+    expect(service.calculate(Role.STUDENT, 60).amount).toBe(10);
+    expect(service.calculate(Role.STUDENT, 30).amount).toBe(5);
+    expect(service.calculate(Role.STUDENT, 15).amount).toBe(2.5);
+    expect(service.calculate(Role.STUDENT, 90).amount).toBe(15);
+    expect(service.calculate(Role.STUDENT, 1).amount).toBe(0.17);
   });
 
-  it('returns zero blocks when duration is zero for billable roles', () => {
+  it('charges guests $10 per hour, proportional to the minute', () => {
+    expect(GUEST_RATE_PER_HOUR).toBe(10);
+    expect(service.calculate(Role.GUEST, 60).amount).toBe(10);
+    expect(service.calculate(Role.GUEST, 45).amount).toBe(7.5);
+    expect(service.calculate(Role.GUEST, 90).amount).toBe(15);
+  });
+
+  it('returns zero amount when duration is zero for billable roles', () => {
     expect(service.calculate(Role.STUDENT, 0).amount).toBe(0);
     expect(service.calculate(Role.GUEST, 0).amount).toBe(0);
   });

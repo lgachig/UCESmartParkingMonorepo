@@ -61,7 +61,21 @@ services:
     networks:
       - smartparking-network
 
-  # ── Auth Service (service_name: auth-service en el workflow matrix) ─────────
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: smartparking-rabbitmq
+    restart: unless-stopped
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartparking-network
+
   auth-service:
     image: ${DOCKERHUB_USER}/smartparking-auth:qa
     container_name: smartparking-auth-service

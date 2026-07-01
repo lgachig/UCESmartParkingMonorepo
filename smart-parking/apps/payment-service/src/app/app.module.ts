@@ -33,6 +33,7 @@ import { MetricsMiddleware } from './middlewares/metrics.middleware';
         RABBITMQ_URL: Joi.string().default('amqp://guest:guest@rabbitmq:5672'),
         INTERNAL_SERVICE_KEY: Joi.string().required(),
         RESERVATION_SERVICE_URL: Joi.string().required(),
+        KAFKA_BROKERS: Joi.string().default('kafka:29092'),
         USER_SERVICE_URL: Joi.string().required(),
         CORS_ORIGINS: Joi.string().optional(),
         STRIPE_SECRET_KEY: Joi.string().optional().allow(''),

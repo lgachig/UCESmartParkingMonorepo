@@ -49,7 +49,12 @@ export class AuthProxyController {
     Logger.log(`AuthProxy → ${target}`, 'ProxyModule');
     this.proxy = makeProxy(target);
   }
-  @All('*')
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     this.proxy(req, res, next);
   }
@@ -65,7 +70,12 @@ export class UserProxyController {
     Logger.log(`UserProxy → ${target}`, 'ProxyModule');
     this.proxy = makeProxy(target);
   }
-  @All('*')
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     this.proxy(req, res, next);
   }
@@ -81,7 +91,12 @@ export class VehicleProxyController {
     Logger.log(`VehicleProxy → ${target}`, 'ProxyModule');
     this.proxy = makeProxy(target);
   }
-  @All('*')
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     this.proxy(req, res, next);
   }
@@ -97,13 +112,17 @@ export class ParkingProxyController {
     Logger.log(`ParkingProxy → ${target}`, 'ProxyModule');
     this.proxy = makeProxy(target, { '^/api/parking': '/api' });
   }
-  @All('*')
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     this.proxy(req, res, next);
   }
 }
 
-// ─── Reservation Service ──────────────────────────────────────────────────────
 @ApiExcludeController()
 @Controller('api/reservations')
 @UseGuards(JwtGatewayGuard)
@@ -114,7 +133,53 @@ export class ReservationProxyController {
     Logger.log(`ReservationProxy → ${target}`, 'ProxyModule');
     this.proxy = makeProxy(target);
   }
-  @All('*')
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
+  handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+}
+
+@ApiExcludeController()
+@Controller('api/payments')
+@UseGuards(JwtGatewayGuard)
+export class PaymentProxyController {
+  private readonly proxy;
+  constructor(private readonly cfg: ConfigService) {
+    const target = cfg.get<string>('PAYMENT_SERVICE_URL')!;
+    Logger.log(`PaymentProxy → ${target}`, 'ProxyModule');
+    this.proxy = makeProxy(target);
+  }
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
+  handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+}
+
+@ApiExcludeController()
+@Controller('api/stripe')
+export class StripeWebhookProxyController {
+  private readonly proxy;
+  constructor(private readonly cfg: ConfigService) {
+    const target = cfg.get<string>('PAYMENT_SERVICE_URL')!;
+    Logger.log(`StripeWebhookProxy → ${target}`, 'ProxyModule');
+    this.proxy = makeProxy(target);
+  }
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
   handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     this.proxy(req, res, next);
   }
@@ -131,6 +196,8 @@ import { AuthModule } from '../auth/auth.module';
     VehicleProxyController,
     ParkingProxyController,
     ReservationProxyController,
+    PaymentProxyController,
+    StripeWebhookProxyController,
   ],
 })
 export class ProxyModule {}

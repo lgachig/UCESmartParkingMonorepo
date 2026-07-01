@@ -1,15 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { Role } from '../auth/enums/role.enum';
 
-export const BLOCK_MINUTES = 30;
-export const STUDENT_RATE_PER_BLOCK = 0.15;
-export const GUEST_RATE_PER_BLOCK = 0.25;
+export const STUDENT_RATE_PER_HOUR = 10;
+export const GUEST_RATE_PER_HOUR = 10;
 
 export interface FeeCalculationResult {
   amount: number;
-  blocks: number;
   durationMinutes: number;
-  ratePerBlock: number;
+  ratePerHour: number;
   role: string;
   currency: string;
 }
@@ -22,27 +20,25 @@ export class ParkingFeeCalculatorService {
     if (normalizedRole === Role.PROFESSOR || normalizedRole === Role.ADMIN) {
       return {
         amount: 0,
-        blocks: 0,
         durationMinutes,
-        ratePerBlock: 0,
+        ratePerHour: 0,
         role: normalizedRole,
         currency: 'USD',
       };
     }
 
-    const blocks =
-      durationMinutes <= 0 ? 0 : Math.ceil(durationMinutes / BLOCK_MINUTES);
-    const ratePerBlock =
+    const safeDuration = durationMinutes > 0 ? durationMinutes : 0;
+    const ratePerHour =
       normalizedRole === Role.STUDENT
-        ? STUDENT_RATE_PER_BLOCK
-        : GUEST_RATE_PER_BLOCK;
-    const amount = Math.round(blocks * ratePerBlock * 100) / 100;
+        ? STUDENT_RATE_PER_HOUR
+        : GUEST_RATE_PER_HOUR;
+
+    const amount = Math.round((safeDuration / 60) * ratePerHour * 100) / 100;
 
     return {
       amount,
-      blocks,
-      durationMinutes,
-      ratePerBlock,
+      durationMinutes: safeDuration,
+      ratePerHour,
       role: normalizedRole,
       currency: 'USD',
     };

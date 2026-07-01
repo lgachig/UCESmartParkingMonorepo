@@ -152,6 +152,7 @@ module "gateway" {
       VEHICLE_SERVICE_URL=http://${module.vehicle.private_ip}:3003
       PARKING_SERVICE_URL=http://${module.parking.private_ip}:3004
       RESERVATION_SERVICE_URL=http://${module.reservation.private_ip}:3005
+      PAYMENT_SERVICE_URL=http://${module.payment.private_ip}:3007
       CORS_ORIGINS=${var.cors_origins}
       THROTTLE_TTL=60000
       THROTTLE_LIMIT=60
@@ -219,6 +220,24 @@ module "reservation" {
       CORS_ORIGINS=${var.cors_origins}
       RESERVATION_EXPIRY_MINUTES=15
       EOF
+  })
+}
+
+module "payment" {
+  source             = "../../modules/ec2"
+  environment        = var.environment
+  service_name       = "payment"
+  instance_type      = var.instance_type
+  key_name           = var.key_name
+  subnet_id          = element(module.vpc.public_subnet_ids, 0)
+  security_group_ids = [module.security_groups.security_group_ids["payment"]]
+  user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
+    dockerhub_user   = var.dockerhub_user
+    docker_image     = "smartparking-payment"
+    docker_image_tag = var.environment
+    service_port     = 3007
+    is_auth          = false
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
   })
 }
 
@@ -411,6 +430,7 @@ resource "aws_launch_template" "prod_gateway_lt" {
       VEHICLE_SERVICE_URL=http://${module.vehicle.private_ip}:3003
       PARKING_SERVICE_URL=http://${module.parking.private_ip}:3004
       RESERVATION_SERVICE_URL=http://${module.reservation.private_ip}:3005
+      PAYMENT_SERVICE_URL=http://${module.payment.private_ip}:3007
       CORS_ORIGINS=http://${aws_lb.prod_alb.dns_name},http://${aws_lb.prod_alb.dns_name}:3006,http://${aws_eip.frontend.public_ip}:3002,http://${aws_eip.gateway.public_ip}:3006
       THROTTLE_TTL=60000
       THROTTLE_LIMIT=60
