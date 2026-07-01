@@ -7,8 +7,8 @@ import { paymentService } from '@/services/payment.service';
 import { useAuth } from '@/context/AuthContext';
 
 const RATE_PER_HOUR: Record<string, number> = {
-  STUDENT: 4,
-  GUEST: 4,
+  STUDENT: 10,
+  GUEST: 10,
   PROFESSOR: 0,
   ADMIN: 0,
 };
