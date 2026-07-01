@@ -111,10 +111,81 @@ jobs:
           build-args: |
             NEXT_PUBLIC_GATEWAY_URL=${{ env.PROD_GATEWAY_URL }}
 
+  ensure-postgres:
+    name: Ensure Postgres on auth
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    needs: [docker-push]
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Discover auth private IP
+        run: |
+          AUTH_IP=$(aws ec2 describe-instances \
+            --filters \
+              "Name=tag:Name,Values=prod-auth" \
+              "Name=tag:Environment,Values=prod" \
+              "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].PrivateIpAddress" \
+            --output text)
+          if [ -z "$AUTH_IP" ] || [ "$AUTH_IP" = "None" ]; then
+            echo "::error::No se encontró instancia Name=prod-auth Environment=prod"
+            exit 1
+          fi
+          echo "AUTH_IP=$AUTH_IP" >> $GITHUB_ENV
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_EC2_SSH_KEY }}" > ~/.ssh/prod.pem
+          chmod 400 ~/.ssh/prod.pem
+          ssh-keyscan -H ${{ secrets.PROD_BASTION_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Start Postgres & Redis on auth EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ env.AUTH_IP }}
+          username: ec2-user
+          key: ${{ secrets.PROD_EC2_SSH_KEY }}
+          port: 22
+          timeout: 120s
+          command_timeout: 10m
+          script_stop: true
+          proxy_host: ${{ secrets.PROD_BASTION_HOST }}
+          proxy_username: ec2-user
+          proxy_key: ${{ secrets.PROD_EC2_SSH_KEY }}
+          proxy_port: 22
+          script: |
+            set -euo pipefail
+            COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
+            sudo mkdir -p /opt/smartparking
+            sudo chown ec2-user:ec2-user /opt/smartparking
+            docker-compose -f "$COMPOSE_FILE" up -d postgres redis
+            pg_c=$(docker-compose -f "$COMPOSE_FILE" ps -q postgres | head -1)
+            [ -n "$pg_c" ] || { echo "❌ Postgres container not found"; exit 1; }
+            for i in $(seq 1 30); do
+              docker exec "$pg_c" pg_isready -U admin &>/dev/null && break
+              [ "$i" -eq 30 ] && { echo "❌ PostgreSQL not ready"; exit 1; }
+              sleep 2
+            done
+            for db in userdb vehicledb parkingdb reservationdb paymentdb; do
+              docker exec "$pg_c" psql -U admin -d postgres \
+                -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1 || \
+              docker exec "$pg_c" psql -U admin -d postgres -c "CREATE DATABASE ${db};" || true
+            done
+            echo "✅ Postgres listo en auth"
+
   deploy:
     name: Deploy on EC2 instances (via Bastion)
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
-    needs: docker-push
+    needs: [ensure-postgres, docker-push]
     runs-on: ubuntu-latest
     environment: prod
     env:
@@ -273,10 +344,10 @@ jobs:
               patch_env GATEWAY_PORT            3006
               patch_env REDIS_URL               "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
               patch_env AUTH_SERVICE_URL        "http://${{ env.AUTH_PRIVATE_IP }}:3000"
-              patch_env USER_SERVICE_URL        "http://${{ env.USER_PRIVATE_IP }}:3001/api"
+              patch_env USER_SERVICE_URL        "http://${{ env.USER_PRIVATE_IP }}:3001"
               patch_env VEHICLE_SERVICE_URL     "http://${{ env.VEHICLE_PRIVATE_IP }}:3003"
               patch_env PARKING_SERVICE_URL     "http://${{ env.PARKING_PRIVATE_IP }}:3004"
-              patch_env RESERVATION_SERVICE_URL "http://${{ env.RESERVATION_PRIVATE_IP }}:3005/api"
+              patch_env RESERVATION_SERVICE_URL "http://${{ env.RESERVATION_PRIVATE_IP }}:3005"
               patch_env PAYMENT_SERVICE_URL     "http://${{ env.PAYMENT_PRIVATE_IP }}:3007"
               patch_env THROTTLE_TTL            60000
               patch_env THROTTLE_LIMIT          60
