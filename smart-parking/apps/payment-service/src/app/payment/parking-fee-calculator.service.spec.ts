@@ -28,20 +28,20 @@ describe('ParkingFeeCalculatorService', () => {
     expect(result.amount).toBe(0);
   });
 
-  it('charges students $1 per hour, proportional to the minute', () => {
-    expect(STUDENT_RATE_PER_HOUR).toBe(1);
-    expect(service.calculate(Role.STUDENT, 60).amount).toBe(1);
-    expect(service.calculate(Role.STUDENT, 30).amount).toBe(0.5);
-    expect(service.calculate(Role.STUDENT, 15).amount).toBe(0.25);
-    expect(service.calculate(Role.STUDENT, 90).amount).toBe(1.5);
-    expect(service.calculate(Role.STUDENT, 1).amount).toBe(0.02);
+  it('charges students $4 per hour, proportional to the minute', () => {
+    expect(STUDENT_RATE_PER_HOUR).toBe(4);
+    expect(service.calculate(Role.STUDENT, 60).amount).toBe(4);
+    expect(service.calculate(Role.STUDENT, 30).amount).toBe(2);
+    expect(service.calculate(Role.STUDENT, 15).amount).toBe(1);
+    expect(service.calculate(Role.STUDENT, 90).amount).toBe(6);
+    expect(service.calculate(Role.STUDENT, 1).amount).toBe(0.07);
   });
 
-  it('charges guests $1 per hour, proportional to the minute', () => {
-    expect(GUEST_RATE_PER_HOUR).toBe(1);
-    expect(service.calculate(Role.GUEST, 60).amount).toBe(1);
-    expect(service.calculate(Role.GUEST, 45).amount).toBe(0.75);
-    expect(service.calculate(Role.GUEST, 90).amount).toBe(1.5);
+  it('charges guests $4 per hour, proportional to the minute', () => {
+    expect(GUEST_RATE_PER_HOUR).toBe(4);
+    expect(service.calculate(Role.GUEST, 60).amount).toBe(4);
+    expect(service.calculate(Role.GUEST, 45).amount).toBe(3);
+    expect(service.calculate(Role.GUEST, 90).amount).toBe(6);
   });
 
   it('returns zero amount when duration is zero for billable roles', () => {
