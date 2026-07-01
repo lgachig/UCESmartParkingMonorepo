@@ -34,7 +34,7 @@ import { Logger } from '@nestjs/common';
 @UseGuards(ServiceKeyGuard)
 @Controller('internal/payments')
 export class InternalPaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(private readonly paymentsService: PaymentsService) { }
 
   @ApiOperation({ summary: 'Calculate parking fee for a reservation (internal)' })
   @ApiBody({ type: CalculateFeeDto })
@@ -63,7 +63,7 @@ export class PaymentsController {
   constructor(
     private readonly paymentsService: PaymentsService,
     private readonly receiptService: ReceiptService,
-  ) {}
+  ) { }
 
   @ApiOperation({ summary: 'Get my payment history' })
   @Get('my')
@@ -130,7 +130,7 @@ export class StripeWebhookController {
     private readonly audit: AuditService,
     private readonly consumer: RabbitmqConsumerService,
     private readonly receiptService: ReceiptService,
-  ) {}
+  ) { }
 
   @ApiOperation({ summary: 'Stripe webhook endpoint' })
   @Post('webhook')
@@ -140,6 +140,9 @@ export class StripeWebhookController {
   ) {
     const rawBody = req.rawBody;
     if (!rawBody || !signature) {
+      this.logger.warn(
+        `Stripe webhook received without ${!rawBody ? 'rawBody' : 'signature'} — check rawBody:true is enabled and STRIPE_WEBHOOK_SECRET is set`,
+      );
       return { received: false };
     }
 
