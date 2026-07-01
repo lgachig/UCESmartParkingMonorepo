@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Role } from '../auth/enums/role.enum';
 
-export const STUDENT_RATE_PER_HOUR = 1;
-export const GUEST_RATE_PER_HOUR = 1;
+export const STUDENT_RATE_PER_HOUR = 4;
+export const GUEST_RATE_PER_HOUR = 4;
 
 export interface FeeCalculationResult {
   amount: number;
