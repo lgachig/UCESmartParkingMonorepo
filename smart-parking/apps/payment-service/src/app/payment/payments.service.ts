@@ -36,7 +36,7 @@ export class PaymentsService {
     private readonly userClient: UserClientService,
     private readonly stripeService: StripeService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   private resolveDurationMinutes(reservation: {
     durationMinutes: number | null;
@@ -119,7 +119,7 @@ export class PaymentsService {
         paymentId: payment.id,
         reservationId,
         amount: fee.amount,
-        blocks: fee.blocks,
+        ratePerHour: fee.ratePerHour,
         durationMinutes: fee.durationMinutes,
         role: fee.role,
       },
