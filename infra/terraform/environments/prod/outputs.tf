@@ -124,3 +124,13 @@ output "prod_gateway_api_url_alb" {
   value       = "http://${aws_lb.prod_alb.dns_name}:3006/api"
 }
 
+output "prod_frontend_tg_arn" {
+  description = "ARN of the frontend target group"
+  value       = aws_lb_target_group.prod_frontend_tg.arn
+}
+
+output "prod_gateway_tg_arn" {
+  description = "ARN of the gateway target group"
+  value       = aws_lb_target_group.prod_gateway_tg.arn
+}
+
