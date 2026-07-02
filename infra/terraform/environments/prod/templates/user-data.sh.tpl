@@ -25,9 +25,9 @@ cd /opt/smartparking
 if [ -n "$${DOCKERHUB_TOKEN:-}" ] && [ -n "$${DOCKERHUB_USER:-}" ]; then
   echo "$${DOCKERHUB_TOKEN}" | docker login -u "$${DOCKERHUB_USER}" --password-stdin
 fi
-docker-compose pull
-docker-compose up -d --force-recreate
-docker-compose ps
+/usr/local/bin/docker-compose pull
+/usr/local/bin/docker-compose up -d --force-recreate
+/usr/local/bin/docker-compose ps
 DEPLOY
 chmod +x /opt/smartparking/deploy.sh
 
@@ -100,5 +100,5 @@ services:
 COMPOSE
 %{ endif ~}
 
-docker-compose -f /opt/smartparking/docker-compose.yml pull || true
-docker-compose -f /opt/smartparking/docker-compose.yml up -d --force-recreate || true
+/usr/local/bin/docker-compose -f /opt/smartparking/docker-compose.yml pull || true
+/usr/local/bin/docker-compose -f /opt/smartparking/docker-compose.yml up -d --force-recreate || true

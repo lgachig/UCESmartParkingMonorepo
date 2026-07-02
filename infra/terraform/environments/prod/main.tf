@@ -28,7 +28,7 @@ module "auth" {
   source             = "../../modules/ec2"
   environment        = var.environment
   service_name       = "auth"
-  instance_type      = var.instance_type
+  instance_type      = "t3.medium"
   key_name           = var.key_name
   subnet_id          = element(module.vpc.public_subnet_ids, 0)
   security_group_ids = [module.security_groups.security_group_ids["auth"]]
@@ -106,64 +106,64 @@ module "vehicle" {
   })
 }
 
-module "frontend" {
-  source             = "../../modules/ec2"
-  environment        = var.environment
-  service_name       = "frontend"
-  instance_type      = var.instance_type
-  key_name           = var.key_name
-  subnet_id          = element(module.vpc.public_subnet_ids, 0)
-  security_group_ids = [module.security_groups.security_group_ids["frontend"]]
-  user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
-    dockerhub_user   = var.dockerhub_user
-    docker_image     = "smartparking-frontend"
-    docker_image_tag = var.environment
-    service_port     = 3002
-    is_auth          = false
-    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
-  })
-}
+# module "frontend" {
+#   source             = "../../modules/ec2"
+#   environment        = var.environment
+#   service_name       = "frontend"
+#   instance_type      = var.instance_type
+#   key_name           = var.key_name
+#   subnet_id          = element(module.vpc.public_subnet_ids, 0)
+#   security_group_ids = [module.security_groups.security_group_ids["frontend"]]
+#   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
+#     dockerhub_user   = var.dockerhub_user
+#     docker_image     = "smartparking-frontend"
+#     docker_image_tag = var.environment
+#     service_port     = 3002
+#     is_auth          = false
+#     env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
+#   })
+# }
+# 
+# resource "aws_eip_association" "frontend" {
+#   instance_id   = module.frontend.instance_id
+#   allocation_id = aws_eip.frontend.id
+# }
 
-resource "aws_eip_association" "frontend" {
-  instance_id   = module.frontend.instance_id
-  allocation_id = aws_eip.frontend.id
-}
-
-module "gateway" {
-  source             = "../../modules/ec2"
-  environment        = var.environment
-  service_name       = "gateway"
-  instance_type      = var.instance_type
-  key_name           = var.key_name
-  subnet_id          = element(module.vpc.public_subnet_ids, 1)
-  security_group_ids = [module.security_groups.security_group_ids["gateway"]]
-  user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
-    dockerhub_user   = var.dockerhub_user
-    docker_image     = "smartparking-gateway"
-    docker_image_tag = var.environment
-    service_port     = 3006
-    is_auth          = false
-    env_content      = <<-EOF
-      GATEWAY_PORT=3006
-      JWT_SECRET=${var.jwt_secret}
-      REDIS_URL=redis://${module.auth.private_ip}:6379
-      AUTH_SERVICE_URL=http://${module.auth.private_ip}:3000
-      USER_SERVICE_URL=http://${module.user.private_ip}:3001
-      VEHICLE_SERVICE_URL=http://${module.vehicle.private_ip}:3003
-      PARKING_SERVICE_URL=http://${module.parking.private_ip}:3004
-      RESERVATION_SERVICE_URL=http://${module.reservation.private_ip}:3005
-      PAYMENT_SERVICE_URL=http://${module.payment.private_ip}:3007
-      CORS_ORIGINS=${var.cors_origins}
-      THROTTLE_TTL=60000
-      THROTTLE_LIMIT=60
-      EOF
-  })
-}
-
-resource "aws_eip_association" "gateway" {
-  instance_id   = module.gateway.instance_id
-  allocation_id = aws_eip.gateway.id
-}
+# module "gateway" {
+#   source             = "../../modules/ec2"
+#   environment        = var.environment
+#   service_name       = "gateway"
+#   instance_type      = var.instance_type
+#   key_name           = var.key_name
+#   subnet_id          = element(module.vpc.public_subnet_ids, 1)
+#   security_group_ids = [module.security_groups.security_group_ids["gateway"]]
+#   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
+#     dockerhub_user   = var.dockerhub_user
+#     docker_image     = "smartparking-gateway"
+#     docker_image_tag = var.environment
+#     service_port     = 3006
+#     is_auth          = false
+#     env_content      = <<-EOF
+#       GATEWAY_PORT=3006
+#       JWT_SECRET=${var.jwt_secret}
+#       REDIS_URL=redis://${module.auth.private_ip}:6379
+#       AUTH_SERVICE_URL=http://${module.auth.private_ip}:3000
+#       USER_SERVICE_URL=http://${module.user.private_ip}:3001
+#       VEHICLE_SERVICE_URL=http://${module.vehicle.private_ip}:3003
+#       PARKING_SERVICE_URL=http://${module.parking.private_ip}:3004
+#       RESERVATION_SERVICE_URL=http://${module.reservation.private_ip}:3005
+#       PAYMENT_SERVICE_URL=http://${module.payment.private_ip}:3007
+#       CORS_ORIGINS=${var.cors_origins}
+#       THROTTLE_TTL=60000
+#       THROTTLE_LIMIT=60
+#       EOF
+#   })
+# }
+# 
+# resource "aws_eip_association" "gateway" {
+#   instance_id   = module.gateway.instance_id
+#   allocation_id = aws_eip.gateway.id
+# }
 
 module "parking" {
   source             = "../../modules/ec2"
@@ -227,7 +227,7 @@ module "payment" {
   source             = "../../modules/ec2"
   environment        = var.environment
   service_name       = "payment"
-  instance_type      = var.instance_type
+  instance_type      = "t3.medium"
   key_name           = var.key_name
   subnet_id          = element(module.vpc.public_subnet_ids, 0)
   security_group_ids = [module.security_groups.security_group_ids["payment"]]
@@ -267,6 +267,14 @@ resource "aws_security_group" "prod_alb_sg" {
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 3006
+    to_port     = 3006
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow API Gateway traffic"
   }
 
   egress {
@@ -359,17 +367,17 @@ resource "aws_lb_listener" "gateway_http" {
   }
 }
 
-resource "aws_lb_target_group_attachment" "frontend_static" {
-  target_group_arn = aws_lb_target_group.prod_frontend_tg.arn
-  target_id        = module.frontend.instance_id
-  port             = 3002
-}
-
-resource "aws_lb_target_group_attachment" "gateway_static" {
-  target_group_arn = aws_lb_target_group.prod_gateway_tg.arn
-  target_id        = module.gateway.instance_id
-  port             = 3006
-}
+# resource "aws_lb_target_group_attachment" "frontend_static" {
+#   target_group_arn = aws_lb_target_group.prod_frontend_tg.arn
+#   target_id        = module.frontend.instance_id
+#   port             = 3002
+# }
+# 
+# resource "aws_lb_target_group_attachment" "gateway_static" {
+#   target_group_arn = aws_lb_target_group.prod_gateway_tg.arn
+#   target_id        = module.gateway.instance_id
+#   port             = 3006
+# }
 
 resource "aws_launch_template" "prod_frontend_lt" {
   name_prefix   = "prod-frontend-lt-"
@@ -456,7 +464,7 @@ resource "aws_autoscaling_group" "prod_frontend_asg" {
   max_size                  = 2
   desired_capacity          = 1
   vpc_zone_identifier       = module.vpc.public_subnet_ids
-  health_check_type         = "ELB"
+  health_check_type         = "EC2"
   health_check_grace_period = 120
 
   launch_template {
@@ -485,7 +493,7 @@ resource "aws_autoscaling_group" "prod_gateway_asg" {
   max_size                  = 2
   desired_capacity          = 1
   vpc_zone_identifier       = module.vpc.public_subnet_ids
-  health_check_type         = "ELB"
+  health_check_type         = "EC2"
   health_check_grace_period = 120
 
   launch_template {

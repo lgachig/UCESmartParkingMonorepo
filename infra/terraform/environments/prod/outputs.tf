@@ -90,8 +90,8 @@ output "github_setup_summary" {
       PROD_EC2_AUTH_HOST      = ${module.auth.private_ip}
       PROD_EC2_USER_HOST      = ${module.user.private_ip}
       PROD_EC2_VEHICLE_HOST   = ${module.vehicle.private_ip}
-      PROD_EC2_FRONTEND_HOST  = ${module.frontend.private_ip}
-      PROD_EC2_GATEWAY_HOST   = ${module.gateway.private_ip}
+      PROD_EC2_FRONTEND_HOST  = (managed-by-ASG)
+      PROD_EC2_GATEWAY_HOST   = (managed-by-ASG)
       PROD_EC2_PARKING_HOST   = ${module.parking.private_ip}
       PROD_EC2_RESERVATION_HOST = ${module.reservation.private_ip}
       PROD_EC2_PAYMENT_HOST   = ${module.payment.private_ip}
