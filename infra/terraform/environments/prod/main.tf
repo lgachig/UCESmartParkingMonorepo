@@ -35,6 +35,7 @@ module "auth" {
   root_volume_size   = 30
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
+    dockerhub_token  = var.dockerhub_token
     docker_image     = "smartparking-auth"
     docker_image_tag = var.environment
     service_port     = 3000
@@ -64,6 +65,7 @@ module "user" {
   security_group_ids = [module.security_groups.security_group_ids["user"]]
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
+    dockerhub_token  = var.dockerhub_token
     docker_image     = "smartparking-user"
     docker_image_tag = var.environment
     service_port     = 3001
@@ -90,6 +92,7 @@ module "vehicle" {
   security_group_ids = [module.security_groups.security_group_ids["vehicle"]]
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
+    dockerhub_token  = var.dockerhub_token
     docker_image     = "smartparking-vehicle"
     docker_image_tag = var.environment
     service_port     = 3003
@@ -175,6 +178,7 @@ module "parking" {
   security_group_ids = [module.security_groups.security_group_ids["parking"]]
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
+    dockerhub_token  = var.dockerhub_token
     docker_image     = "smartparking-parking"
     docker_image_tag = var.environment
     service_port     = 3004
@@ -202,6 +206,7 @@ module "reservation" {
   security_group_ids = [module.security_groups.security_group_ids["reservation"]]
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
+    dockerhub_token  = var.dockerhub_token
     docker_image     = "smartparking-reservation"
     docker_image_tag = var.environment
     service_port     = 3005
@@ -233,6 +238,7 @@ module "payment" {
   security_group_ids = [module.security_groups.security_group_ids["payment"]]
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
+    dockerhub_token  = var.dockerhub_token
     docker_image     = "smartparking-payment"
     docker_image_tag = var.environment
     service_port     = 3007
@@ -392,6 +398,7 @@ resource "aws_launch_template" "prod_frontend_lt" {
 
   user_data = base64encode(templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
+    dockerhub_token  = var.dockerhub_token
     docker_image     = "smartparking-frontend"
     docker_image_tag = var.environment
     service_port     = 3002
@@ -425,6 +432,7 @@ resource "aws_launch_template" "prod_gateway_lt" {
 
   user_data = base64encode(templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
+    dockerhub_token  = var.dockerhub_token
     docker_image     = "smartparking-gateway"
     docker_image_tag = var.environment
     service_port     = 3006

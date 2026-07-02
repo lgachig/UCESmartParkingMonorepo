@@ -100,5 +100,9 @@ services:
 COMPOSE
 %{ endif ~}
 
-/usr/local/bin/docker-compose -f /opt/smartparking/docker-compose.yml pull || true
-/usr/local/bin/docker-compose -f /opt/smartparking/docker-compose.yml up -d --force-recreate || true
+if [ -n "${dockerhub_token}" ]; then
+  echo "${dockerhub_token}" | docker login -u "${dockerhub_user}" --password-stdin
+fi
+
+/usr/local/bin/docker-compose -f /opt/smartparking/docker-compose.yml pull || { echo "PULL FAILED"; exit 1; }
+/usr/local/bin/docker-compose -f /opt/smartparking/docker-compose.yml up -d --force-recreate || { echo "UP FAILED"; exit 1; }

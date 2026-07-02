@@ -70,3 +70,9 @@ variable "cors_origins" {
   description = "Comma-separated list of allowed CORS origins"
   default     = "http://placeholder"
 }
+
+variable "dockerhub_token" {
+  type        = string
+  sensitive   = true
+  description = "Docker Hub Personal Access Token or password for pulling private images"
+}
