@@ -17,10 +17,12 @@ on:
         value: ${{ jobs.changes.outputs.gateway }}
       frontend:
         value: ${{ jobs.changes.outputs.frontend }}
+      payment:
+        value: ${{ jobs.changes.outputs.payment }}
       infra:
         value: ${{ jobs.changes.outputs.infra }}
   push:
-    branches: [main, QA, qa, PROD, prod, develop, Feature-EnvPro]
+    branches: [feature/USP-096-infrastructure-frontend-integration, PROD]
   pull_request:
 
 permissions:
@@ -38,6 +40,7 @@ jobs:
       reservation: ${{ steps.filter.outputs.reservation }}
       gateway: ${{ steps.filter.outputs.gateway }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      payment: ${{ steps.filter.outputs.payment }}
       infra: ${{ steps.filter.outputs.infra }}
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +55,7 @@ jobs:
             reservation: 'smart-parking/apps/reservation-service/**'
             gateway: 'smart-parking/apps/gateway-service/**'
             frontend: 'smart-parking/apps/frontend/**'
+            payment: 'smart-parking/apps/payment-service/**'
             infra:
               - 'infra/**'
               - '.github/workflows/**'

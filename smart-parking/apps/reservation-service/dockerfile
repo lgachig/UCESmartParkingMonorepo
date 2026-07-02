@@ -16,4 +16,4 @@ RUN npx nx build @org/reservation-service
 
 EXPOSE 3005
 
-CMD ["sh", "-c", "npx prisma db push --config prisma.reservation.config.ts --accept-data-loss && node apps/reservation-service/dist/main.js"]
+CMD ["node", "apps/reservation-service/dist/main.js"]

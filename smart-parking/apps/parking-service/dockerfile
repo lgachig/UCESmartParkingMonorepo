@@ -16,4 +16,4 @@ RUN npx nx build @org/parking-service
 
 EXPOSE 3004
 
-CMD ["sh", "-c", "npx prisma db push --config prisma.parking.config.ts --accept-data-loss && node apps/parking-service/dist/main.js"]
+CMD ["node", "apps/parking-service/dist/main.js"]

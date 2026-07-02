@@ -1,26 +1,4 @@
-# docker-compose.yml — EC2 QA
-#
-# PROBLEMAS CORREGIDOS vs la versión original:
-#   1. Faltaban gateway-service, parking-service y reservation-service.
-#      El workflow QA los intenta deployar con `docker-compose up app`
-#      pero "app" no existía en el compose → deploy silencioso fallido.
-#
-#   2. Los servicios no-auth se renombran a "app" porque el matrix del
-#      workflow usa service_name: app para user, vehicle, gateway, parking,
-#      reservation y frontend. El compose debe tener ese nombre.
-#      EXCEPCIÓN: auth sigue siendo "auth-service" (service_name: auth-service).
-#
-#   3. frontend necesita PORT=3002 como variable de entorno.
-#
-#   4. Se agrega kafka al compose de EC2 (necesario para parking y reservation).
-#
-# NOTA: Esta es la arquitectura single-node de QA donde todos los servicios
-# comparten la misma EC2. En multi-node, cada EC2 sube solo su "app" service.
-# Este compose funciona en ambos casos porque docker-compose up app levanta
-# solo el servicio "app" en la EC2 correspondiente.
-
 services:
-  # ── Infraestructura compartida ───────────────────────────────────────────────
   postgres:
     image: postgres:16
     container_name: smartparking-postgres
@@ -83,7 +61,21 @@ services:
     networks:
       - smartparking-network
 
-  # ── Auth Service (service_name: auth-service en el workflow matrix) ─────────
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: smartparking-rabbitmq
+    restart: unless-stopped
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartparking-network
+
   auth-service:
     image: ${DOCKERHUB_USER}/smartparking-auth:qa
     container_name: smartparking-auth-service
@@ -102,11 +94,6 @@ services:
     networks:
       - smartparking-network
 
-  # ── "app" — servicio genérico usado por user/vehicle/gateway/parking/
-  #    reservation/frontend según la EC2 en que se ejecute.
-  #    El workflow hace: docker-compose up -d --force-recreate app
-  #    La imagen correcta se determina por la variable APP_IMAGE en .env,
-  #    que el workflow inyecta antes del pull/restart. ───────────────────────
   app:
     image: ${APP_IMAGE:-${DOCKERHUB_USER}/smartparking-user:qa}
     container_name: smartparking-app

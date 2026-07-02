@@ -19,6 +19,7 @@ import { RequestLoggerMiddleware } from './middlewares/request-logger.middleware
         REDIS_URL: Joi.string().required(),
         AUTH_SERVICE_URL: Joi.string().required(),
         USER_SERVICE_URL: Joi.string().required(),
+        PAYMENT_SERVICE_URL: Joi.string().required(),
         VEHICLE_SERVICE_URL: Joi.string().required(),
         PARKING_SERVICE_URL: Joi.string().required(),
         RESERVATION_SERVICE_URL: Joi.string().required(),

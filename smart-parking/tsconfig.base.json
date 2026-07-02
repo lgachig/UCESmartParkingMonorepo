@@ -22,7 +22,8 @@
       "@generated/user-client/*": ["./generated/user-client/*"],
       "@generated/vehicle-client/*": ["./generated/vehicle-client/*"],
       "@generated/parking-client/*": ["./generated/parking-client/*"],
-      "@generated/reservation-client/*": ["./generated/reservation-client/*"]
+      "@generated/reservation-client/*": ["./generated/reservation-client/*"],
+      "@generated/payment-client/*": ["./generated/payment-client/*"]
     }
   }
 }

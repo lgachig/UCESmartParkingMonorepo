@@ -79,6 +79,11 @@ variable "auth_host" {
   default     = "placeholder"
 }
 
+output "payment_private_ip" {
+  description = "Private IP of payment service EC2"
+  value       = module.payment.private_ip
+}
+
 
 output "github_setup_summary" {
   description = "Solo 3 secrets necesarios en GitHub"

@@ -1,11 +1,11 @@
-name: Feature-EnvPro CI/CD
+name: PROD CI/CD
 
 on:
   push:
-    branches: [PROD, prod, Feature-EnvPro]
+    branches: [PROD]
   pull_request:
     types: [closed]
-    branches: [PROD, prod, Feature-EnvPro]
+    branches: [PROD]
   workflow_dispatch:
 
 concurrency:
@@ -93,6 +93,14 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-reservation:prod
 
+      - name: Push payment-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./smart-parking
+          file: ./smart-parking/apps/payment-service/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-payment:prod
+
       - name: Push frontend
         uses: docker/build-push-action@v6
         with:
@@ -103,10 +111,81 @@ jobs:
           build-args: |
             NEXT_PUBLIC_GATEWAY_URL=${{ env.PROD_GATEWAY_URL }}
 
+  ensure-postgres:
+    name: Ensure Postgres on auth
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    needs: [docker-push]
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Discover auth private IP
+        run: |
+          AUTH_IP=$(aws ec2 describe-instances \
+            --filters \
+              "Name=tag:Name,Values=prod-auth" \
+              "Name=tag:Environment,Values=prod" \
+              "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].PrivateIpAddress" \
+            --output text)
+          if [ -z "$AUTH_IP" ] || [ "$AUTH_IP" = "None" ]; then
+            echo "::error::No se encontró instancia Name=prod-auth Environment=prod"
+            exit 1
+          fi
+          echo "AUTH_IP=$AUTH_IP" >> $GITHUB_ENV
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_EC2_SSH_KEY }}" > ~/.ssh/prod.pem
+          chmod 400 ~/.ssh/prod.pem
+          ssh-keyscan -H ${{ secrets.PROD_BASTION_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Start Postgres & Redis on auth EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ env.AUTH_IP }}
+          username: ec2-user
+          key: ${{ secrets.PROD_EC2_SSH_KEY }}
+          port: 22
+          timeout: 120s
+          command_timeout: 10m
+          script_stop: true
+          proxy_host: ${{ secrets.PROD_BASTION_HOST }}
+          proxy_username: ec2-user
+          proxy_key: ${{ secrets.PROD_EC2_SSH_KEY }}
+          proxy_port: 22
+          script: |
+            set -euo pipefail
+            COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
+            sudo mkdir -p /opt/smartparking
+            sudo chown ec2-user:ec2-user /opt/smartparking
+            docker-compose -f "$COMPOSE_FILE" up -d postgres redis
+            pg_c=$(docker-compose -f "$COMPOSE_FILE" ps -q postgres | head -1)
+            [ -n "$pg_c" ] || { echo "❌ Postgres container not found"; exit 1; }
+            for i in $(seq 1 30); do
+              docker exec "$pg_c" pg_isready -U admin &>/dev/null && break
+              [ "$i" -eq 30 ] && { echo "❌ PostgreSQL not ready"; exit 1; }
+              sleep 2
+            done
+            for db in userdb vehicledb parkingdb reservationdb paymentdb; do
+              docker exec "$pg_c" psql -U admin -d postgres \
+                -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1 || \
+              docker exec "$pg_c" psql -U admin -d postgres -c "CREATE DATABASE ${db};" || true
+            done
+            echo "✅ Postgres listo en auth"
+
   deploy:
     name: Deploy on EC2 instances (via Bastion)
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
-    needs: docker-push
+    needs: [ensure-postgres, docker-push]
     runs-on: ubuntu-latest
     environment: prod
     env:
@@ -136,6 +215,9 @@ jobs:
           - name: reservation
             service_tag: reservation
             service_name: app
+          - name: payment
+            service_tag: payment
+            service_name: app
 
     steps:
       - name: Configure AWS credentials
@@ -159,7 +241,7 @@ jobs:
               --output text
           }
 
-          for svc in auth user vehicle parking reservation; do
+          for svc in auth user vehicle parking reservation payment; do
             ip=$(discover_ip $svc)
             if [ -z "$ip" ] || [ "$ip" = "None" ]; then
               echo "❌ No se encontró instancia Name=prod-$svc Environment=prod"
@@ -194,7 +276,7 @@ jobs:
             sleep 15
           done
 
-      - name: Deploy ${{ matrix.name }} — inject .env + pull + restart
+      - name: Deploy ${{ matrix.name }} — inject .env + pull + restart + migrate
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ env.PRIVATE_IP }}
@@ -233,14 +315,11 @@ jobs:
             patch_env JWT_REFRESH_SECRET   "${{ secrets.PROD_JWT_REFRESH_SECRET }}"
             patch_env INTERNAL_SERVICE_KEY "${{ secrets.PROD_INTERNAL_SERVICE_KEY }}"
 
-            # ── CORS: solo frontend y gateway son públicos ───────────────────
-            # Permitimos tanto las IPs elásticas (directas) como el balanceador ALB
-            # Extraemos el host/ip del ALB desde PROD_GATEWAY_URL (ej. http://alb-dns:3006/api -> http://alb-dns)
             ALB_FRONTEND_URL=$(echo "${{ env.PROD_GATEWAY_URL }}" | sed -E 's|:3006(/api)?$||')
             CORS_LIST="http://${{ secrets.PROD_FRONTEND_EIP }}:3002,http://${{ secrets.PROD_GATEWAY_EIP }}:3006,${ALB_FRONTEND_URL},${{ env.PROD_GATEWAY_URL }}"
             patch_env CORS_ORIGINS "$CORS_LIST"
 
-            # ── Vars por servicio — IPs privadas descubiertas dinámicamente ──
+            # ── Vars por servicio ─────────────────────────────────────────────
             if [ "${{ matrix.name }}" = "auth" ]; then
               patch_env PORT             3000
               patch_env DATABASE_URL     "postgresql://admin:admin@postgres:5432/smartparking"
@@ -265,10 +344,11 @@ jobs:
               patch_env GATEWAY_PORT            3006
               patch_env REDIS_URL               "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
               patch_env AUTH_SERVICE_URL        "http://${{ env.AUTH_PRIVATE_IP }}:3000"
-              patch_env USER_SERVICE_URL        "http://${{ env.USER_PRIVATE_IP }}:3001/api"
+              patch_env USER_SERVICE_URL        "http://${{ env.USER_PRIVATE_IP }}:3001"
               patch_env VEHICLE_SERVICE_URL     "http://${{ env.VEHICLE_PRIVATE_IP }}:3003"
               patch_env PARKING_SERVICE_URL     "http://${{ env.PARKING_PRIVATE_IP }}:3004"
-              patch_env RESERVATION_SERVICE_URL "http://${{ env.RESERVATION_PRIVATE_IP }}:3005/api"
+              patch_env RESERVATION_SERVICE_URL "http://${{ env.RESERVATION_PRIVATE_IP }}:3005"
+              patch_env PAYMENT_SERVICE_URL     "http://${{ env.PAYMENT_PRIVATE_IP }}:3007"
               patch_env THROTTLE_TTL            60000
               patch_env THROTTLE_LIMIT          60
             fi
@@ -291,12 +371,25 @@ jobs:
               patch_env RESERVATION_EXPIRY_MINUTES 15
             fi
 
+            if [ "${{ matrix.name }}" = "payment" ]; then
+              patch_env PAYMENT_SERVICE_PORT    3007
+              patch_env PAYMENT_DATABASE_URL    "postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/paymentdb"
+              patch_env REDIS_URL               "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
+              patch_env RABBITMQ_URL            "amqp://guest:guest@${{ env.AUTH_PRIVATE_IP }}:5672"
+              patch_env KAFKA_BROKERS           "${{ env.AUTH_PRIVATE_IP }}:9092"
+              patch_env RESERVATION_SERVICE_URL "http://${{ env.RESERVATION_PRIVATE_IP }}:3005"
+              patch_env USER_SERVICE_URL        "http://${{ env.USER_PRIVATE_IP }}:3001/api"
+              patch_env STRIPE_SECRET_KEY       "${{ secrets.STRIPE_SECRET_KEY }}"
+              patch_env STRIPE_PUBLIC_KEY       "${{ secrets.STRIPE_PUBLIC_KEY }}"
+              patch_env STRIPE_WEBHOOK_SECRET   "${{ secrets.STRIPE_WEBHOOK_SECRET }}"
+            fi
+
             if [ "${{ matrix.name }}" = "frontend" ]; then
               patch_env PORT 3002
               patch_env NEXT_PUBLIC_GATEWAY_URL "${{ env.PROD_GATEWAY_URL }}"
             fi
 
-            # ── Docker login, pull y restart ─────────────────────────────────
+            # ── Docker login, pull y restart ──────────────────────────────────
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
               docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
@@ -304,39 +397,64 @@ jobs:
             docker-compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
             docker-compose -f "$COMPOSE_FILE" ps
 
+            # ── Migraciones Prisma ────────────────────────────────────────────
+            # Cada servicio corre SOLO sus propias migraciones contra SU propia DB.
+            # auth  → smartparking  (prisma/auth/schema.prisma)
+            # user  → userdb        (prisma/user/schema.prisma)
+            # vehicle → vehicledb   (prisma/vehicle/schema.prisma)
+            # parking → parkingdb   (prisma/parking/schema.prisma)
+            # reservation → reservationdb (prisma/reservation/schema.prisma)
+            # payment → paymentdb   (prisma/payment/schema.prisma)
+
             if [ "${{ matrix.name }}" = "auth" ]; then
-              echo "Waiting for PostgreSQL to be ready..."
+              echo "⏳ Esperando PostgreSQL (smartparking)..."
               pg_container=$(docker-compose -f "$COMPOSE_FILE" ps -q postgres)
-              for i in {1..30}; do
-                if docker exec "$pg_container" pg_isready -U admin -d smartparking &>/dev/null; then
-                  echo "PostgreSQL is ready!"
-                  break
-                fi
+              for i in $(seq 1 30); do
+                docker exec "$pg_container" pg_isready -U admin -d smartparking &>/dev/null && break
                 sleep 1
               done
 
-              echo "Ensuring microservice databases exist..."
-              docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE userdb;" || true
-              docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE vehicledb;" || true
-              docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE parkingdb;" || true
-              docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE reservationdb;" || true
+              # Crear DBs de los demás servicios si no existen (conectando a postgres, no a smartparking)
+              for db in userdb vehicledb parkingdb reservationdb paymentdb; do
+                docker exec "$pg_container" psql -U admin -d postgres \
+                  -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1 || \
+                  docker exec "$pg_container" psql -U admin -d postgres -c "CREATE DATABASE ${db};" || true
+                echo "  ✔ DB ${db}"
+              done
 
-              echo "Cleaning up invalid failed migrations on smartparking DB..."
-              docker exec "$pg_container" psql -U admin -d smartparking -c "DELETE FROM _prisma_migrations WHERE migration_name = '20260601120000_init_vehicle';" || true
-
-              echo "Running auth migrations..."
-              docker-compose -f "$COMPOSE_FILE" exec -T auth-service npx prisma migrate deploy --schema prisma/auth/schema.prisma
+              echo "▶ Migraciones auth → smartparking"
+              docker-compose -f "$COMPOSE_FILE" exec -T auth-service \
+                npx prisma migrate deploy --schema prisma/auth/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "user" ]; then
-              echo "Running user migrations..."
-              docker-compose -f "$COMPOSE_FILE" exec -T app npx prisma migrate deploy --config prisma.user.config.ts
+              echo "▶ Migraciones user → userdb"
+              docker-compose -f "$COMPOSE_FILE" exec -T app \
+                npx prisma migrate deploy --schema prisma/user/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "vehicle" ]; then
-              echo "Resolving vehicle init migration if failed in vehicledb..."
-              docker-compose -f "$COMPOSE_FILE" exec -T app npx prisma migrate resolve --rolled-back 20260601120000_init_vehicle --config prisma.vehicle.config.ts || true
-
-              echo "Running vehicle migrations..."
-              docker-compose -f "$COMPOSE_FILE" exec -T app npx prisma migrate deploy --config prisma.vehicle.config.ts
+              echo "▶ Migraciones vehicle → vehicledb"
+              docker-compose -f "$COMPOSE_FILE" exec -T app \
+                npx prisma migrate deploy --schema prisma/vehicle/schema.prisma
             fi
+
+            if [ "${{ matrix.name }}" = "parking" ]; then
+              echo "▶ Migraciones parking → parkingdb"
+              docker-compose -f "$COMPOSE_FILE" exec -T app \
+                npx prisma migrate deploy --schema prisma/parking/schema.prisma
+            fi
+
+            if [ "${{ matrix.name }}" = "reservation" ]; then
+              echo "▶ Migraciones reservation → reservationdb"
+              docker-compose -f "$COMPOSE_FILE" exec -T app \
+                npx prisma migrate deploy --schema prisma/reservation/schema.prisma
+            fi
+
+            if [ "${{ matrix.name }}" = "payment" ]; then
+              echo "▶ Migraciones payment → paymentdb"
+              docker-compose -f "$COMPOSE_FILE" exec -T app \
+                npx prisma migrate deploy --schema prisma/payment/schema.prisma
+            fi
+
+            echo "✅ ${{ matrix.name }} deployado exitosamente."

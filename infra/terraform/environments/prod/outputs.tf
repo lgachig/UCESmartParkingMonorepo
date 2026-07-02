@@ -38,6 +38,11 @@ output "reservation_private_ip" {
   value       = module.reservation.private_ip
 }
 
+output "payment_private_ip" {
+  description = "GitHub Secret: PROD_EC2_PAYMENT_HOST"
+  value       = module.payment.private_ip
+}
+
 output "prod_auth_api_url" {
   description = "GitHub Variable: PROD_AUTH_API_URL"
   value       = "http://${aws_eip.gateway.public_ip}:3006/api"
@@ -89,6 +94,7 @@ output "github_setup_summary" {
       PROD_EC2_GATEWAY_HOST   = ${module.gateway.private_ip}
       PROD_EC2_PARKING_HOST   = ${module.parking.private_ip}
       PROD_EC2_RESERVATION_HOST = ${module.reservation.private_ip}
+      PROD_EC2_PAYMENT_HOST   = ${module.payment.private_ip}
       DOCKERHUB_USERNAME      = ${var.dockerhub_user}
       DOCKERHUB_TOKEN         = (token de Docker Hub)
 

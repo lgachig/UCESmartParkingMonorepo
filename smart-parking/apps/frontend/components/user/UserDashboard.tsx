@@ -57,13 +57,11 @@ export default function UserDashboard() {
     setTimeout(() => {
       fetchData();
     }, 0);
-
-    // Refresh slots periodically
+    
     const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // Keep track of activeSession changes in localStorage
   useEffect(() => {
     const handleStorageChange = () => {
       const savedActive = localStorage.getItem('my_reserved_slot_id');
@@ -79,7 +77,6 @@ export default function UserDashboard() {
       }
     };
     window.addEventListener('storage', handleStorageChange);
-    // Poll storage local changes manually too
     const pollLocal = setInterval(handleStorageChange, 1000);
 
     return () => {
@@ -90,7 +87,6 @@ export default function UserDashboard() {
 
   const credits = useMemo(() => {
     const limit = user?.role === 'PROFESSOR' ? 5 : 3;
-    // Calculate spent credits from history
     return Math.max(0, limit - history.length);
   }, [user, history]);
 
@@ -127,11 +123,9 @@ export default function UserDashboard() {
     try {
       await parkingService.reserveSlot(slot.id);
       
-      // Update local reservation
       localStorage.setItem('my_reserved_slot_id', slot.id);
       setActiveSession(slot.id);
 
-      // Add to history
       const nextHistory = [...history, slot.number];
       localStorage.setItem('my_reservation_history', JSON.stringify(nextHistory));
       setHistory(nextHistory);

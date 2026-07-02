@@ -44,6 +44,7 @@ export default [
         enforceBuildableLibDependency: true,
         allow: [
           '^.*/eslint(\\.base)?\\.config\\.[cm]?[jt]s$',
+          '^\\.\\./\\.\\./webpack\\.prisma\\.config\\.js$',
           '^\\.\\./\\.\\./\\.\\./shared/.*'
         ],
         depConstraints: [

@@ -1,6 +1,11 @@
 const { NxAppWebpackPlugin } = require('@nx/webpack/app-plugin');
 const { join } = require('path');
 const TsconfigPathsPlugin = require('tsconfig-paths-webpack-plugin');
+const {
+  prismaGeneratedClientRule,
+  prismaWebpackExternals,
+  prismaWebpackPlugins,
+} = require('../../webpack.prisma.config.js');
 
 module.exports = {
   output: {
@@ -17,10 +22,12 @@ module.exports = {
       }),
     ],
   },
-  externals: {
-    '@nestjs/terminus': 'commonjs @nestjs/terminus',
+  module: {
+    rules: [prismaGeneratedClientRule()],
   },
+  externals: prismaWebpackExternals(__dirname),
   plugins: [
+    ...prismaWebpackPlugins(),
     new NxAppWebpackPlugin({
       target: 'node',
       compiler: 'tsc',

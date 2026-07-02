@@ -15,3 +15,11 @@ coverage
 **/coverage
 *.md
 .DS_Store
+
+node_modules
+**/node_modules
+**/.git
+**/.nx/cache
+**/dist
+**/*.spec.ts
+**/*.test.ts
