@@ -7,6 +7,11 @@ on:
     types: [closed]
     branches: [hotfix/USP-096-fix-deploy]
   workflow_dispatch:
+    inputs:
+      force_deploy_all:
+        description: 'Force deploy all services regardless of file changes'
+        type: boolean
+        default: true
 
 concurrency:
   group: prod-pipeline-${{ github.ref }}
@@ -20,18 +25,94 @@ jobs:
   ci-check:
     uses: ./.github/workflows/ci.yml
 
-  docker-push:
-    name: Build & Push to Docker Hub
+  get-changes:
+    name: Read Changed Services
     needs: [ci-check]
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      auth:        ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.auth == 'true' }}
+      user:        ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.user == 'true' }}
+      vehicle:     ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.vehicle == 'true' }}
+      parking:     ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.parking == 'true' }}
+      reservation: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.reservation == 'true' }}
+      gateway:     ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.gateway == 'true' }}
+      frontend:    ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.frontend == 'true' }}
+      payment:     ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.payment == 'true' }}
+    steps:
+      - name: Echo changes
+        run: |
+          echo "auth=${{ needs.ci-check.outputs.auth }}"
+          echo "user=${{ needs.ci-check.outputs.user }}"
+          echo "vehicle=${{ needs.ci-check.outputs.vehicle }}"
+          echo "parking=${{ needs.ci-check.outputs.parking }}"
+          echo "reservation=${{ needs.ci-check.outputs.reservation }}"
+          echo "gateway=${{ needs.ci-check.outputs.gateway }}"
+          echo "frontend=${{ needs.ci-check.outputs.frontend }}"
+          echo "payment=${{ needs.ci-check.outputs.payment }}"
+
+  docker-push:
+    name: Build & Push (${{ matrix.name }})
+    needs: [get-changes]
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     environment: prod
     env:
       PROD_GATEWAY_URL: ${{ vars.PROD_GATEWAY_URL || secrets.PROD_GATEWAY_URL }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: auth
+            changed: ${{ needs.get-changes.outputs.auth }}
+            dockerfile: smart-parking/apps/auth-service/dockerfile
+            context: ./smart-parking
+            image_suffix: auth
+          - name: user
+            changed: ${{ needs.get-changes.outputs.user }}
+            dockerfile: smart-parking/apps/user-service/dockerfile
+            context: ./smart-parking
+            image_suffix: user
+          - name: vehicle
+            changed: ${{ needs.get-changes.outputs.vehicle }}
+            dockerfile: smart-parking/apps/vehicle-service/dockerfile
+            context: ./smart-parking
+            image_suffix: vehicle
+          - name: gateway
+            changed: ${{ needs.get-changes.outputs.gateway }}
+            dockerfile: smart-parking/apps/gateway-service/dockerfile
+            context: ./smart-parking
+            image_suffix: gateway
+          - name: parking
+            changed: ${{ needs.get-changes.outputs.parking }}
+            dockerfile: smart-parking/apps/parking-service/dockerfile
+            context: ./smart-parking
+            image_suffix: parking
+          - name: reservation
+            changed: ${{ needs.get-changes.outputs.reservation }}
+            dockerfile: smart-parking/apps/reservation-service/dockerfile
+            context: ./smart-parking
+            image_suffix: reservation
+          - name: frontend
+            changed: ${{ needs.get-changes.outputs.frontend }}
+            dockerfile: smart-parking/apps/frontend/dockerfile
+            context: ./smart-parking/apps/frontend
+            image_suffix: frontend
+          - name: payment
+            changed: ${{ needs.get-changes.outputs.payment }}
+            dockerfile: smart-parking/apps/payment-service/dockerfile
+            context: ./smart-parking
+            image_suffix: payment
     steps:
+      - name: Skip if unchanged
+        if: matrix.changed != 'true'
+        run: echo "Skip ${{ matrix.name }} — sin cambios."
+
       - uses: actions/checkout@v4
+        if: matrix.changed == 'true'
 
       - name: Verify PROD_GATEWAY_URL
+        if: matrix.changed == 'true' && matrix.name == 'frontend'
         run: |
           if [ -z "$PROD_GATEWAY_URL" ]; then
             echo "::error::Falta PROD_GATEWAY_URL — ponla en GitHub Environment prod → Variables"
@@ -40,72 +121,29 @@ jobs:
           echo "PROD_GATEWAY_URL=$PROD_GATEWAY_URL"
 
       - uses: docker/setup-buildx-action@v3
+        if: matrix.changed == 'true'
+
       - uses: docker/login-action@v3
+        if: matrix.changed == 'true'
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push auth-service
+      - name: Push ${{ matrix.name }}
+        if: matrix.changed == 'true' && matrix.name != 'frontend'
         uses: docker/build-push-action@v6
         with:
-          context: ./smart-parking
-          file: ./smart-parking/apps/auth-service/dockerfile
+          context: ${{ matrix.context }}
+          file: ./${{ matrix.dockerfile }}
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-auth:prod
-
-      - name: Push user-service
-        uses: docker/build-push-action@v6
-        with:
-          context: ./smart-parking
-          file: ./smart-parking/apps/user-service/dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-user:prod
-
-      - name: Push vehicle-service
-        uses: docker/build-push-action@v6
-        with:
-          context: ./smart-parking
-          file: ./smart-parking/apps/vehicle-service/dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-vehicle:prod
-
-      - name: Push gateway-service
-        uses: docker/build-push-action@v6
-        with:
-          context: ./smart-parking
-          file: ./smart-parking/apps/gateway-service/dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-gateway:prod
-
-      - name: Push parking-service
-        uses: docker/build-push-action@v6
-        with:
-          context: ./smart-parking
-          file: ./smart-parking/apps/parking-service/dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-parking:prod
-
-      - name: Push reservation-service
-        uses: docker/build-push-action@v6
-        with:
-          context: ./smart-parking
-          file: ./smart-parking/apps/reservation-service/dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-reservation:prod
-
-      - name: Push payment-service
-        uses: docker/build-push-action@v6
-        with:
-          context: ./smart-parking
-          file: ./smart-parking/apps/payment-service/dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-payment:prod
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-${{ matrix.image_suffix }}:prod
 
       - name: Push frontend
+        if: matrix.changed == 'true' && matrix.name == 'frontend'
         uses: docker/build-push-action@v6
         with:
-          context: ./smart-parking/apps/frontend
-          file: ./smart-parking/apps/frontend/dockerfile
+          context: ${{ matrix.context }}
+          file: ./${{ matrix.dockerfile }}
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-frontend:prod
           build-args: |
@@ -183,9 +221,9 @@ jobs:
             echo "✅ Postgres listo en auth"
 
   deploy:
-    name: Deploy on EC2 instances (via Bastion)
+    name: Deploy ${{ matrix.name }} on EC2 (via Bastion)
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
-    needs: [ensure-postgres, docker-push]
+    needs: [get-changes, ensure-postgres, docker-push]
     runs-on: ubuntu-latest
     environment: prod
     env:
@@ -197,30 +235,34 @@ jobs:
           - name: auth
             service_tag: auth
             service_name: auth-service
+            changed: ${{ needs.get-changes.outputs.auth }}
           - name: user
             service_tag: user
             service_name: app
+            changed: ${{ needs.get-changes.outputs.user }}
           - name: vehicle
             service_tag: vehicle
             service_name: app
-          - name: frontend
-            service_tag: frontend
-            service_name: app
-          - name: gateway
-            service_tag: gateway
-            service_name: app
+            changed: ${{ needs.get-changes.outputs.vehicle }}
           - name: parking
             service_tag: parking
             service_name: app
+            changed: ${{ needs.get-changes.outputs.parking }}
           - name: reservation
             service_tag: reservation
             service_name: app
+            changed: ${{ needs.get-changes.outputs.reservation }}
           - name: payment
             service_tag: payment
             service_name: app
-
+            changed: ${{ needs.get-changes.outputs.payment }}
     steps:
+      - name: Skip if unchanged
+        if: matrix.changed != 'true'
+        run: echo "Skip ${{ matrix.name }}."
+
       - name: Configure AWS credentials
+        if: matrix.changed == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -229,6 +271,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Discover private IPs via AWS CLI
+        if: matrix.changed == 'true'
         id: discover
         run: |
           discover_ip() {
@@ -255,6 +298,7 @@ jobs:
           echo "PRIVATE_IP=$TARGET_IP" >> $GITHUB_ENV
 
       - name: Setup SSH key
+        if: matrix.changed == 'true'
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.PROD_EC2_SSH_KEY }}" > ~/.ssh/prod.pem
@@ -262,6 +306,7 @@ jobs:
           ssh-keyscan -H ${{ secrets.PROD_BASTION_HOST }} >> ~/.ssh/known_hosts
 
       - name: Wait for SSH connectivity
+        if: matrix.changed == 'true'
         run: |
           for i in $(seq 1 10); do
             if ssh -i ~/.ssh/prod.pem \
@@ -277,6 +322,7 @@ jobs:
           done
 
       - name: Deploy ${{ matrix.name }} — inject .env + pull + restart + migrate
+        if: matrix.changed == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ env.PRIVATE_IP }}
@@ -309,7 +355,6 @@ jobs:
               fi
             }
 
-            # ── Vars comunes ─────────────────────────────────────────────────
             patch_env DOCKERHUB_USER       "${{ secrets.DOCKERHUB_USERNAME }}"
             patch_env JWT_SECRET           "${{ secrets.PROD_JWT_SECRET }}"
             patch_env JWT_REFRESH_SECRET   "${{ secrets.PROD_JWT_REFRESH_SECRET }}"
@@ -319,7 +364,6 @@ jobs:
             CORS_LIST="http://${{ secrets.PROD_FRONTEND_EIP }}:3002,http://${{ secrets.PROD_GATEWAY_EIP }}:3006,${ALB_FRONTEND_URL},${{ env.PROD_GATEWAY_URL }}"
             patch_env CORS_ORIGINS "$CORS_LIST"
 
-            # ── Vars por servicio ─────────────────────────────────────────────
             if [ "${{ matrix.name }}" = "auth" ]; then
               patch_env PORT             3000
               patch_env DATABASE_URL     "postgresql://admin:admin@postgres:5432/smartparking"
@@ -338,19 +382,6 @@ jobs:
               patch_env VEHICLE_SERVICE_PORT  3003
               patch_env VEHICLE_DATABASE_URL  "postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/vehicledb"
               patch_env REDIS_URL             "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
-            fi
-
-            if [ "${{ matrix.name }}" = "gateway" ]; then
-              patch_env GATEWAY_PORT            3006
-              patch_env REDIS_URL               "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
-              patch_env AUTH_SERVICE_URL        "http://${{ env.AUTH_PRIVATE_IP }}:3000"
-              patch_env USER_SERVICE_URL        "http://${{ env.USER_PRIVATE_IP }}:3001"
-              patch_env VEHICLE_SERVICE_URL     "http://${{ env.VEHICLE_PRIVATE_IP }}:3003"
-              patch_env PARKING_SERVICE_URL     "http://${{ env.PARKING_PRIVATE_IP }}:3004"
-              patch_env RESERVATION_SERVICE_URL "http://${{ env.RESERVATION_PRIVATE_IP }}:3005"
-              patch_env PAYMENT_SERVICE_URL     "http://${{ env.PAYMENT_PRIVATE_IP }}:3007"
-              patch_env THROTTLE_TTL            60000
-              patch_env THROTTLE_LIMIT          60
             fi
 
             if [ "${{ matrix.name }}" = "parking" ]; then
@@ -384,27 +415,12 @@ jobs:
               patch_env STRIPE_WEBHOOK_SECRET   "${{ secrets.STRIPE_WEBHOOK_SECRET }}"
             fi
 
-            if [ "${{ matrix.name }}" = "frontend" ]; then
-              patch_env PORT 3002
-              patch_env NEXT_PUBLIC_GATEWAY_URL "${{ env.PROD_GATEWAY_URL }}"
-            fi
-
-            # ── Docker login, pull y restart ──────────────────────────────────
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
               docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-            docker-compose -f "$COMPOSE_FILE" pull
+            docker-compose -f "$COMPOSE_FILE" pull ${{ matrix.service_name }}
             docker-compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
             docker-compose -f "$COMPOSE_FILE" ps
-
-            # ── Migraciones Prisma ────────────────────────────────────────────
-            # Cada servicio corre SOLO sus propias migraciones contra SU propia DB.
-            # auth  → smartparking  (prisma/auth/schema.prisma)
-            # user  → userdb        (prisma/user/schema.prisma)
-            # vehicle → vehicledb   (prisma/vehicle/schema.prisma)
-            # parking → parkingdb   (prisma/parking/schema.prisma)
-            # reservation → reservationdb (prisma/reservation/schema.prisma)
-            # payment → paymentdb   (prisma/payment/schema.prisma)
 
             if [ "${{ matrix.name }}" = "auth" ]; then
               echo "⏳ Esperando PostgreSQL (smartparking)..."
@@ -414,7 +430,6 @@ jobs:
                 sleep 1
               done
 
-              # Crear DBs de los demás servicios si no existen (conectando a postgres, no a smartparking)
               for db in userdb vehicledb parkingdb reservationdb paymentdb; do
                 docker exec "$pg_container" psql -U admin -d postgres \
                   -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1 || \
@@ -429,32 +444,70 @@ jobs:
 
             if [ "${{ matrix.name }}" = "user" ]; then
               echo "▶ Migraciones user → userdb"
-              docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --schema prisma/user/schema.prisma
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e USER_DATABASE_URL="postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/userdb" \
+                app npx prisma migrate deploy --config prisma.user.config.ts
             fi
 
             if [ "${{ matrix.name }}" = "vehicle" ]; then
               echo "▶ Migraciones vehicle → vehicledb"
-              docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --schema prisma/vehicle/schema.prisma
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e VEHICLE_DATABASE_URL="postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/vehicledb" \
+                app npx prisma migrate deploy --config prisma.vehicle.config.ts
             fi
 
             if [ "${{ matrix.name }}" = "parking" ]; then
               echo "▶ Migraciones parking → parkingdb"
-              docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --schema prisma/parking/schema.prisma
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e PARKING_DATABASE_URL="postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/parkingdb" \
+                app npx prisma migrate deploy --config prisma.parking.config.ts
             fi
 
             if [ "${{ matrix.name }}" = "reservation" ]; then
               echo "▶ Migraciones reservation → reservationdb"
-              docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --schema prisma/reservation/schema.prisma
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e RESERVATION_DATABASE_URL="postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/reservationdb" \
+                app npx prisma migrate deploy --config prisma.reservation.config.ts
             fi
 
             if [ "${{ matrix.name }}" = "payment" ]; then
               echo "▶ Migraciones payment → paymentdb"
-              docker-compose -f "$COMPOSE_FILE" exec -T app \
-                npx prisma migrate deploy --schema prisma/payment/schema.prisma
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e PAYMENT_DATABASE_URL="postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/paymentdb" \
+                app npx prisma migrate deploy --config prisma.payment.config.ts
             fi
 
             echo "✅ ${{ matrix.name }} deployado exitosamente."
+
+  refresh-asg:
+    name: Refresh ASG (frontend & gateway)
+    needs: [get-changes, docker-push]
+    if: (github.event_name != 'pull_request' || github.event.pull_request.merged == true) && (needs.get-changes.outputs.frontend == 'true' || needs.get-changes.outputs.gateway == 'true')
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Refresh Frontend ASG
+        if: needs.get-changes.outputs.frontend == 'true'
+        run: |
+          echo "Starting instance refresh for prod-frontend-asg..."
+          REFRESH_ID=$(aws autoscaling start-instance-refresh \
+            --auto-scaling-group-name prod-frontend-asg \
+            --query "InstanceRefreshId" --output text)
+          echo "Instance refresh started successfully. ID: $REFRESH_ID"
+
+      - name: Refresh Gateway ASG
+        if: needs.get-changes.outputs.gateway == 'true'
+        run: |
+          echo "Starting instance refresh for prod-gateway-asg..."
+          REFRESH_ID=$(aws autoscaling start-instance-refresh \
+            --auto-scaling-group-name prod-gateway-asg \
+            --query "InstanceRefreshId" --output text)
+          echo "Instance refresh started successfully. ID: $REFRESH_ID"
