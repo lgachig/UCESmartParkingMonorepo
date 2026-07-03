@@ -2,10 +2,10 @@ name: QA CI/CD
 
 on:
   push:
-    branches: [qa, QA]
+    branches: [qa, QA, hotfix/USP-096-fix-deploy]
   pull_request:
     types: [closed]
-    branches: [qa, QA]
+    branches: [qa, QA, hotfix/USP-096-fix-deploy]
   workflow_dispatch:
     inputs:
       force_deploy_all:
@@ -161,9 +161,9 @@ jobs:
       vehicle_ip:     ${{ steps.ips.outputs.vehicle_ip }}
       parking_ip:     ${{ steps.ips.outputs.parking_ip }}
       reservation_ip: ${{ steps.ips.outputs.reservation_ip }}
-      gateway_ip:     ${{ steps.ips.outputs.gateway_ip }}
-      frontend_ip:    ${{ steps.ips.outputs.frontend_ip }}
       payment_ip:     ${{ steps.ips.outputs.payment_ip }}
+      gateway_ips:    ${{ steps.ips.outputs.gateway_ips }}
+      frontend_ips:   ${{ steps.ips.outputs.frontend_ips }}
 
     steps:
       - name: Configure AWS credentials
@@ -177,6 +177,7 @@ jobs:
       - name: Get IPs
         id: ips
         run: |
+          # Una sola instancia (auth/user/vehicle/parking/reservation/payment) — igual que QA
           get_ip() {
             local svc="$1"
             local ip
@@ -189,25 +190,41 @@ jobs:
             fi
             echo "$ip"
           }
+
+          # Uno o más (gateway/frontend viven en un ASG) -> lista separada por comas,
+          # lista que appleboy/ssh-action acepta directo en el campo "host".
+          get_ips_multi() {
+            local svc="$1"
+            local ips
+            ips=$(aws ec2 describe-instances \
+              --filters "Name=tag:Service,Values=${svc}" "Name=tag:Environment,Values=qa" \
+                        "Name=instance-state-name,Values=running" \
+              --query "Reservations[].Instances[].PrivateIpAddress" --output text 2>/dev/null | tr '\t' ',' | tr ' ' ',' | sed 's/,,*/,/g;s/^,//;s/,$//')
+            if [ -z "$ips" ]; then
+              echo "::error::No EC2 running for Service=${svc} (ASG)"; return 1
+            fi
+            echo "$ips"
+          }
+
           AUTH_IP=$(get_ip "auth")               || exit 1
           USER_IP=$(get_ip "user")               || exit 1
           VEHICLE_IP=$(get_ip "vehicle")         || exit 1
           PARKING_IP=$(get_ip "parking")         || exit 1
           RESERVATION_IP=$(get_ip "reservation") || exit 1
-          GATEWAY_IP=$(get_ip "gateway")         || exit 1
-          FRONTEND_IP=$(get_ip "frontend")       || exit 1
           PAYMENT_IP=$(get_ip "payment")         || exit 1
+          GATEWAY_IPS=$(get_ips_multi "gateway")   || exit 1
+          FRONTEND_IPS=$(get_ips_multi "frontend") || exit 1
 
           echo "auth_ip=$AUTH_IP"               >> $GITHUB_OUTPUT
           echo "user_ip=$USER_IP"               >> $GITHUB_OUTPUT
           echo "vehicle_ip=$VEHICLE_IP"         >> $GITHUB_OUTPUT
           echo "parking_ip=$PARKING_IP"         >> $GITHUB_OUTPUT
           echo "reservation_ip=$RESERVATION_IP" >> $GITHUB_OUTPUT
-          echo "gateway_ip=$GATEWAY_IP"         >> $GITHUB_OUTPUT
-          echo "frontend_ip=$FRONTEND_IP"       >> $GITHUB_OUTPUT
           echo "payment_ip=$PAYMENT_IP"         >> $GITHUB_OUTPUT
+          echo "gateway_ips=$GATEWAY_IPS"       >> $GITHUB_OUTPUT
+          echo "frontend_ips=$FRONTEND_IPS"     >> $GITHUB_OUTPUT
 
-          echo "auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | reservation=$RESERVATION_IP | gateway=$GATEWAY_IP | frontend=$FRONTEND_IP | payment=$PAYMENT_IP"
+          echo "auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | reservation=$RESERVATION_IP | payment=$PAYMENT_IP | gateway(asg)=$GATEWAY_IPS | frontend(asg)=$FRONTEND_IPS"
 
   ensure-postgres:
     name: Ensure Postgres on auth
@@ -262,7 +279,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: qa
     env:
-      QA_GATEWAY_URL: ${{ secrets.QA_GATEWAY_URL }}
+      QA_GATEWAY_URL:  ${{ secrets.QA_GATEWAY_URL }}
+      QA_FRONTEND_URL: http://${{ secrets.QA_FRONTEND_EIP }}:3002
     strategy:
       fail-fast: false
       matrix:
@@ -321,11 +339,11 @@ jobs:
           echo "VEHICLE_PRIVATE_IP=${{ needs.discover-ips.outputs.vehicle_ip }}"         >> $GITHUB_ENV
           echo "PARKING_PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"         >> $GITHUB_ENV
           echo "RESERVATION_PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV
-          echo "GATEWAY_PRIVATE_IP=${{ needs.discover-ips.outputs.gateway_ip }}"         >> $GITHUB_ENV
-          echo "FRONTEND_PRIVATE_IP=${{ needs.discover-ips.outputs.frontend_ip }}"       >> $GITHUB_ENV
           echo "PAYMENT_PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"         >> $GITHUB_ENV
+          echo "GATEWAY_PRIVATE_IPS=${{ needs.discover-ips.outputs.gateway_ips }}"       >> $GITHUB_ENV
+          echo "FRONTEND_PRIVATE_IPS=${{ needs.discover-ips.outputs.frontend_ips }}"     >> $GITHUB_ENV
 
-      - name: Resolve target IP
+      - name: Resolve target host(s)
         if: matrix.changed == 'true'
         run: |
           case "${{ matrix.name }}" in
@@ -334,9 +352,9 @@ jobs:
             vehicle)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.vehicle_ip }}"     >> $GITHUB_ENV ;;
             parking)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"     >> $GITHUB_ENV ;;
             reservation) echo "PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV ;;
-            gateway)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.gateway_ip }}"     >> $GITHUB_ENV ;;
-            frontend)    echo "PRIVATE_IP=${{ needs.discover-ips.outputs.frontend_ip }}"    >> $GITHUB_ENV ;;
             payment)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"     >> $GITHUB_ENV ;;
+            gateway)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.gateway_ips }}"    >> $GITHUB_ENV ;;
+            frontend)    echo "PRIVATE_IP=${{ needs.discover-ips.outputs.frontend_ips }}"   >> $GITHUB_ENV ;;
           esac
 
       - name: Setup SSH
@@ -350,10 +368,11 @@ jobs:
       - name: Wait SSH
         if: matrix.changed == 'true'
         run: |
+          FIRST_IP=$(echo "${{ env.PRIVATE_IP }}" | cut -d',' -f1)
           for i in $(seq 1 10); do
             ssh -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
               -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.QA_BASTION_HOST }}" \
-              ec2-user@${{ env.PRIVATE_IP }} "echo OK" 2>/dev/null && break
+              ec2-user@${FIRST_IP} "echo OK" 2>/dev/null && break
             echo "⏳ $i/10..."; sleep 15
           done
 
@@ -368,11 +387,12 @@ jobs:
           timeout: 120s
           command_timeout: 15m
           script_stop: true
+          sync: true
           proxy_host: ${{ secrets.QA_BASTION_HOST }}
           proxy_username: ec2-user
           proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
           proxy_port: 22
-          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,GATEWAY_PRIVATE_IP,FRONTEND_PRIVATE_IP,PAYMENT_PRIVATE_IP,QA_GATEWAY_URL
+          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,PAYMENT_PRIVATE_IP,QA_GATEWAY_URL,QA_FRONTEND_URL
           script: |
             set -euo pipefail
 
@@ -396,7 +416,7 @@ jobs:
             patch_env JWT_SECRET           "${{ secrets.QA_JWT_SECRET }}"
             patch_env JWT_REFRESH_SECRET   "${{ secrets.QA_JWT_REFRESH_SECRET }}"
             patch_env INTERNAL_SERVICE_KEY "${{ secrets.QA_INTERNAL_SERVICE_KEY }}"
-            patch_env CORS_ORIGINS         "http://${{ secrets.QA_FRONTEND_EIP }}:3002,http://${{ secrets.QA_GATEWAY_EIP }}:3006"
+            patch_env CORS_ORIGINS         "$QA_FRONTEND_URL,$QA_GATEWAY_URL"
             patch_env APP_IMAGE "${{ secrets.DOCKERHUB_USERNAME }}/smartparking-${{ matrix.image_suffix }}:qa"
             patch_env APP_PORT  "${{ matrix.app_port }}"
 
@@ -404,7 +424,7 @@ jobs:
               patch_env PORT              "3000"
               patch_env DATABASE_URL      "postgresql://admin:admin@postgres:5432/smartparking"
               patch_env REDIS_URL         "redis://redis:6379"
-              patch_env FRONTEND_URL      "http://${{ secrets.QA_FRONTEND_EIP }}:3002"
+              patch_env FRONTEND_URL      "$QA_FRONTEND_URL"
               patch_env USER_SERVICE_URL  "http://${USER_PRIVATE_IP}:3001/api"
             fi
 

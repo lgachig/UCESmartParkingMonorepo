@@ -2,10 +2,10 @@ name: PROD CI/CD
 
 on:
   push:
-    branches: [main, prod,hotfix/USP-096-fix-deploy ]
+    branches: [prod, PROD]
   pull_request:
     types: [closed]
-    branches: [main, prod, hotfix/USP-096-fix-deploy]
+    branches: [prod, PROD]
   workflow_dispatch:
     inputs:
       force_deploy_all:
