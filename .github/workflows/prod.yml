@@ -51,46 +51,9 @@ jobs:
           echo "frontend=${{ needs.ci-check.outputs.frontend }}"
           echo "payment=${{ needs.ci-check.outputs.payment }}"
 
-  terraform-apply:
-    name: Provision Infrastructure (Terraform Apply)
-    needs: [get-changes]
-    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
-    environment: prod
-    env:
-      TF_VAR_key_name:             ${{ secrets.PROD_KEY_NAME }}
-      TF_VAR_dockerhub_user:       ${{ secrets.DOCKERHUB_USERNAME }}
-      TF_VAR_dockerhub_token:      ${{ secrets.DOCKERHUB_TOKEN }}
-      TF_VAR_jwt_secret:           ${{ secrets.PROD_JWT_SECRET }}
-      TF_VAR_jwt_refresh_secret:   ${{ secrets.PROD_JWT_REFRESH_SECRET }}
-      TF_VAR_internal_service_key: ${{ secrets.PROD_INTERNAL_SERVICE_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.5.0
-
-      - name: Terraform Init
-        run: terraform init
-        working-directory: infra/terraform/environments/prod
-
-      - name: Terraform Apply
-        run: terraform apply -auto-approve
-        working-directory: infra/terraform/environments/prod
-
   docker-push:
     name: Build & Push (${{ matrix.name }})
-    needs: [get-changes, terraform-apply]
+    needs: [get-changes]
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     environment: prod
@@ -186,36 +149,71 @@ jobs:
           build-args: |
             NEXT_PUBLIC_GATEWAY_URL=${{ env.PROD_GATEWAY_URL }}
 
-  ensure-postgres:
-    name: Ensure Postgres on auth
+  # ── NUEVO: discovery único, igual patrón que QA. Solo los 6 servicios
+  # que son EC2 fijas (auth/user/vehicle/parking/reservation/payment).
+  # frontend y gateway NO se descubren aquí porque viven en ASG detrás
+  # del ALB y se actualizan vía instance refresh (job refresh-asg).
+  discover-ips:
+    name: Discover Private IPs
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
-    needs: [terraform-apply, docker-push]
+    needs: [docker-push]
     runs-on: ubuntu-latest
     environment: prod
+    outputs:
+      auth_ip:        ${{ steps.ips.outputs.auth_ip }}
+      user_ip:        ${{ steps.ips.outputs.user_ip }}
+      vehicle_ip:     ${{ steps.ips.outputs.vehicle_ip }}
+      parking_ip:     ${{ steps.ips.outputs.parking_ip }}
+      reservation_ip: ${{ steps.ips.outputs.reservation_ip }}
+      payment_ip:     ${{ steps.ips.outputs.payment_ip }}
+
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: us-east-1
 
-      - name: Discover auth private IP
+      - name: Get IPs
+        id: ips
         run: |
-          AUTH_IP=$(aws ec2 describe-instances \
-            --filters \
-              "Name=tag:Name,Values=prod-auth" \
-              "Name=tag:Environment,Values=prod" \
-              "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].PrivateIpAddress" \
-            --output text)
-          if [ -z "$AUTH_IP" ] || [ "$AUTH_IP" = "None" ]; then
-            echo "::error::No se encontró instancia Name=prod-auth Environment=prod"
-            exit 1
-          fi
-          echo "AUTH_IP=$AUTH_IP" >> $GITHUB_ENV
+          get_ip() {
+            local svc="$1"
+            local ip
+            ip=$(aws ec2 describe-instances \
+              --filters "Name=tag:Name,Values=prod-${svc}" "Name=tag:Environment,Values=prod" \
+                        "Name=instance-state-name,Values=running" \
+              --query "Reservations[0].Instances[0].PrivateIpAddress" --output text 2>/dev/null)
+            if [ -z "$ip" ] || [ "$ip" = "None" ] || [ "$ip" = "null" ]; then
+              echo "::error::No EC2 running for Name=prod-${svc}"; return 1
+            fi
+            echo "$ip"
+          }
+          AUTH_IP=$(get_ip "auth")               || exit 1
+          USER_IP=$(get_ip "user")               || exit 1
+          VEHICLE_IP=$(get_ip "vehicle")         || exit 1
+          PARKING_IP=$(get_ip "parking")         || exit 1
+          RESERVATION_IP=$(get_ip "reservation") || exit 1
+          PAYMENT_IP=$(get_ip "payment")         || exit 1
 
+          echo "auth_ip=$AUTH_IP"               >> $GITHUB_OUTPUT
+          echo "user_ip=$USER_IP"               >> $GITHUB_OUTPUT
+          echo "vehicle_ip=$VEHICLE_IP"         >> $GITHUB_OUTPUT
+          echo "parking_ip=$PARKING_IP"         >> $GITHUB_OUTPUT
+          echo "reservation_ip=$RESERVATION_IP" >> $GITHUB_OUTPUT
+          echo "payment_ip=$PAYMENT_IP"         >> $GITHUB_OUTPUT
+
+          echo "auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | reservation=$RESERVATION_IP | payment=$PAYMENT_IP"
+
+  ensure-postgres:
+    name: Ensure Postgres on auth
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    needs: [discover-ips]
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
@@ -226,7 +224,7 @@ jobs:
       - name: Start Postgres & Redis on auth EC2
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ env.AUTH_IP }}
+          host: ${{ needs.discover-ips.outputs.auth_ip }}
           username: ec2-user
           key: ${{ secrets.PROD_EC2_SSH_KEY }}
           port: 22
@@ -260,7 +258,7 @@ jobs:
   deploy:
     name: Deploy ${{ matrix.name }} on EC2 (via Bastion)
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
-    needs: [get-changes, terraform-apply, ensure-postgres, docker-push]
+    needs: [get-changes, discover-ips, ensure-postgres]
     runs-on: ubuntu-latest
     environment: prod
     env:
@@ -270,27 +268,21 @@ jobs:
       matrix:
         include:
           - name: auth
-            service_tag: auth
             service_name: auth-service
             changed: ${{ needs.get-changes.outputs.auth }}
           - name: user
-            service_tag: user
             service_name: app
             changed: ${{ needs.get-changes.outputs.user }}
           - name: vehicle
-            service_tag: vehicle
             service_name: app
             changed: ${{ needs.get-changes.outputs.vehicle }}
           - name: parking
-            service_tag: parking
             service_name: app
             changed: ${{ needs.get-changes.outputs.parking }}
           - name: reservation
-            service_tag: reservation
             service_name: app
             changed: ${{ needs.get-changes.outputs.reservation }}
           - name: payment
-            service_tag: payment
             service_name: app
             changed: ${{ needs.get-changes.outputs.payment }}
     steps:
@@ -298,41 +290,27 @@ jobs:
         if: matrix.changed != 'true'
         run: echo "Skip ${{ matrix.name }}."
 
-      - name: Configure AWS credentials
+      - name: Load IPs
         if: matrix.changed == 'true'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
-
-      - name: Discover private IPs via AWS CLI
-        if: matrix.changed == 'true'
-        id: discover
         run: |
-          discover_ip() {
-            aws ec2 describe-instances \
-              --filters \
-                "Name=tag:Name,Values=prod-$1" \
-                "Name=tag:Environment,Values=prod" \
-                "Name=instance-state-name,Values=running" \
-              --query "Reservations[0].Instances[0].PrivateIpAddress" \
-              --output text
-          }
+          echo "AUTH_PRIVATE_IP=${{ needs.discover-ips.outputs.auth_ip }}"               >> $GITHUB_ENV
+          echo "USER_PRIVATE_IP=${{ needs.discover-ips.outputs.user_ip }}"               >> $GITHUB_ENV
+          echo "VEHICLE_PRIVATE_IP=${{ needs.discover-ips.outputs.vehicle_ip }}"         >> $GITHUB_ENV
+          echo "PARKING_PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"         >> $GITHUB_ENV
+          echo "RESERVATION_PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV
+          echo "PAYMENT_PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"         >> $GITHUB_ENV
 
-          for svc in auth user vehicle parking reservation payment; do
-            ip=$(discover_ip $svc)
-            if [ -z "$ip" ] || [ "$ip" = "None" ]; then
-              echo "❌ No se encontró instancia Name=prod-$svc Environment=prod"
-              exit 1
-            fi
-            echo "✅ $svc → $ip"
-            echo "${svc^^}_PRIVATE_IP=$ip" >> $GITHUB_ENV
-          done
-
-          TARGET_IP=$(discover_ip ${{ matrix.service_tag }})
-          echo "PRIVATE_IP=$TARGET_IP" >> $GITHUB_ENV
+      - name: Resolve target IP
+        if: matrix.changed == 'true'
+        run: |
+          case "${{ matrix.name }}" in
+            auth)        echo "PRIVATE_IP=${{ needs.discover-ips.outputs.auth_ip }}"        >> $GITHUB_ENV ;;
+            user)        echo "PRIVATE_IP=${{ needs.discover-ips.outputs.user_ip }}"        >> $GITHUB_ENV ;;
+            vehicle)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.vehicle_ip }}"     >> $GITHUB_ENV ;;
+            parking)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"     >> $GITHUB_ENV ;;
+            reservation) echo "PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV ;;
+            payment)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"     >> $GITHUB_ENV ;;
+          esac
 
       - name: Setup SSH key
         if: matrix.changed == 'true'
@@ -373,6 +351,7 @@ jobs:
           proxy_username: ec2-user
           proxy_key: ${{ secrets.PROD_EC2_SSH_KEY }}
           proxy_port: 22
+          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,PAYMENT_PRIVATE_IP
           script: |
             set -e
             COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
@@ -516,9 +495,13 @@ jobs:
 
             echo "✅ ${{ matrix.name }} deployado exitosamente."
 
+  # frontend y gateway NO se tocan por SSH: viven en ASG detrás del ALB.
+  # Se actualizan forzando un instance refresh, que relanza instancias
+  # nuevas desde el Launch Template (ya con la imagen :prod recién
+  # publicada por docker-push).
   refresh-asg:
     name: Refresh ASG (frontend & gateway)
-    needs: [get-changes, terraform-apply, docker-push]
+    needs: [get-changes, docker-push]
     if: (github.event_name != 'pull_request' || github.event.pull_request.merged == true) && (needs.get-changes.outputs.frontend == 'true' || needs.get-changes.outputs.gateway == 'true')
     runs-on: ubuntu-latest
     environment: prod
