@@ -39,6 +39,7 @@ resource "aws_security_group" "microservice" {
 }
 
 resource "aws_security_group_rule" "frontend_public" {
+  count             = var.enable_frontend_public_direct ? 1 : 0
   type              = "ingress"
   from_port         = 3002
   to_port           = 3002
@@ -49,6 +50,7 @@ resource "aws_security_group_rule" "frontend_public" {
 }
 
 resource "aws_security_group_rule" "gateway_public" {
+  count             = var.enable_gateway_public_direct ? 1 : 0
   type              = "ingress"
   from_port         = 3006
   to_port           = 3006
@@ -57,6 +59,7 @@ resource "aws_security_group_rule" "gateway_public" {
   security_group_id = aws_security_group.microservice["gateway"].id
   description       = "Gateway public access"
 }
+
 
 resource "aws_security_group_rule" "private_from_gateway" {
   for_each = tomap({

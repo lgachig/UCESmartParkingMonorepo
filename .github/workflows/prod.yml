@@ -2,10 +2,10 @@ name: PROD CI/CD
 
 on:
   push:
-    branches: [hotfix/USP-096-fix-deploy]
+    branches: [main, prod]
   pull_request:
     types: [closed]
-    branches: [hotfix/USP-096-fix-deploy]
+    branches: [main, prod]
   workflow_dispatch:
     inputs:
       force_deploy_all:
@@ -31,14 +31,14 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     outputs:
-      auth:        ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.auth == 'true' }}
-      user:        ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.user == 'true' }}
-      vehicle:     ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.vehicle == 'true' }}
-      parking:     ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.parking == 'true' }}
-      reservation: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.reservation == 'true' }}
-      gateway:     ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.gateway == 'true' }}
-      frontend:    ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.frontend == 'true' }}
-      payment:     ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy_all == 'true') || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.payment == 'true' }}
+      auth:        ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.auth == 'true' }}
+      user:        ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.user == 'true' }}
+      vehicle:     ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.vehicle == 'true' }}
+      parking:     ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.parking == 'true' }}
+      reservation: ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.reservation == 'true' }}
+      gateway:     ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.gateway == 'true' }}
+      frontend:    ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.frontend == 'true' }}
+      payment:     ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.payment == 'true' }}
     steps:
       - name: Echo changes
         run: |
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: prod
     env:
-      PROD_GATEWAY_URL: ${{ vars.PROD_GATEWAY_URL || secrets.PROD_GATEWAY_URL }}
+      PROD_GATEWAY_URL: ${{ secrets.PROD_GATEWAY_URL }}
     strategy:
       fail-fast: false
       matrix:
@@ -103,6 +103,7 @@ jobs:
             dockerfile: smart-parking/apps/payment-service/dockerfile
             context: ./smart-parking
             image_suffix: payment
+
     steps:
       - name: Skip if unchanged
         if: matrix.changed != 'true'
@@ -110,15 +111,6 @@ jobs:
 
       - uses: actions/checkout@v4
         if: matrix.changed == 'true'
-
-      - name: Verify PROD_GATEWAY_URL
-        if: matrix.changed == 'true' && matrix.name == 'frontend'
-        run: |
-          if [ -z "$PROD_GATEWAY_URL" ]; then
-            echo "::error::Falta PROD_GATEWAY_URL — ponla en GitHub Environment prod → Variables"
-            exit 1
-          fi
-          echo "PROD_GATEWAY_URL=$PROD_GATEWAY_URL"
 
       - uses: docker/setup-buildx-action@v3
         if: matrix.changed == 'true'
@@ -138,6 +130,14 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-${{ matrix.image_suffix }}:prod
 
+      - name: Verify PROD_GATEWAY_URL
+        if: matrix.changed == 'true' && matrix.name == 'frontend'
+        run: |
+          if [ -z "$PROD_GATEWAY_URL" ]; then
+            echo "::error::Falta PROD_GATEWAY_URL — configúrala en GitHub Environments prod"
+            exit 1
+          fi
+
       - name: Push frontend
         if: matrix.changed == 'true' && matrix.name == 'frontend'
         uses: docker/build-push-action@v6
@@ -149,10 +149,6 @@ jobs:
           build-args: |
             NEXT_PUBLIC_GATEWAY_URL=${{ env.PROD_GATEWAY_URL }}
 
-  # ── NUEVO: discovery único, igual patrón que QA. Solo los 6 servicios
-  # que son EC2 fijas (auth/user/vehicle/parking/reservation/payment).
-  # frontend y gateway NO se descubren aquí porque viven en ASG detrás
-  # del ALB y se actualizan vía instance refresh (job refresh-asg).
   discover-ips:
     name: Discover Private IPs
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
@@ -166,6 +162,8 @@ jobs:
       parking_ip:     ${{ steps.ips.outputs.parking_ip }}
       reservation_ip: ${{ steps.ips.outputs.reservation_ip }}
       payment_ip:     ${{ steps.ips.outputs.payment_ip }}
+      gateway_ips:    ${{ steps.ips.outputs.gateway_ips }}
+      frontend_ips:   ${{ steps.ips.outputs.frontend_ips }}
 
     steps:
       - name: Configure AWS credentials
@@ -179,24 +177,43 @@ jobs:
       - name: Get IPs
         id: ips
         run: |
+          # Una sola instancia (auth/user/vehicle/parking/reservation/payment) — igual que QA
           get_ip() {
             local svc="$1"
             local ip
             ip=$(aws ec2 describe-instances \
-              --filters "Name=tag:Name,Values=prod-${svc}" "Name=tag:Environment,Values=prod" \
+              --filters "Name=tag:Service,Values=${svc}" "Name=tag:Environment,Values=prod" \
                         "Name=instance-state-name,Values=running" \
               --query "Reservations[0].Instances[0].PrivateIpAddress" --output text 2>/dev/null)
             if [ -z "$ip" ] || [ "$ip" = "None" ] || [ "$ip" = "null" ]; then
-              echo "::error::No EC2 running for Name=prod-${svc}"; return 1
+              echo "::error::No EC2 running for Service=${svc}"; return 1
             fi
             echo "$ip"
           }
+
+          # Uno o más (gateway/frontend viven en un ASG) -> lista separada por comas,
+          # lista que appleboy/ssh-action acepta directo en el campo "host".
+          get_ips_multi() {
+            local svc="$1"
+            local ips
+            ips=$(aws ec2 describe-instances \
+              --filters "Name=tag:Service,Values=${svc}" "Name=tag:Environment,Values=prod" \
+                        "Name=instance-state-name,Values=running" \
+              --query "Reservations[].Instances[].PrivateIpAddress" --output text 2>/dev/null | tr '\t' ',' | tr ' ' ',' | sed 's/,,*/,/g;s/^,//;s/,$//')
+            if [ -z "$ips" ]; then
+              echo "::error::No EC2 running for Service=${svc} (ASG)"; return 1
+            fi
+            echo "$ips"
+          }
+
           AUTH_IP=$(get_ip "auth")               || exit 1
           USER_IP=$(get_ip "user")               || exit 1
           VEHICLE_IP=$(get_ip "vehicle")         || exit 1
           PARKING_IP=$(get_ip "parking")         || exit 1
           RESERVATION_IP=$(get_ip "reservation") || exit 1
           PAYMENT_IP=$(get_ip "payment")         || exit 1
+          GATEWAY_IPS=$(get_ips_multi "gateway")   || exit 1
+          FRONTEND_IPS=$(get_ips_multi "frontend") || exit 1
 
           echo "auth_ip=$AUTH_IP"               >> $GITHUB_OUTPUT
           echo "user_ip=$USER_IP"               >> $GITHUB_OUTPUT
@@ -204,8 +221,10 @@ jobs:
           echo "parking_ip=$PARKING_IP"         >> $GITHUB_OUTPUT
           echo "reservation_ip=$RESERVATION_IP" >> $GITHUB_OUTPUT
           echo "payment_ip=$PAYMENT_IP"         >> $GITHUB_OUTPUT
+          echo "gateway_ips=$GATEWAY_IPS"       >> $GITHUB_OUTPUT
+          echo "frontend_ips=$FRONTEND_IPS"     >> $GITHUB_OUTPUT
 
-          echo "auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | reservation=$RESERVATION_IP | payment=$PAYMENT_IP"
+          echo "auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | reservation=$RESERVATION_IP | payment=$PAYMENT_IP | gateway(asg)=$GATEWAY_IPS | frontend(asg)=$FRONTEND_IPS"
 
   ensure-postgres:
     name: Ensure Postgres on auth
@@ -214,14 +233,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: prod
     steps:
-      - name: Setup SSH key
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.PROD_EC2_SSH_KEY }}" > ~/.ssh/prod.pem
           chmod 400 ~/.ssh/prod.pem
           ssh-keyscan -H ${{ secrets.PROD_BASTION_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Start Postgres & Redis on auth EC2
+      - name: Start Postgres on auth EC2
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ needs.discover-ips.outputs.auth_ip }}
@@ -238,8 +257,6 @@ jobs:
           script: |
             set -euo pipefail
             COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
-            sudo mkdir -p /opt/smartparking
-            sudo chown ec2-user:ec2-user /opt/smartparking
             docker-compose -f "$COMPOSE_FILE" up -d postgres redis
             pg_c=$(docker-compose -f "$COMPOSE_FILE" ps -q postgres | head -1)
             [ -n "$pg_c" ] || { echo "❌ Postgres container not found"; exit 1; }
@@ -256,35 +273,59 @@ jobs:
             echo "✅ Postgres listo en auth"
 
   deploy:
-    name: Deploy ${{ matrix.name }} on EC2 (via Bastion)
+    name: Deploy ${{ matrix.name }}
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     needs: [get-changes, discover-ips, ensure-postgres]
     runs-on: ubuntu-latest
     environment: prod
     env:
-      PROD_GATEWAY_URL: ${{ vars.PROD_GATEWAY_URL || secrets.PROD_GATEWAY_URL }}
+      PROD_GATEWAY_URL:  ${{ secrets.PROD_GATEWAY_URL }}
+      PROD_FRONTEND_URL: ${{ secrets.PROD_FRONTEND_URL }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: auth
             service_name: auth-service
+            image_suffix: auth
+            app_port: '3000'
             changed: ${{ needs.get-changes.outputs.auth }}
           - name: user
             service_name: app
+            image_suffix: user
+            app_port: '3001'
             changed: ${{ needs.get-changes.outputs.user }}
           - name: vehicle
             service_name: app
+            image_suffix: vehicle
+            app_port: '3003'
             changed: ${{ needs.get-changes.outputs.vehicle }}
+          - name: gateway
+            service_name: app
+            image_suffix: gateway
+            app_port: '3006'
+            changed: ${{ needs.get-changes.outputs.gateway }}
           - name: parking
             service_name: app
+            image_suffix: parking
+            app_port: '3004'
             changed: ${{ needs.get-changes.outputs.parking }}
           - name: reservation
             service_name: app
+            image_suffix: reservation
+            app_port: '3005'
             changed: ${{ needs.get-changes.outputs.reservation }}
+          - name: frontend
+            service_name: app
+            image_suffix: frontend
+            app_port: '3002'
+            changed: ${{ needs.get-changes.outputs.frontend }}
           - name: payment
             service_name: app
+            image_suffix: payment
+            app_port: '3007'
             changed: ${{ needs.get-changes.outputs.payment }}
+
     steps:
       - name: Skip if unchanged
         if: matrix.changed != 'true'
@@ -299,10 +340,17 @@ jobs:
           echo "PARKING_PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"         >> $GITHUB_ENV
           echo "RESERVATION_PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV
           echo "PAYMENT_PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"         >> $GITHUB_ENV
+          echo "GATEWAY_PRIVATE_IPS=${{ needs.discover-ips.outputs.gateway_ips }}"       >> $GITHUB_ENV
+          echo "FRONTEND_PRIVATE_IPS=${{ needs.discover-ips.outputs.frontend_ips }}"     >> $GITHUB_ENV
+          # AUTH_PRIVATE_IP se usa como target de gateway hacia auth; para las demás,
+          # la primera IP alcanza pues auth/user/vehicle/parking/reservation/payment
+          # siguen siendo instancia única, igual que QA.
 
-      - name: Resolve target IP
+      - name: Resolve target host(s)
         if: matrix.changed == 'true'
         run: |
+          # gateway y frontend viven en un ASG: puede haber 1 o N instancias.
+          # appleboy/ssh-action acepta "host: ip1,ip2,ip3" y despliega en cada una.
           case "${{ matrix.name }}" in
             auth)        echo "PRIVATE_IP=${{ needs.discover-ips.outputs.auth_ip }}"        >> $GITHUB_ENV ;;
             user)        echo "PRIVATE_IP=${{ needs.discover-ips.outputs.user_ip }}"        >> $GITHUB_ENV ;;
@@ -310,9 +358,11 @@ jobs:
             parking)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"     >> $GITHUB_ENV ;;
             reservation) echo "PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV ;;
             payment)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"     >> $GITHUB_ENV ;;
+            gateway)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.gateway_ips }}"    >> $GITHUB_ENV ;;
+            frontend)    echo "PRIVATE_IP=${{ needs.discover-ips.outputs.frontend_ips }}"   >> $GITHUB_ENV ;;
           esac
 
-      - name: Setup SSH key
+      - name: Setup SSH
         if: matrix.changed == 'true'
         run: |
           mkdir -p ~/.ssh
@@ -320,23 +370,18 @@ jobs:
           chmod 400 ~/.ssh/prod.pem
           ssh-keyscan -H ${{ secrets.PROD_BASTION_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Wait for SSH connectivity
+      - name: Wait SSH
         if: matrix.changed == 'true'
         run: |
+          FIRST_IP=$(echo "${{ env.PRIVATE_IP }}" | cut -d',' -f1)
           for i in $(seq 1 10); do
-            if ssh -i ~/.ssh/prod.pem \
-                   -o StrictHostKeyChecking=no \
-                   -o ConnectTimeout=10 \
-                   -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/prod.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.PROD_BASTION_HOST }}" \
-                   ec2-user@${{ env.PRIVATE_IP }} "echo OK" 2>/dev/null; then
-              echo "✅ SSH conectado"
-              break
-            fi
-            echo "⏳ Intento $i/10 — esperando..."
-            sleep 15
+            ssh -i ~/.ssh/prod.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+              -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/prod.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.PROD_BASTION_HOST }}" \
+              ec2-user@${FIRST_IP} "echo OK" 2>/dev/null && break
+            echo "⏳ $i/10..."; sleep 15
           done
 
-      - name: Deploy ${{ matrix.name }} — inject .env + pull + restart + migrate
+      - name: Deploy ${{ matrix.name }} via SSH
         if: matrix.changed == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -346,188 +391,192 @@ jobs:
           port: 22
           timeout: 120s
           command_timeout: 15m
-          script_stop: false
+          script_stop: true
+          sync: true
           proxy_host: ${{ secrets.PROD_BASTION_HOST }}
           proxy_username: ec2-user
           proxy_key: ${{ secrets.PROD_EC2_SSH_KEY }}
           proxy_port: 22
-          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,PAYMENT_PRIVATE_IP
+          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,PAYMENT_PRIVATE_IP,PROD_GATEWAY_URL,PROD_FRONTEND_URL
           script: |
-            set -e
+            set -euo pipefail
+
             COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
             ENV_FILE="/opt/smartparking/.env"
-
             sudo mkdir -p /opt/smartparking
             sudo chown ec2-user:ec2-user /opt/smartparking
-            touch "$ENV_FILE"
-            chmod 644 "$ENV_FILE"
+            touch "$ENV_FILE" && chmod 644 "$ENV_FILE"
 
             patch_env() {
               local key="$1" val="$2"
-              if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
-                sed -i "s|^${key}=.*|${key}=${val}|" "$ENV_FILE"
-              else
-                echo "${key}=${val}" >> "$ENV_FILE"
+              if [ -z "$val" ] || [ "$val" = "None" ] || [ "$val" = "null" ]; then
+                echo "❌ Valor vacío para $key"; exit 1
               fi
+              sudo sed -i "/^${key}=/d" "$ENV_FILE"
+              printf '%s=%s\n' "$key" "$val" >> "$ENV_FILE"
+              echo "  ✔ $key"
             }
 
             patch_env DOCKERHUB_USER       "${{ secrets.DOCKERHUB_USERNAME }}"
             patch_env JWT_SECRET           "${{ secrets.PROD_JWT_SECRET }}"
             patch_env JWT_REFRESH_SECRET   "${{ secrets.PROD_JWT_REFRESH_SECRET }}"
             patch_env INTERNAL_SERVICE_KEY "${{ secrets.PROD_INTERNAL_SERVICE_KEY }}"
-
-            ALB_FRONTEND_URL=$(echo "${{ env.PROD_GATEWAY_URL }}" | sed -E 's|:3006(/api)?$||')
-            CORS_LIST="http://${{ secrets.PROD_FRONTEND_EIP }}:3002,http://${{ secrets.PROD_GATEWAY_EIP }}:3006,${ALB_FRONTEND_URL},${{ env.PROD_GATEWAY_URL }}"
-            patch_env CORS_ORIGINS "$CORS_LIST"
+            patch_env CORS_ORIGINS         "${{ secrets.PROD_FRONTEND_URL }},${{ secrets.PROD_GATEWAY_URL }}"
+            patch_env APP_IMAGE "${{ secrets.DOCKERHUB_USERNAME }}/smartparking-${{ matrix.image_suffix }}:prod"
+            patch_env APP_PORT  "${{ matrix.app_port }}"
 
             if [ "${{ matrix.name }}" = "auth" ]; then
-              patch_env PORT             3000
-              patch_env DATABASE_URL     "postgresql://admin:admin@postgres:5432/smartparking"
-              patch_env REDIS_URL        "redis://redis:6379"
-              patch_env FRONTEND_URL     "${ALB_FRONTEND_URL}"
-              patch_env USER_SERVICE_URL "http://${{ env.USER_PRIVATE_IP }}:3001/api"
+              patch_env PORT              "3000"
+              patch_env DATABASE_URL      "postgresql://admin:admin@postgres:5432/smartparking"
+              patch_env REDIS_URL         "redis://redis:6379"
+              patch_env FRONTEND_URL      "${{ secrets.PROD_FRONTEND_URL }}"
+              patch_env USER_SERVICE_URL  "http://${USER_PRIVATE_IP}:3001/api"
             fi
 
             if [ "${{ matrix.name }}" = "user" ]; then
-              patch_env USER_SERVICE_PORT  3001
-              patch_env USER_DATABASE_URL  "postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/userdb"
-              patch_env REDIS_URL          "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
+              patch_env USER_SERVICE_PORT "3001"
+              patch_env USER_DATABASE_URL "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb"
+              patch_env REDIS_URL         "redis://${AUTH_PRIVATE_IP}:6379"
             fi
 
             if [ "${{ matrix.name }}" = "vehicle" ]; then
-              patch_env VEHICLE_SERVICE_PORT  3003
-              patch_env VEHICLE_DATABASE_URL  "postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/vehicledb"
-              patch_env REDIS_URL             "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
+              patch_env VEHICLE_SERVICE_PORT "3003"
+              patch_env VEHICLE_DATABASE_URL "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/vehicledb"
+              patch_env REDIS_URL            "redis://${AUTH_PRIVATE_IP}:6379"
+            fi
+
+            if [ "${{ matrix.name }}" = "gateway" ]; then
+              patch_env GATEWAY_PORT            "3006"
+              patch_env REDIS_URL               "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env AUTH_SERVICE_URL        "http://${AUTH_PRIVATE_IP}:3000"
+              patch_env USER_SERVICE_URL        "http://${USER_PRIVATE_IP}:3001"
+              patch_env VEHICLE_SERVICE_URL     "http://${VEHICLE_PRIVATE_IP}:3003"
+              patch_env PARKING_SERVICE_URL     "http://${PARKING_PRIVATE_IP}:3004"
+              patch_env RESERVATION_SERVICE_URL "http://${RESERVATION_PRIVATE_IP}:3005"
+              patch_env PAYMENT_SERVICE_URL     "http://${PAYMENT_PRIVATE_IP}:3007"
+              patch_env THROTTLE_TTL            "60000"
+              patch_env THROTTLE_LIMIT          "60"
             fi
 
             if [ "${{ matrix.name }}" = "parking" ]; then
-              patch_env PARKING_SERVICE_PORT  3004
-              patch_env PARKING_DATABASE_URL  "postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/parkingdb"
-              patch_env REDIS_URL             "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
-              patch_env KAFKA_BROKERS         "${{ env.AUTH_PRIVATE_IP }}:9092"
+              patch_env PARKING_SERVICE_PORT "3004"
+              patch_env PARKING_DATABASE_URL "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb"
+              patch_env REDIS_URL            "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env KAFKA_BROKERS        "${AUTH_PRIVATE_IP}:9092"
             fi
 
             if [ "${{ matrix.name }}" = "reservation" ]; then
-              patch_env RESERVATION_SERVICE_PORT  3005
-              patch_env RESERVATION_DATABASE_URL  "postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/reservationdb"
-              patch_env REDIS_URL                 "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
-              patch_env KAFKA_BROKERS             "${{ env.AUTH_PRIVATE_IP }}:9092"
-              patch_env PARKING_SERVICE_URL       "http://${{ env.PARKING_PRIVATE_IP }}:3004"
-              patch_env USER_SERVICE_URL          "http://${{ env.USER_PRIVATE_IP }}:3001/api"
-              patch_env VEHICLE_SERVICE_URL       "http://${{ env.VEHICLE_PRIVATE_IP }}:3003"
-              patch_env RESERVATION_EXPIRY_MINUTES 15
+              patch_env RESERVATION_SERVICE_PORT   "3005"
+              patch_env RESERVATION_DATABASE_URL   "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/reservationdb"
+              patch_env REDIS_URL                  "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env KAFKA_BROKERS              "${AUTH_PRIVATE_IP}:9092"
+              patch_env PARKING_SERVICE_URL        "http://${PARKING_PRIVATE_IP}:3004"
+              patch_env USER_SERVICE_URL           "http://${USER_PRIVATE_IP}:3001/api"
+              patch_env VEHICLE_SERVICE_URL        "http://${VEHICLE_PRIVATE_IP}:3003"
+              patch_env RESERVATION_EXPIRY_MINUTES "15"
             fi
 
             if [ "${{ matrix.name }}" = "payment" ]; then
-              patch_env PAYMENT_SERVICE_PORT    3007
-              patch_env PAYMENT_DATABASE_URL    "postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/paymentdb"
-              patch_env REDIS_URL               "redis://${{ env.AUTH_PRIVATE_IP }}:6379"
-              patch_env RABBITMQ_URL            "amqp://guest:guest@${{ env.AUTH_PRIVATE_IP }}:5672"
-              patch_env KAFKA_BROKERS           "${{ env.AUTH_PRIVATE_IP }}:9092"
-              patch_env RESERVATION_SERVICE_URL "http://${{ env.RESERVATION_PRIVATE_IP }}:3005"
-              patch_env USER_SERVICE_URL        "http://${{ env.USER_PRIVATE_IP }}:3001/api"
+              patch_env PAYMENT_SERVICE_PORT    "3007"
+              patch_env PAYMENT_DATABASE_URL    "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb"
+              patch_env REDIS_URL               "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env RABBITMQ_URL            "amqp://guest:guest@${AUTH_PRIVATE_IP}:5672"
+              patch_env KAFKA_BROKERS           "${AUTH_PRIVATE_IP}:9092"
+              patch_env RESERVATION_SERVICE_URL "http://${RESERVATION_PRIVATE_IP}:3005"
+              patch_env USER_SERVICE_URL        "http://${USER_PRIVATE_IP}:3001/api"
               patch_env STRIPE_SECRET_KEY       "${{ secrets.STRIPE_SECRET_KEY }}"
               patch_env STRIPE_PUBLIC_KEY       "${{ secrets.STRIPE_PUBLIC_KEY }}"
               patch_env STRIPE_WEBHOOK_SECRET   "${{ secrets.STRIPE_WEBHOOK_SECRET }}"
             fi
 
-            echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
-              docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+            if [ "${{ matrix.name }}" = "frontend" ]; then
+              patch_env PORT "3002"
+              patch_env NEXT_PUBLIC_GATEWAY_URL "$PROD_GATEWAY_URL"
+            fi
 
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
             docker-compose -f "$COMPOSE_FILE" pull ${{ matrix.service_name }}
             docker-compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
             docker-compose -f "$COMPOSE_FILE" ps
 
+            reset_db_schema() {
+              local db="$1"
+              docker run --rm -e PGPASSWORD=admin -e PGCONNECT_TIMEOUT=5 postgres:16 \
+                psql -h "${AUTH_PRIVATE_IP}" -U admin -d "$db" -v ON_ERROR_STOP=1 -c \
+                "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO admin; GRANT ALL ON SCHEMA public TO public;"
+            }
+
             if [ "${{ matrix.name }}" = "auth" ]; then
-              echo "⏳ Esperando PostgreSQL (smartparking)..."
+              echo "⏳ Esperando PostgreSQL..."
               pg_container=$(docker-compose -f "$COMPOSE_FILE" ps -q postgres)
-              for i in $(seq 1 30); do
-                docker exec "$pg_container" pg_isready -U admin -d smartparking &>/dev/null && break
-                sleep 1
+              for i in {1..30}; do
+                if docker exec "$pg_container" pg_isready -U admin -d smartparking &>/dev/null; then
+                  break
+                fi
+                sleep 2
               done
 
               for db in userdb vehicledb parkingdb reservationdb paymentdb; do
-                docker exec "$pg_container" psql -U admin -d postgres \
-                  -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1 || \
-                  docker exec "$pg_container" psql -U admin -d postgres -c "CREATE DATABASE ${db};" || true
-                echo "  ✔ DB ${db}"
+                if ! docker exec "$pg_container" psql -U admin -d smartparking -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" 2>/dev/null | grep -q 1; then
+                  docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE ${db};" 2>/dev/null || true
+                fi
+                echo "  ✔ ${db}"
               done
 
-              echo "▶ Migraciones auth → smartparking"
+              echo "Cleaning up invalid failed migrations on smartparking DB..."
+              docker exec "$pg_container" psql -U admin -d smartparking -c "DELETE FROM _prisma_migrations WHERE migration_name = '20260601120000_init_vehicle';" 2>/dev/null || true
+
+              echo "Running auth migrations..."
               docker-compose -f "$COMPOSE_FILE" exec -T auth-service \
                 npx prisma migrate deploy --schema prisma/auth/schema.prisma
             fi
 
             if [ "${{ matrix.name }}" = "user" ]; then
-              echo "▶ Migraciones user → userdb"
+              echo "Running user migrations..."
               docker-compose -f "$COMPOSE_FILE" exec -T \
-                -e USER_DATABASE_URL="postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/userdb" \
+                -e USER_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/userdb" \
                 app npx prisma migrate deploy --config prisma.user.config.ts
             fi
 
             if [ "${{ matrix.name }}" = "vehicle" ]; then
-              echo "▶ Migraciones vehicle → vehicledb"
+              echo "Resolving vehicle init migration if failed in vehicledb..."
               docker-compose -f "$COMPOSE_FILE" exec -T \
-                -e VEHICLE_DATABASE_URL="postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/vehicledb" \
+                -e VEHICLE_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/vehicledb" \
+                app npx prisma migrate resolve --rolled-back 20260601120000_init_vehicle --config prisma.vehicle.config.ts || true
+
+              echo "Running vehicle migrations..."
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e VEHICLE_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/vehicledb" \
                 app npx prisma migrate deploy --config prisma.vehicle.config.ts
             fi
 
             if [ "${{ matrix.name }}" = "parking" ]; then
-              echo "▶ Migraciones parking → parkingdb"
+              echo "Resetting parkingdb schema..."
+              reset_db_schema parkingdb
+              echo "Running parking migrations..."
               docker-compose -f "$COMPOSE_FILE" exec -T \
-                -e PARKING_DATABASE_URL="postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/parkingdb" \
+                -e PARKING_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb" \
                 app npx prisma migrate deploy --config prisma.parking.config.ts
             fi
 
             if [ "${{ matrix.name }}" = "reservation" ]; then
-              echo "▶ Migraciones reservation → reservationdb"
+              echo "Running reservation migrations..."
               docker-compose -f "$COMPOSE_FILE" exec -T \
-                -e RESERVATION_DATABASE_URL="postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/reservationdb" \
+                -e RESERVATION_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/reservationdb" \
                 app npx prisma migrate deploy --config prisma.reservation.config.ts
             fi
 
             if [ "${{ matrix.name }}" = "payment" ]; then
-              echo "▶ Migraciones payment → paymentdb"
+              if ! swapon --show 2>/dev/null | grep -q /swapfile; then
+                sudo fallocate -l 2G /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
+                sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+              fi
+              echo "Resetting paymentdb schema..."
+              reset_db_schema paymentdb
+              echo "Running payment migrations..."
               docker-compose -f "$COMPOSE_FILE" exec -T \
-                -e PAYMENT_DATABASE_URL="postgresql://admin:admin@${{ env.AUTH_PRIVATE_IP }}:5432/paymentdb" \
+                -e PAYMENT_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb" \
                 app npx prisma migrate deploy --config prisma.payment.config.ts
             fi
 
             echo "✅ ${{ matrix.name }} deployado exitosamente."
-
-  # frontend y gateway NO se tocan por SSH: viven en ASG detrás del ALB.
-  # Se actualizan forzando un instance refresh, que relanza instancias
-  # nuevas desde el Launch Template (ya con la imagen :prod recién
-  # publicada por docker-push).
-  refresh-asg:
-    name: Refresh ASG (frontend & gateway)
-    needs: [get-changes, docker-push]
-    if: (github.event_name != 'pull_request' || github.event.pull_request.merged == true) && (needs.get-changes.outputs.frontend == 'true' || needs.get-changes.outputs.gateway == 'true')
-    runs-on: ubuntu-latest
-    environment: prod
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
-
-      - name: Refresh Frontend ASG
-        if: needs.get-changes.outputs.frontend == 'true'
-        run: |
-          echo "Starting instance refresh for prod-frontend-asg..."
-          REFRESH_ID=$(aws autoscaling start-instance-refresh \
-            --auto-scaling-group-name prod-frontend-asg \
-            --query "InstanceRefreshId" --output text)
-          echo "Instance refresh started successfully. ID: $REFRESH_ID"
-
-      - name: Refresh Gateway ASG
-        if: needs.get-changes.outputs.gateway == 'true'
-        run: |
-          echo "Starting instance refresh for prod-gateway-asg..."
-          REFRESH_ID=$(aws autoscaling start-instance-refresh \
-            --auto-scaling-group-name prod-gateway-asg \
-            --query "InstanceRefreshId" --output text)
-          echo "Instance refresh started successfully. ID: $REFRESH_ID"

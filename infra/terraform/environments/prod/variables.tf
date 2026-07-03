@@ -6,14 +6,14 @@ variable "aws_region" {
 
 variable "environment" {
   type        = string
-  description = "The environment name (e.g. qa)"
+  description = "The environment name"
   default     = "prod"
 }
 
 variable "instance_type" {
   type        = string
-  description = "The EC2 instance type to launch"
-  default     = "t3.small"
+  description = "The EC2 instance type to launch (instancias privadas + launch template del ASG)"
+  default     = "t3.micro"
 }
 
 variable "key_name" {
@@ -32,47 +32,21 @@ variable "dockerhub_user" {
   description = "The Docker Hub user name for pulling docker images"
 }
 
-variable "jwt_secret" {
-  type        = string
-  sensitive   = true
-  description = "JWT Secret token for API validation"
-  default     = ""
+# ── ASG (gateway / frontend) ─────────────────────────────────────────────────
+variable "asg_min_size" {
+  type        = number
+  description = "Tamaño mínimo del ASG para gateway y frontend"
+  default     = 1
 }
 
-variable "jwt_refresh_secret" {
-  type        = string
-  sensitive   = true
-  description = "JWT Refresh Secret token"
-  default     = ""
+variable "asg_max_size" {
+  type        = number
+  description = "Tamaño máximo del ASG para gateway y frontend"
+  default     = 2
 }
 
-variable "internal_service_key" {
-  type        = string
-  sensitive   = true
-  description = "Secure internal service authorization key"
-  default     = ""
-}
-
-variable "frontend_url" {
-  type        = string
-  description = "Public URL of the frontend (e.g. http://<frontend-eip>:3002)"
-  default     = "http://placeholder"
-}
-
-variable "user_service_url" {
-  type        = string
-  description = "Public URL of the user-service (e.g. http://<user-eip>:3001)"
-  default     = "http://placeholder:3001"
-}
-
-variable "cors_origins" {
-  type        = string
-  description = "Comma-separated list of allowed CORS origins"
-  default     = "http://placeholder"
-}
-
-variable "dockerhub_token" {
-  type        = string
-  sensitive   = true
-  description = "Docker Hub Personal Access Token or password for pulling private images"
+variable "asg_desired_capacity" {
+  type        = number
+  description = "Capacidad deseada del ASG para gateway y frontend"
+  default     = 1
 }

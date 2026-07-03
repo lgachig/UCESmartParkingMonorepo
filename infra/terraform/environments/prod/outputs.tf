@@ -18,16 +18,6 @@ output "vehicle_private_ip" {
   value       = module.vehicle.private_ip
 }
 
-output "frontend_elastic_ip" {
-  description = "GitHub Secret: PROD_EC2_FRONTEND_HOST"
-  value       = aws_eip.frontend.public_ip
-}
-
-output "gateway_elastic_ip" {
-  description = "GitHub Secret: PROD_EC2_GATEWAY_HOST"
-  value       = aws_eip.gateway.public_ip
-}
-
 output "parking_private_ip" {
   description = "GitHub Secret: PROD_EC2_PARKING_HOST"
   value       = module.parking.private_ip
@@ -43,94 +33,54 @@ output "payment_private_ip" {
   value       = module.payment.private_ip
 }
 
-output "prod_auth_api_url" {
-  description = "GitHub Variable: PROD_AUTH_API_URL"
-  value       = "http://${aws_eip.gateway.public_ip}:3006/api"
+output "frontend_alb_dns" {
+  description = "GitHub Variable: PROD_FRONTEND_URL (agrégale http:// y sin puerto, el ALB escucha en 80)"
+  value       = module.frontend_asg.alb_dns_name
 }
 
-output "prod_user_api_url" {
-  description = "GitHub Variable: PROD_USER_API_URL"
-  value       = "http://${aws_eip.gateway.public_ip}:3006/api"
+output "gateway_alb_dns" {
+  description = "GitHub Variable/Secret: PROD_GATEWAY_URL (agrégale http:// y sin puerto, el ALB escucha en 80)"
+  value       = module.gateway_asg.alb_dns_name
 }
 
-output "prod_vehicle_api_url" {
-  description = "GitHub Variable: PROD_VEHICLE_API_URL"
-  value       = "http://${aws_eip.gateway.public_ip}:3006/api"
+output "frontend_asg_name" {
+  description = "Nombre del ASG del frontend (para describir/instance-refresh desde el CI/CD)"
+  value       = module.frontend_asg.asg_name
 }
 
-output "prod_parking_api_url" {
-  description = "GitHub Variable: PROD_PARKING_API_URL"
-  value       = "http://${aws_eip.gateway.public_ip}:3006/api"
-}
-
-output "prod_reservation_api_url" {
-  description = "GitHub Variable: PROD_RESERVATION_API_URL"
-  value       = "http://${aws_eip.gateway.public_ip}:3006/api"
+output "gateway_asg_name" {
+  description = "Nombre del ASG del gateway (para describir/instance-refresh desde el CI/CD)"
+  value       = module.gateway_asg.asg_name
 }
 
 output "prod_gateway_api_url" {
-  description = "URL pública del Gateway"
-  value       = "http://${aws_eip.gateway.public_ip}:3006/api"
+  description = "URL pública del Gateway (vía ALB)"
+  value       = "http://${module.gateway_asg.alb_dns_name}/api"
 }
 
 output "prod_frontend_url" {
-  description = "URL pública del Frontend"
-  value       = "http://${aws_eip.frontend.public_ip}:3002"
+  description = "URL pública del Frontend (vía ALB)"
+  value       = "http://${module.frontend_asg.alb_dns_name}"
 }
 
 output "github_setup_summary" {
-  description = "Resumen para configurar GitHub Actions (environment prod)"
+  description = "Resumen de lo que hay que copiar a GitHub (Environment: prod)"
   value       = <<-EOT
-    GitHub Environment: prod
-    Rama que dispara CI/CD: PROD (o prod)
+    ── SECRETS ────────────────────────────────────────────
+    PROD_EC2_SSH_KEY   = contenido del archivo ${var.key_name}.pem
+    PROD_BASTION_HOST  = ${module.bastion.public_ip}
+    DOCKERHUB_TOKEN    = tu token de Docker Hub
 
-    SECRETS (Environment secrets):
-      PROD_EC2_SSH_KEY        = contenido del archivo .pem (${var.key_name})
-      PROD_BASTION_HOST       = ${module.bastion.public_ip}
-      PROD_EC2_AUTH_HOST      = ${module.auth.private_ip}
-      PROD_EC2_USER_HOST      = ${module.user.private_ip}
-      PROD_EC2_VEHICLE_HOST   = ${module.vehicle.private_ip}
-      PROD_EC2_FRONTEND_HOST  = (managed-by-ASG)
-      PROD_EC2_GATEWAY_HOST   = (managed-by-ASG)
-      PROD_EC2_PARKING_HOST   = ${module.parking.private_ip}
-      PROD_EC2_RESERVATION_HOST = ${module.reservation.private_ip}
-      PROD_EC2_PAYMENT_HOST   = ${module.payment.private_ip}
-      DOCKERHUB_USERNAME      = ${var.dockerhub_user}
-      DOCKERHUB_TOKEN         = (token de Docker Hub)
+    ── VARIABLES ──────────────────────────────────────────
+    PROD_GATEWAY_URL   = http://${module.gateway_asg.alb_dns_name}
+    PROD_FRONTEND_URL  = http://${module.frontend_asg.alb_dns_name}
 
-    VARIABLES (Environment variables):
-      PROD_AUTH_API_URL        = http://${aws_eip.gateway.public_ip}:3006/api
-      PROD_USER_API_URL        = http://${aws_eip.gateway.public_ip}:3006/api
-      PROD_VEHICLE_API_URL     = http://${aws_eip.gateway.public_ip}:3006/api
-      PROD_PARKING_API_URL     = http://${aws_eip.gateway.public_ip}:3006/api
-      PROD_RESERVATION_API_URL = http://${aws_eip.gateway.public_ip}:3006/api
+    ── ACCESO PÚBLICO ─────────────────────────────────────
+    Frontend (ALB): http://${module.frontend_asg.alb_dns_name}
+    Gateway  (ALB): http://${module.gateway_asg.alb_dns_name}
 
-    Docker Hub tags: smartparking-*:${var.environment}
+    ── ASG (para instance refresh manual si hace falta) ───
+    Frontend ASG: ${module.frontend_asg.asg_name}
+    Gateway  ASG: ${module.gateway_asg.asg_name}
   EOT
 }
-
-output "alb_dns_name" {
-  description = "The DNS name of the Application Load Balancer"
-  value       = aws_lb.prod_alb.dns_name
-}
-
-output "prod_frontend_url_alb" {
-  description = "Frontend public URL via ALB"
-  value       = "http://${aws_lb.prod_alb.dns_name}"
-}
-
-output "prod_gateway_api_url_alb" {
-  description = "Gateway API URL via ALB"
-  value       = "http://${aws_lb.prod_alb.dns_name}:3006/api"
-}
-
-output "prod_frontend_tg_arn" {
-  description = "ARN of the frontend target group"
-  value       = aws_lb_target_group.prod_frontend_tg.arn
-}
-
-output "prod_gateway_tg_arn" {
-  description = "ARN of the gateway target group"
-  value       = aws_lb_target_group.prod_gateway_tg.arn
-}
-

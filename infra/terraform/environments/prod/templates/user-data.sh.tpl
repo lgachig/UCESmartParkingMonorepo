@@ -25,9 +25,9 @@ cd /opt/smartparking
 if [ -n "$${DOCKERHUB_TOKEN:-}" ] && [ -n "$${DOCKERHUB_USER:-}" ]; then
   echo "$${DOCKERHUB_TOKEN}" | docker login -u "$${DOCKERHUB_USER}" --password-stdin
 fi
-/usr/local/bin/docker-compose pull
-/usr/local/bin/docker-compose up -d --force-recreate
-/usr/local/bin/docker-compose ps
+docker-compose pull
+docker-compose up -d --force-recreate
+docker-compose ps
 DEPLOY
 chmod +x /opt/smartparking/deploy.sh
 
@@ -37,12 +37,14 @@ CREATE DATABASE userdb;
 CREATE DATABASE vehicledb;
 CREATE DATABASE parkingdb;
 CREATE DATABASE reservationdb;
+CREATE DATABASE paymentdb;
 SQL
 
 cat > /opt/smartparking/docker-compose.yml <<COMPOSE
 services:
   postgres:
     image: postgres:16
+    container_name: smartparking-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: admin
@@ -77,8 +79,13 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    ports: ["5672:5672", "15672:15672"]
   auth-service:
     image: ${dockerhub_user}/${docker_image}:${docker_image_tag}
+    container_name: smartparking-auth-service
     restart: unless-stopped
     env_file: [.env]
     ports: ["${service_port}:${service_port}"]
@@ -100,9 +107,5 @@ services:
 COMPOSE
 %{ endif ~}
 
-if [ -n "${dockerhub_token}" ]; then
-  echo "${dockerhub_token}" | docker login -u "${dockerhub_user}" --password-stdin
-fi
-
-/usr/local/bin/docker-compose -f /opt/smartparking/docker-compose.yml pull || { echo "PULL FAILED"; exit 1; }
-/usr/local/bin/docker-compose -f /opt/smartparking/docker-compose.yml up -d --force-recreate || { echo "UP FAILED"; exit 1; }
+docker-compose -f /opt/smartparking/docker-compose.yml pull || true
+docker-compose -f /opt/smartparking/docker-compose.yml up -d --force-recreate || true
