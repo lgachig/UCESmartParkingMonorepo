@@ -111,7 +111,11 @@ module "frontend_asg" {
     docker_image_tag = var.environment
     service_port     = 3002
     is_auth          = false
-    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
+    env_content       = <<-ENV
+      DOCKERHUB_USER=${var.dockerhub_user}
+      PORT=3002
+      NEXT_PUBLIC_GATEWAY_URL=http://${module.gateway_asg.alb_dns_name}
+    ENV
   })
 }
 
@@ -137,10 +141,10 @@ module "gateway_asg" {
   key_name                     = var.key_name
   instance_security_group_ids  = [module.security_groups.security_group_ids["gateway"]]
   app_port                     = 3006
-  health_check_path            = "/api/health"
+  health_check_path            = "/health"
   min_size                     = var.asg_min_size
   max_size                     = var.asg_max_size
-  desired_capacity             = var.asg_desired_capacity
+  desired_capacity              = var.asg_desired_capacity
   extra_tags                   = { Service = "gateway" }
   user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
     dockerhub_user   = var.dockerhub_user
@@ -148,7 +152,23 @@ module "gateway_asg" {
     docker_image_tag = var.environment
     service_port     = 3006
     is_auth          = false
-    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
+    env_content       = <<-ENV
+      DOCKERHUB_USER=${var.dockerhub_user}
+      GATEWAY_PORT=3006
+      JWT_SECRET=${var.jwt_secret}
+      JWT_REFRESH_SECRET=${var.jwt_refresh_secret}
+      INTERNAL_SERVICE_KEY=${var.internal_service_key}
+      REDIS_URL=redis://${module.auth.private_ip}:6379
+      AUTH_SERVICE_URL=http://${module.auth.private_ip}:3000
+      USER_SERVICE_URL=http://${module.user.private_ip}:3001
+      VEHICLE_SERVICE_URL=http://${module.vehicle.private_ip}:3003
+      PARKING_SERVICE_URL=http://${module.parking.private_ip}:3004
+      RESERVATION_SERVICE_URL=http://${module.reservation.private_ip}:3005
+      PAYMENT_SERVICE_URL=http://${module.payment.private_ip}:3007
+      THROTTLE_TTL=60000
+      THROTTLE_LIMIT=60
+      CORS_ORIGINS=http://${module.frontend_asg.alb_dns_name},http://${module.gateway_asg.alb_dns_name}
+    ENV
   })
 }
 

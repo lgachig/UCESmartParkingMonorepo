@@ -50,3 +50,21 @@ variable "asg_desired_capacity" {
   description = "Capacidad deseada del ASG para gateway y frontend"
   default     = 1
 }
+
+variable "jwt_secret" {
+  type        = string
+  description = "JWT signing secret (gateway/auth)"
+  sensitive   = true
+}
+
+variable "jwt_refresh_secret" {
+  type        = string
+  description = "JWT refresh secret (gateway/auth)"
+  sensitive   = true
+}
+
+variable "internal_service_key" {
+  type        = string
+  description = "Internal service-to-service auth key"
+  sensitive   = true
+}
