@@ -12,6 +12,8 @@ import { Logger, UsePipes, ValidationPipe } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { GLOBAL_ROOM, RealtimeService } from './realtime.service';
 import { SubscribeZoneDto } from './dto/subscribe.dto';
+import { SlotEventPayload } from './dto/slot-event.dto';
+
 
 @WebSocketGateway({ namespace: '/realtime' })
 export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -35,6 +37,20 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
         this.logger.log(
             `Client disconnected: ${client.id} (active=${this.realtimeService.activeConnections})`,
         );
+    }
+
+    emitSlotEvent(payload: SlotEventPayload): void {
+        this.server.to(GLOBAL_ROOM).emit('slot:update', payload);
+
+        if (payload.zoneId !== undefined) {
+            this.server.to(this.realtimeService.zoneRoom(payload.zoneId)).emit('slot:update', payload);
+        }
+
+        if (payload.facultyId !== undefined) {
+            this.server.to(this.realtimeService.facultyRoom(payload.facultyId)).emit('slot:update', payload);
+        }
+
+        this.logger.log(`Relayed ${payload.eventType} for slot ${payload.id}`);
     }
 
     @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))

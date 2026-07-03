@@ -9,6 +9,7 @@ import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { AppRedisModule } from './redis/redis.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { KafkaModule } from './kafka/kafka.module';
 import { RequestLoggerMiddleware } from './middlewares/request-logger.middleware';
 import { MetricsMiddleware } from './middlewares/metrics.middleware';
 
@@ -28,6 +29,7 @@ import { MetricsMiddleware } from './middlewares/metrics.middleware';
     AppRedisModule,
     HealthModule,
     RealtimeModule,
+    KafkaModule,
   ],
   controllers: [AppController],
   providers: [
