@@ -1,217 +1,98 @@
-# Analytics Service — Contexto del Agente
+Analytics Service — Agent Context
 
-> Lee CLAUDE.md global primero, luego este archivo.
-> Este servicio AÚN NO EXISTE. Es el que introduce MongoDB al sistema.
+Read the global CLAUDE.md first, then this file.
+This service DOES NOT EXIST YET.
 
----
+⸻
 
-## Estado: ❌ PENDIENTE — Crear desde cero
+Status
 
-Puerto: `3009` | BD: MongoDB | Kafka: ✅ consumer (todos los eventos)
+🔴 PENDING — Epic USP-9 (issues USP-127 to USP-131)
 
----
+Port: 3010
 
-## Lo que hace
+Database: MongoDB (raw event history) + ClickHouse (aggregations for dashboards)
 
-Consume todos los eventos Kafka del sistema y los almacena en MongoDB para análisis histórico. Expone endpoints de estadísticas agregadas para el dashboard de admin. Es el que justifica el requerimiento académico de **3 tecnologías de BD** (PostgreSQL + Redis + MongoDB).
+Message Broker: Kafka (consumer of all topics)
 
----
+Framework: NestJS + Nx
 
-## Endpoints a implementar
+⸻
 
-```
-# ADMIN only (JwtAuthGuard + RolesGuard ADMIN)
-GET /api/analytics/occupancy                → ocupación actual por zona
-GET /api/analytics/reservations/daily       → reservaciones por día (últimos 30 días)
-GET /api/analytics/reservations/hourly      → distribución por hora del día
-GET /api/analytics/top-slots                → top 10 slots más usados
-GET /api/analytics/revenue/daily            → ingresos por día
-GET /api/analytics/revenue/total            → ingresos totales
-GET /api/analytics/users/activity           → usuarios más activos
+Service Purpose
 
-GET /health   → incluye estado de MongoDB
-GET /metrics  → Prometheus
-```
+Consumes every business event in the system and retains it for historical analysis and generation of admin dashboards (occupancy, revenue, average time per zone). It differs from audit-service: here the goal is business/analytics and the data can be reprocessed; in audit-service the goal is compliance and the data is immutable.
 
----
+⸻
 
-## Kafka — lo que consume
+USP-127 — As an admin I want a dashboard with occupancy, revenue and average time metrics per zone
 
-| Topic | Qué almacena |
-|---|---|
-| `slot.reserved` | evento de reserva en `slot_events` |
-| `slot.occupied` | evento de ocupación |
-| `slot.released` | evento de liberación |
-| `reservation.cancelled` | evento en `reservation_events` |
-| `reservation.expired` | evento |
-| `payment.completed` | evento en `payment_events` |
+What it must do
 
----
+* Expose read-only endpoints, restricted to the admin role, that return aggregated metrics: current and date-range occupancy, daily revenue, average usage time per zone, and most-used slots.
+* These queries must be resolved against the aggregation layer (ClickHouse, see USP-129), not against the raw history, so they respond fast even with a lot of accumulated data volume.
 
-## Variables de entorno
+How it's validated as done
 
-```env
-PORT=3009
-MONGODB_URI=mongodb://mongodb:27017/smartparking_analytics
-JWT_SECRET=your_jwt_secret
-REDIS_URL=redis://redis:6379
-KAFKA_BROKERS=kafka:29092
-INTERNAL_SERVICE_KEY=internal_service_secret_key
-CORS_ORIGINS=http://localhost:3002
-```
+* Each dashboard endpoint responds in under half a second with data from the last 30 days.
+* Only the admin role can access these endpoints.
 
----
+⸻
 
-## Mongoose schemas a crear
+USP-128 — Kafka consumer of ALL events: persist to MongoDB
 
-```typescript
-// schemas/slot-event.schema.ts
-@Schema({ timestamps: true, collection: 'slot_events' })
-export class SlotEvent {
-  @Prop({ required: true }) eventType: string    // 'slot.reserved' | 'slot.occupied' | 'slot.released'
-  @Prop({ required: true }) slotId: string
-  @Prop() zoneId: string
-  @Prop() facultyId: string
-  @Prop() userId: string
-  @Prop() reservationId: string
-  @Prop({ type: Object }) metadata: Record<string, any>
-}
+What it must do
 
-// schemas/reservation-event.schema.ts
-@Schema({ timestamps: true, collection: 'reservation_events' })
-export class ReservationEvent {
-  @Prop({ required: true }) eventType: string
-  @Prop({ required: true }) reservationId: string
-  @Prop() userId: string
-  @Prop() slotId: string
-  @Prop() reservationCode: string
-  @Prop({ type: Object }) metadata: Record<string, any>
-}
+* Subscribe to every business event topic in the system (slots, reservations, payments, users, vehicles), without needing to maintain a fixed list that has to be manually updated every time a new topic is added.
+* Store each event received as-is, together with its source topic and the reception timestamp, without transforming it.
+* This storage is the raw history: it serves as the source of truth to be able to rebuild or recalculate aggregated metrics if the business logic ever changes.
 
-// schemas/payment-event.schema.ts
-@Schema({ timestamps: true, collection: 'payment_events' })
-export class PaymentEvent {
-  @Prop({ required: true }) paymentId: string
-  @Prop({ required: true }) reservationId: string
-  @Prop({ required: true }) userId: string
-  @Prop() amount: number
-  @Prop() status: string
-}
-```
+How it's validated as done
 
----
+* Any event published in the system ends up recorded in the history, with no exceptions.
 
-## Estructura a crear
+⸻
 
-```
-apps/analytics-service/src/app/
-├── analytics/
-│   ├── analytics.module.ts
-│   ├── analytics.controller.ts        ← endpoints de estadísticas (ADMIN)
-│   ├── analytics.service.ts           ← queries MongoDB con Mongoose
-│   ├── analytics.service.spec.ts
-│   └── dto/
-│       └── analytics-query.dto.ts     ← dateFrom, dateTo, zoneId, limit
-├── schemas/
-│   ├── slot-event.schema.ts
-│   ├── reservation-event.schema.ts
-│   └── payment-event.schema.ts
-├── kafka/
-│   ├── kafka.module.ts
-│   └── kafka-consumer.service.ts      ← consume todos los topics y persiste en MongoDB
-└── infrastructure/
-    └── database/
-        └── mongodb.module.ts          ← MongooseModule.forRootAsync(...)
-```
+USP-129 — ClickHouse for OLAP time-series queries for admin dashboards
 
-**IMPORTANTE:** Este servicio usa Mongoose en lugar de Prisma. No tiene `prisma.service.ts`.
+What it must do
 
-Instalar en workspace:
-```bash
-cd smart-parking && npm install @nestjs/mongoose mongoose
-```
+* Maintain a data layer optimized for fast aggregations (hourly occupancy, daily revenue, etc.), separate from the raw MongoDB history.
+* Periodically sync the relevant data from the raw history into this aggregation layer (not in real time event-by-event, but in short batches, since this is dashboard data, not information for instant operational decisions).
 
----
+How it's validated as done
 
-## Health check — incluir MongoDB
+* The dashboard queries (USP-127) are resolved against this layer, not directly against MongoDB.
+* The aggregation layer's data reflects reality with a lag of at most a few minutes.
 
-```typescript
-// health.controller.ts
-@Get('/health')
-async health() {
-  const mongoState = this.mongoConnection.readyState  // 1 = connected
-  return {
-    status: mongoState === 1 ? 'ok' : 'error',
-    mongodb: mongoState === 1 ? 'connected' : 'disconnected',
-    uptime: process.uptime(),
-  }
-}
-```
+⸻
 
----
+USP-130 — Dockerfile + CI/CD + Swagger + Prometheus for analytics-service
 
-## Infraestructura a crear
+What it must do
 
-### docker-compose.yml — añadir MongoDB + analytics-service
+* Same packaging, health, metrics, and CI/CD pattern as the rest of the new services.
+* Metrics must include the number of events processed per topic and the status of the sync toward the aggregation layer.
 
-```yaml
-mongodb:
-  image: mongo:7
-  container_name: smartparking-mongodb
-  ports:
-    - "27017:27017"
-  volumes:
-    - mongodb_data:/data/db
-  networks:
-    - smartparking-network
-  healthcheck:
-    test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-    interval: 10s
-    timeout: 5s
-    retries: 5
+How it's validated as done
 
-analytics-service:
-  build:
-    context: ./smart-parking
-    dockerfile: apps/analytics-service/dockerfile
-  container_name: smartparking-analytics
-  ports:
-    - "3009:3009"
-  environment:
-    PORT: 3009
-    MONGODB_URI: mongodb://mongodb:27017/smartparking_analytics
-    JWT_SECRET: ${JWT_SECRET}
-    REDIS_URL: redis://redis:6379
-    KAFKA_BROKERS: kafka:29092
-    INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
-  depends_on:
-    mongodb:
-      condition: service_healthy
-    kafka:
-      condition: service_started
-  networks:
-    - smartparking-network
+* The image builds and publishes correctly, and the service ends up deployed and reachable in QA.
 
-volumes:
-  mongodb_data:
-```
+⸻
 
-### Terraform QA — añadir 2 módulos EC2
-1. `mongodb_instance` — EC2 con docker run de mongo:7
-2. `analytics_service` — EC2 con el contenedor del servicio
+USP-131 — Unit tests for analytics-service
 
-### GitHub Actions qa.yml — añadir push y deploy de analytics-service
+What it must do
 
----
+* Cover the raw-history persistence (that any incoming event ends up correctly stored).
+* Cover the aggregation logic that feeds the dashboard (occupancy, revenue, average time calculations) using controlled test data.
 
-## Frontend — página de analytics (cuando este servicio esté listo)
+How it's validated as done
 
-Crear: `app/(dashboard)/admin/analytics/page.tsx`
+* The tests run inside the CI pipeline and cover both ingestion and metric calculation.
 
-Componentes a crear:
-- `ReservationsChart` — línea de reservaciones por día (usar recharts)
-- `OccupancyCard` — ocupación actual por zona
-- `RevenueCard` — ingresos totales
-- `TopSlotsTable` — tabla de slots más usados
+⸻
 
-Añadir entrada en `Sidebar.tsx` bajo el menú ADMIN.
+Expected Result
+
+A functional service with MongoDB for raw history and ClickHouse for fast aggregations, feeding an admin dashboard with occupancy, revenue and average-time metrics, with its Dockerfile, CI/CD, documentation and tests in place.
