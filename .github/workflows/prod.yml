@@ -51,9 +51,46 @@ jobs:
           echo "frontend=${{ needs.ci-check.outputs.frontend }}"
           echo "payment=${{ needs.ci-check.outputs.payment }}"
 
+  terraform-apply:
+    name: Provision Infrastructure (Terraform Apply)
+    needs: [get-changes]
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    environment: prod
+    env:
+      TF_VAR_key_name:             ${{ secrets.PROD_KEY_NAME }}
+      TF_VAR_dockerhub_user:       ${{ secrets.DOCKERHUB_USERNAME }}
+      TF_VAR_dockerhub_token:      ${{ secrets.DOCKERHUB_TOKEN }}
+      TF_VAR_jwt_secret:           ${{ secrets.PROD_JWT_SECRET }}
+      TF_VAR_jwt_refresh_secret:   ${{ secrets.PROD_JWT_REFRESH_SECRET }}
+      TF_VAR_internal_service_key: ${{ secrets.PROD_INTERNAL_SERVICE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra/terraform/environments/prod
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: infra/terraform/environments/prod
+
   docker-push:
     name: Build & Push (${{ matrix.name }})
-    needs: [get-changes]
+    needs: [get-changes, terraform-apply]
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     environment: prod
@@ -152,7 +189,7 @@ jobs:
   ensure-postgres:
     name: Ensure Postgres on auth
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
-    needs: [docker-push]
+    needs: [terraform-apply, docker-push]
     runs-on: ubuntu-latest
     environment: prod
     steps:
@@ -223,7 +260,7 @@ jobs:
   deploy:
     name: Deploy ${{ matrix.name }} on EC2 (via Bastion)
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
-    needs: [get-changes, ensure-postgres, docker-push]
+    needs: [get-changes, terraform-apply, ensure-postgres, docker-push]
     runs-on: ubuntu-latest
     environment: prod
     env:
@@ -481,7 +518,7 @@ jobs:
 
   refresh-asg:
     name: Refresh ASG (frontend & gateway)
-    needs: [get-changes, docker-push]
+    needs: [get-changes, terraform-apply, docker-push]
     if: (github.event_name != 'pull_request' || github.event.pull_request.merged == true) && (needs.get-changes.outputs.frontend == 'true' || needs.get-changes.outputs.gateway == 'true')
     runs-on: ubuntu-latest
     environment: prod
