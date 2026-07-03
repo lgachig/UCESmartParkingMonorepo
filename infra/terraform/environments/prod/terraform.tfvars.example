@@ -1,0 +1,15 @@
+aws_region       = "us-east-1"
+environment      = "prod"
+key_name         = "TU_KEY_PAIR_EC2"
+allowed_ssh_cidr = "TU_IP_PUBLICA/32"
+dockerhub_user   = "TU_USUARIO_DOCKERHUB"
+
+# ASG de gateway y frontend
+asg_min_size         = 1
+asg_max_size         = 2
+asg_desired_capacity = 1
+
+# Secretos (NO poner aquí — exportar en terminal o usar GitHub Environment "prod"):
+# export TF_VAR_jwt_secret="..."
+# export TF_VAR_jwt_refresh_secret="..."
+# export TF_VAR_internal_service_key="..."
