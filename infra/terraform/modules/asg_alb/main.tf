@@ -16,11 +16,11 @@ resource "aws_security_group" "alb" {
   lifecycle { create_before_destroy = true }
 
   ingress {
-    from_port   = var.app_port
-    to_port     = var.app_port
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = var.allowed_alb_cidr
-    description = "Acceso publico al ${var.service_name}"
+    description = "Acceso publico al ${var.service_name} (listener HTTP del ALB)"
   }
 
   egress {
@@ -126,7 +126,7 @@ resource "aws_autoscaling_group" "this" {
   max_size                   = var.max_size
   desired_capacity           = var.desired_capacity
   health_check_type          = "ELB"
-  health_check_grace_period  = 120
+  health_check_grace_period  = 720
 
   launch_template {
     id      = aws_launch_template.this.id

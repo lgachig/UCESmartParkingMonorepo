@@ -114,7 +114,11 @@ module "frontend_asg" {
     env_content       = <<-ENV
       DOCKERHUB_USER=${var.dockerhub_user}
       PORT=3002
-      NEXT_PUBLIC_GATEWAY_URL=http://${module.gateway_asg.alb_dns_name}
+      # NOTA: Las variables NEXT_PUBLIC_* son inlineadas en el build de Next.js (Docker build en GitHub Actions).
+      # La fuente de verdad real es el build-arg NEXT_PUBLIC_GATEWAY_URL provisto en el workflow de GitHub Actions
+      # (.github/workflows/prod.yml) a partir del secret PROD_GATEWAY_URL (al cual se le concatena /api).
+      # Se mantiene y alinea aquí solo por consistencia para peticiones Server-Side (SSR) en runtime y documentación.
+      NEXT_PUBLIC_GATEWAY_URL=http://${module.gateway_asg.alb_dns_name}/api
     ENV
   })
 }
