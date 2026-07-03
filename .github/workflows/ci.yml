@@ -22,7 +22,7 @@ on:
       infra:
         value: ${{ jobs.changes.outputs.infra }}
   push:
-    branches: [feature/USP-096-infrastructure-frontend-integration, hotfix/USP-096-fix-deploy]
+    branches: [hotfix/USP-096-fix-deploy, QA, PROD]
   pull_request:
 
 permissions:
