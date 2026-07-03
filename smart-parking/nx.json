@@ -57,7 +57,9 @@
         "reservation-service-e2e/**/*",
         "apps-e2e/**/*",
         "apps-e2e/**/*",
-        "apps/payment-service-e2e/**/*"
+        "apps/payment-service-e2e/**/*",
+        "realtime-service-e2e/**/*",
+        "apps/realtime-service-e2e/**/*"
       ]
     }
   ],
