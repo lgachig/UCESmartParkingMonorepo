@@ -43,13 +43,7 @@
     "webpack-cli": "^5.1.4"
   },
   "workspaces": [
-    "apps/*",
-    "reservation-service",
-    "reservation-service-e2e",
-    "apps",
-    "apps-e2e",
-    "realtime-service",
-    "realtime-service-e2e"
+    "apps/*"
   ],
   "dependencies": {
     "@nestjs-modules/ioredis": "^2.2.1",

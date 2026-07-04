@@ -33,10 +33,8 @@ output "parking_private_ip" {
   value       = module.parking.private_ip
 }
 
-output "reservation_private_ip" {
-  description = "GitHub Secret: QA_EC2_RESERVATION_HOST"
-  value       = module.reservation.private_ip
-}
+# reservation ahora vive en environments/lab-b — ver su output
+# "reservation_private_ip" ahí para el secret QA_EC2_RESERVATION_HOST.
 
 output "qa_auth_api_url" {
   description = "GitHub Variable: QA_AUTH_API_URL"
@@ -79,10 +77,8 @@ variable "auth_host" {
   default     = "placeholder"
 }
 
-output "payment_private_ip" {
-  description = "Private IP of payment service EC2"
-  value       = module.payment.private_ip
-}
+# payment ahora vive en environments/lab-b — ver su output
+# "payment_private_ip" ahí para el secret QA_EC2_PAYMENT_HOST.
 
 
 output "github_setup_summary" {

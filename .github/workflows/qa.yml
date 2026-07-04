@@ -2,10 +2,10 @@ name: QA CI/CD
 
 on:
   push:
-    branches: [qa, QA, hotfix/USP-096-fix-deploy]
+    branches: [feature/USP-101-dockerfile-cicd-swagger-prometheus, QA]
   pull_request:
     types: [closed]
-    branches: [qa, QA, hotfix/USP-096-fix-deploy]
+    branches: [feature/USP-101-dockerfile-cicd-swagger-prometheus, QA]
   workflow_dispatch:
     inputs:
       force_deploy_all:
@@ -39,6 +39,7 @@ jobs:
       gateway:     ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.gateway == 'true' }}
       frontend:    ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.frontend == 'true' }}
       payment:     ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.payment == 'true' }}
+      realtime:    ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.realtime == 'true' }}
     steps:
       - name: Echo changes
         run: |
@@ -50,7 +51,7 @@ jobs:
           echo "gateway=${{ needs.ci-check.outputs.gateway }}"
           echo "frontend=${{ needs.ci-check.outputs.frontend }}"
           echo "payment=${{ needs.ci-check.outputs.payment }}"
-
+          echo "realtime=${{ needs.ci-check.outputs.realtime }}"
   docker-push:
     name: Build & Push (${{ matrix.name }})
     needs: [get-changes]
@@ -103,6 +104,12 @@ jobs:
             dockerfile: smart-parking/apps/payment-service/dockerfile
             context: ./smart-parking
             image_suffix: payment
+          - name: realtime
+            changed: ${{ needs.get-changes.outputs.realtime }}
+            dockerfile: smart-parking/apps/realtime-service/dockerfile
+            context: ./smart-parking
+            image_suffix: realtime
+
 
     steps:
       - name: Skip if unchanged
@@ -162,11 +169,13 @@ jobs:
       parking_ip:     ${{ steps.ips.outputs.parking_ip }}
       reservation_ip: ${{ steps.ips.outputs.reservation_ip }}
       payment_ip:     ${{ steps.ips.outputs.payment_ip }}
+      realtime_ip:    ${{ steps.ips.outputs.realtime_ip }}
       gateway_ips:    ${{ steps.ips.outputs.gateway_ips }}
       frontend_ips:   ${{ steps.ips.outputs.frontend_ips }}
 
     steps:
-      - name: Configure AWS credentials
+      # ---- Account A (Lab A): auth, user, vehicle, parking, gateway, frontend ----
+      - name: Configure AWS credentials (Lab A)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -174,10 +183,9 @@ jobs:
           aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: us-east-1
 
-      - name: Get IPs
-        id: ips
+      - name: Get IPs (Lab A)
+        id: ips_lab_a
         run: |
-          # Una sola instancia (auth/user/vehicle/parking/reservation/payment) — igual que QA
           get_ip() {
             local svc="$1"
             local ip
@@ -191,8 +199,6 @@ jobs:
             echo "$ip"
           }
 
-          # Uno o más (gateway/frontend viven en un ASG) -> lista separada por comas,
-          # lista que appleboy/ssh-action acepta directo en el campo "host".
           get_ips_multi() {
             local svc="$1"
             local ips
@@ -210,21 +216,66 @@ jobs:
           USER_IP=$(get_ip "user")               || exit 1
           VEHICLE_IP=$(get_ip "vehicle")         || exit 1
           PARKING_IP=$(get_ip "parking")         || exit 1
-          RESERVATION_IP=$(get_ip "reservation") || exit 1
-          PAYMENT_IP=$(get_ip "payment")         || exit 1
           GATEWAY_IPS=$(get_ips_multi "gateway")   || exit 1
           FRONTEND_IPS=$(get_ips_multi "frontend") || exit 1
 
-          echo "auth_ip=$AUTH_IP"               >> $GITHUB_OUTPUT
-          echo "user_ip=$USER_IP"               >> $GITHUB_OUTPUT
-          echo "vehicle_ip=$VEHICLE_IP"         >> $GITHUB_OUTPUT
-          echo "parking_ip=$PARKING_IP"         >> $GITHUB_OUTPUT
+          echo "auth_ip=$AUTH_IP"           >> $GITHUB_OUTPUT
+          echo "user_ip=$USER_IP"           >> $GITHUB_OUTPUT
+          echo "vehicle_ip=$VEHICLE_IP"     >> $GITHUB_OUTPUT
+          echo "parking_ip=$PARKING_IP"     >> $GITHUB_OUTPUT
+          echo "gateway_ips=$GATEWAY_IPS"   >> $GITHUB_OUTPUT
+          echo "frontend_ips=$FRONTEND_IPS" >> $GITHUB_OUTPUT
+
+          echo "[Lab A] auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | gateway(asg)=$GATEWAY_IPS | frontend(asg)=$FRONTEND_IPS"
+
+      # ---- Account B (Lab B): reservation, payment, realtime ----
+      - name: Configure AWS credentials (Lab B)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID_LAB_B }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_LAB_B }}
+          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN_LAB_B }}
+          aws-region: us-east-1
+
+      - name: Get IPs (Lab B)
+        id: ips_lab_b
+        run: |
+          get_ip() {
+            local svc="$1"
+            local ip
+            ip=$(aws ec2 describe-instances \
+              --filters "Name=tag:Service,Values=${svc}" "Name=tag:Environment,Values=lab-b" \
+                        "Name=instance-state-name,Values=running" \
+              --query "Reservations[0].Instances[0].PrivateIpAddress" --output text 2>/dev/null)
+            if [ -z "$ip" ] || [ "$ip" = "None" ] || [ "$ip" = "null" ]; then
+              echo "::error::No EC2 running for Service=${svc}"; return 1
+            fi
+            echo "$ip"
+          }
+
+          RESERVATION_IP=$(get_ip "reservation") || exit 1
+          PAYMENT_IP=$(get_ip "payment")         || exit 1
+          REALTIME_IP=$(get_ip "realtime")       || exit 1
+
           echo "reservation_ip=$RESERVATION_IP" >> $GITHUB_OUTPUT
           echo "payment_ip=$PAYMENT_IP"         >> $GITHUB_OUTPUT
-          echo "gateway_ips=$GATEWAY_IPS"       >> $GITHUB_OUTPUT
-          echo "frontend_ips=$FRONTEND_IPS"     >> $GITHUB_OUTPUT
+          echo "realtime_ip=$REALTIME_IP"       >> $GITHUB_OUTPUT
 
-          echo "auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | reservation=$RESERVATION_IP | payment=$PAYMENT_IP | gateway(asg)=$GATEWAY_IPS | frontend(asg)=$FRONTEND_IPS"
+          echo "[Lab B] reservation=$RESERVATION_IP | payment=$PAYMENT_IP | realtime=$REALTIME_IP"
+
+      # ---- Combine both accounts' outputs into this job's outputs ----
+      - name: Combine outputs
+        id: ips
+        run: |
+          echo "auth_ip=${{ steps.ips_lab_a.outputs.auth_ip }}"               >> $GITHUB_OUTPUT
+          echo "user_ip=${{ steps.ips_lab_a.outputs.user_ip }}"               >> $GITHUB_OUTPUT
+          echo "vehicle_ip=${{ steps.ips_lab_a.outputs.vehicle_ip }}"         >> $GITHUB_OUTPUT
+          echo "parking_ip=${{ steps.ips_lab_a.outputs.parking_ip }}"         >> $GITHUB_OUTPUT
+          echo "gateway_ips=${{ steps.ips_lab_a.outputs.gateway_ips }}"       >> $GITHUB_OUTPUT
+          echo "frontend_ips=${{ steps.ips_lab_a.outputs.frontend_ips }}"     >> $GITHUB_OUTPUT
+          echo "reservation_ip=${{ steps.ips_lab_b.outputs.reservation_ip }}" >> $GITHUB_OUTPUT
+          echo "payment_ip=${{ steps.ips_lab_b.outputs.payment_ip }}"         >> $GITHUB_OUTPUT
+          echo "realtime_ip=${{ steps.ips_lab_b.outputs.realtime_ip }}"       >> $GITHUB_OUTPUT
 
   ensure-postgres:
     name: Ensure Postgres on auth
@@ -325,6 +376,11 @@ jobs:
             image_suffix: payment
             app_port: '3007'
             changed: ${{ needs.get-changes.outputs.payment }}
+          - name: realtime
+            service_name: app
+            image_suffix: realtime
+            app_port: '3008'
+            changed: ${{ needs.get-changes.outputs.realtime }}
 
     steps:
       - name: Skip if unchanged
@@ -340,6 +396,7 @@ jobs:
           echo "PARKING_PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"         >> $GITHUB_ENV
           echo "RESERVATION_PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV
           echo "PAYMENT_PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"         >> $GITHUB_ENV
+          echo "REALTIME_PRIVATE_IP=${{ needs.discover-ips.outputs.realtime_ip }}"       >> $GITHUB_ENV
           echo "GATEWAY_PRIVATE_IPS=${{ needs.discover-ips.outputs.gateway_ips }}"       >> $GITHUB_ENV
           echo "FRONTEND_PRIVATE_IPS=${{ needs.discover-ips.outputs.frontend_ips }}"     >> $GITHUB_ENV
 
@@ -353,6 +410,7 @@ jobs:
             parking)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"     >> $GITHUB_ENV ;;
             reservation) echo "PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV ;;
             payment)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"     >> $GITHUB_ENV ;;
+            realtime)    echo "PRIVATE_IP=${{ needs.discover-ips.outputs.realtime_ip }}"   >> $GITHUB_ENV ;;
             gateway)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.gateway_ips }}"    >> $GITHUB_ENV ;;
             frontend)    echo "PRIVATE_IP=${{ needs.discover-ips.outputs.frontend_ips }}"   >> $GITHUB_ENV ;;
           esac
@@ -362,27 +420,50 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.QA_EC2_SSH_KEY }}" > ~/.ssh/qa.pem
-          chmod 400 ~/.ssh/qa.pem
+          echo "${{ secrets.QA_EC2_SSH_KEY_LAB_B }}" > ~/.ssh/lab_b.pem
+          chmod 400 ~/.ssh/qa.pem ~/.ssh/lab_b.pem
           ssh-keyscan -H ${{ secrets.QA_BASTION_HOST }} >> ~/.ssh/known_hosts
+
+      # reservation / payment / realtime live in Lab B (Account B) and were
+      # created with Lab B's own key pair. Everything else is Lab A, where
+      # bastion and target share the same key pair.
+      - name: Resolve target key
+        if: matrix.changed == 'true'
+        run: |
+          case "${{ matrix.name }}" in
+            reservation|payment|realtime)
+              echo "TARGET_KEY_PATH=~/.ssh/lab_b.pem" >> $GITHUB_ENV
+              echo "TARGET_KEY_SECRET=QA_EC2_SSH_KEY_LAB_B" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "TARGET_KEY_PATH=~/.ssh/qa.pem" >> $GITHUB_ENV
+              echo "TARGET_KEY_SECRET=QA_EC2_SSH_KEY" >> $GITHUB_ENV
+              ;;
+          esac
 
       - name: Wait SSH
         if: matrix.changed == 'true'
         run: |
           FIRST_IP=$(echo "${{ env.PRIVATE_IP }}" | cut -d',' -f1)
           for i in $(seq 1 10); do
-            ssh -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            ssh -i $(eval echo ${{ env.TARGET_KEY_PATH }}) -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
               -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.QA_BASTION_HOST }}" \
               ec2-user@${FIRST_IP} "echo OK" 2>/dev/null && break
             echo "⏳ $i/10..."; sleep 15
           done
 
+      # NOTE: the bastion hop (proxy_key) is ALWAYS QA_EC2_SSH_KEY (Lab A) —
+      # the bastion only exists in Account A. Only the final hop's key
+      # (key:) switches to Lab B's key pair for reservation/payment/realtime,
+      # since those instances were created with their own key pair in
+      # Account B and don't trust Lab A's key.
       - name: Deploy ${{ matrix.name }} via SSH
         if: matrix.changed == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ env.PRIVATE_IP }}
           username: ec2-user
-          key: ${{ secrets.QA_EC2_SSH_KEY }}
+          key: ${{ (matrix.name == 'reservation' || matrix.name == 'payment' || matrix.name == 'realtime') && secrets.QA_EC2_SSH_KEY_LAB_B || secrets.QA_EC2_SSH_KEY }}
           port: 22
           timeout: 120s
           command_timeout: 15m
@@ -482,6 +563,12 @@ jobs:
               patch_env STRIPE_SECRET_KEY       "${{ secrets.STRIPE_SECRET_KEY }}"
               patch_env STRIPE_PUBLIC_KEY       "${{ secrets.STRIPE_PUBLIC_KEY }}"
               patch_env STRIPE_WEBHOOK_SECRET   "${{ secrets.STRIPE_WEBHOOK_SECRET }}"
+            fi
+
+            if [ "${{ matrix.name }}" = "realtime" ]; then
+              patch_env REALTIME_SERVICE_PORT "3008"
+              patch_env REDIS_URL             "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env KAFKA_BROKERS         "${AUTH_PRIVATE_IP}:9092"
             fi
 
             if [ "${{ matrix.name }}" = "frontend" ]; then

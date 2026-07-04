@@ -26,6 +26,13 @@ export class MetricsService implements OnModuleInit {
         registers: [this.register],
     });
 
+    readonly kafkaEventsProcessedTotal = new client.Counter({
+        name: 'realtime_kafka_events_processed_total',
+        help: 'Total number of Kafka slot.* events processed by realtime-service',
+        labelNames: ['topic', 'status'] as const,
+        registers: [this.register],
+    });
+
     onModuleInit() {
         client.collectDefaultMetrics({
             register: this.register,

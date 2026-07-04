@@ -3,6 +3,7 @@ import { Kafka, Consumer, EachMessagePayload } from 'kafkajs';
 import { ConfigService } from '@nestjs/config';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { SlotEventPayload } from '../realtime/dto/slot-event.dto';
+import { MetricsService } from '../metrics/metrics.service';
 
 const SLOT_TOPICS = [
     'slot.created',
@@ -25,6 +26,7 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
     constructor(
         private readonly configService: ConfigService,
         private readonly realtimeGateway: RealtimeGateway,
+        private readonly metrics: MetricsService,
     ) {
         const brokersString = this.configService.get<string>('KAFKA_BROKERS') || 'kafka:29092';
         this.kafka = new Kafka({
@@ -73,6 +75,7 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
 
         if (!raw) {
             this.logger.warn(`[${topic}] Empty message discarded`);
+            this.metrics.kafkaEventsProcessedTotal.inc({ topic, status: 'discarded' });
             return;
         }
 
@@ -81,11 +84,13 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
             data = JSON.parse(raw);
         } catch {
             this.logger.warn(`[${topic}] Discarded malformed message (invalid JSON)`);
+            this.metrics.kafkaEventsProcessedTotal.inc({ topic, status: 'discarded' });
             return;
         }
 
         if (!data.id) {
             this.logger.warn(`[${topic}] Discarded message without slot identifier`);
+            this.metrics.kafkaEventsProcessedTotal.inc({ topic, status: 'discarded' });
             return;
         }
 
@@ -99,12 +104,17 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
             facultyId: data.facultyId,
             timestamp: data.timestamp ?? new Date().toISOString(),
         };
-
         try {
             this.realtimeGateway.emitSlotEvent(eventPayload);
+            this.metrics.kafkaEventsProcessedTotal.inc({ topic, status: 'processed' });
         } catch (err) {
             this.logger.error(`[${topic}] Error relaying event for slot ${data.id}`, err);
+            this.metrics.kafkaEventsProcessedTotal.inc({ topic, status: 'error' });
         }
+    }
+
+    get connected(): boolean {
+        return this.isConnected;
     }
 
     async onModuleDestroy() {

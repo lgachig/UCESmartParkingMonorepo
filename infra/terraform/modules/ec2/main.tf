@@ -23,6 +23,17 @@ resource "aws_instance" "this" {
     delete_on_termination = true
   }
 
+  # data.aws_ami usa most_recent = true. Sin esto, el DIA que AWS publique
+  # una nueva AMI de AL2023, el siguiente `terraform apply` (aunque no
+  # cambies nada tuyo) va a querer REEMPLAZAR la instancia -> IP privada
+  # nueva -> rompe cualquier URL/DATABASE_URL que ya apuntaba a la IP vieja,
+  # hasta que se vuelva a correr el pipeline (discover-ips) o se actualicen
+  # a mano los secrets. Ignoramos cambios de AMI: solo se actualiza si vos
+  # tocás explícitamente el campo (ver el módulo `ec2` para forzar update).
+  lifecycle {
+    ignore_changes = [ami]
+  }
+
   tags = merge({
     Name        = "${var.environment}-${var.service_name}"
     Environment = var.environment
