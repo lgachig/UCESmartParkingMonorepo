@@ -3,7 +3,7 @@ data "aws_vpc" "selected" {
 }
 
 resource "aws_security_group" "microservice" {
-  for_each    = toset(["auth", "user", "vehicle", "frontend", "gateway", "parking", "reservation","payment"])
+  for_each    = toset(["auth", "user", "vehicle", "frontend", "gateway", "parking", "reservation", "payment", "realtime"])
   name        = "${var.environment}-${each.value}-sg"
   description = "Security Group for ${var.environment}-${each.value}"
   vpc_id      = var.vpc_id
@@ -58,6 +58,17 @@ resource "aws_security_group_rule" "gateway_public" {
   cidr_blocks       = ["0.0.0.0/0"]
   security_group_id = aws_security_group.microservice["gateway"].id
   description       = "Gateway public access"
+}
+
+resource "aws_security_group_rule" "realtime_public" {
+  count             = var.enable_realtime_public_direct ? 1 : 0
+  type              = "ingress"
+  from_port         = 3008
+  to_port           = 3008
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.microservice["realtime"].id
+  description       = "Realtime WebSocket public access (frontend se conecta directo)"
 }
 
 
@@ -130,7 +141,7 @@ resource "aws_security_group_rule" "frontend_from_auth" {
 }
 
 locals {
-  internal_sgs = toset(["user", "vehicle", "gateway", "parking", "reservation", "payment"])
+  internal_sgs = toset(["user", "vehicle", "gateway", "parking", "reservation", "payment", "realtime"])
 }
 
 resource "aws_security_group_rule" "auth_postgres" {
@@ -156,7 +167,7 @@ resource "aws_security_group_rule" "auth_redis" {
 }
 
 resource "aws_security_group_rule" "auth_kafka" {
-  for_each                 = toset(["parking", "reservation", "payment"])
+  for_each                 = toset(["parking", "reservation", "payment", "realtime"])
   type                     = "ingress"
   from_port                = 9092
   to_port                  = 9092

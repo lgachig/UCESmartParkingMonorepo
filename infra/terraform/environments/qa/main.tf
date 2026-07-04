@@ -24,9 +24,10 @@ module "security_groups" {
   bastion_security_group_id = module.bastion.security_group_id
 }
 
-# ── EIPs (solo frontend y gateway son públicos) ───────────────────────────────
+# ── EIPs ───────────────────────────────
 resource "aws_eip" "frontend" { domain = "vpc" }
 resource "aws_eip" "gateway"  { domain = "vpc" }
+resource "aws_eip" "realtime" { domain = "vpc" }
 
 # ── 1) Auth EC2 ───────────────────────────────────────────────────────────────
 module "auth" {
@@ -198,3 +199,28 @@ module "payment" {
     env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
   })
 }
+
+# ── 9) Realtime EC2 ─────────────────────────────────
+module "realtime" {
+  source             = "../../modules/ec2"
+  environment        = var.environment
+  service_name       = "realtime"
+  instance_type      = var.instance_type
+  key_name           = var.key_name
+  subnet_id          = element(module.vpc.public_subnet_ids, 0)
+  security_group_ids = [module.security_groups.security_group_ids["realtime"]]
+  extra_tags         = { Service = "realtime" }
+  user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
+    dockerhub_user   = var.dockerhub_user
+    docker_image     = "smartparking-realtime"
+    docker_image_tag = var.environment
+    service_port     = 3008
+    is_auth          = false
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
+  })
+}
+
+resource "aws_eip_association" "realtime" {
+  instance_id   = module.realtime.instance_id
+  allocation_id = aws_eip.realtime.id
+}x

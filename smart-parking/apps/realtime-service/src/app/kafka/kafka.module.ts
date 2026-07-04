@@ -5,5 +5,6 @@ import { RealtimeModule } from '../realtime/realtime.module';
 @Module({
     imports: [RealtimeModule],
     providers: [KafkaConsumerService],
+    exports: [KafkaConsumerService],
 })
 export class KafkaModule { }

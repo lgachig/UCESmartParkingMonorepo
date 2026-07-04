@@ -19,10 +19,12 @@ on:
         value: ${{ jobs.changes.outputs.frontend }}
       payment:
         value: ${{ jobs.changes.outputs.payment }}
+      realtime:
+        value: ${{ jobs.changes.outputs.realtime }}
       infra:
         value: ${{ jobs.changes.outputs.infra }}
   push:
-    branches: [hotfix/USP-096-fix-deploy, QA, PROD]
+    branches: [feature/USP-101-dockerfile-cicd-swagger-prometheus, QA, PROD]
   pull_request:
 
 permissions:
@@ -41,6 +43,7 @@ jobs:
       gateway: ${{ steps.filter.outputs.gateway }}
       frontend: ${{ steps.filter.outputs.frontend }}
       payment: ${{ steps.filter.outputs.payment }}
+      realtime: ${{ steps.filter.outputs.realtime }}
       infra: ${{ steps.filter.outputs.infra }}
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +59,7 @@ jobs:
             gateway: 'smart-parking/apps/gateway-service/**'
             frontend: 'smart-parking/apps/frontend/**'
             payment: 'smart-parking/apps/payment-service/**'
+            realtime: 'smart-parking/apps/realtime-service/**'
             infra:
               - 'infra/**'
               - '.github/workflows/**'

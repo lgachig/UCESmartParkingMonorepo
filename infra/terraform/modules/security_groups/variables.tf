@@ -32,4 +32,9 @@ variable "enable_gateway_public_direct" {
   description = "Si es true, abre el puerto del gateway a 0.0.0.0/0 directo a la instancia (modelo QA). Ponlo en false cuando el gateway esté detrás de un ALB (prod)."
 }
 
+variable "enable_realtime_public_direct" {
+  type        = bool
+  default     = true
+  description = "Si es true, abre el puerto WebSocket de realtime-service a 0.0.0.0/0 directo a la instancia, ya que el frontend se conecta a él directamente (no vía gateway)."
+}
 

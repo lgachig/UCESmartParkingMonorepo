@@ -2,10 +2,10 @@ name: QA CI/CD
 
 on:
   push:
-    branches: [qa, QA, hotfix/USP-096-fix-deploy]
+    branches: [feature/USP-101-dockerfile-cicd-swagger-prometheus]
   pull_request:
     types: [closed]
-    branches: [qa, QA, hotfix/USP-096-fix-deploy]
+    branches: [feature/USP-101-dockerfile-cicd-swagger-prometheus]
   workflow_dispatch:
     inputs:
       force_deploy_all:
@@ -39,6 +39,7 @@ jobs:
       gateway:     ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.gateway == 'true' }}
       frontend:    ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.frontend == 'true' }}
       payment:     ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.payment == 'true' }}
+      realtime:    ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.realtime == 'true' }}
     steps:
       - name: Echo changes
         run: |
@@ -50,7 +51,7 @@ jobs:
           echo "gateway=${{ needs.ci-check.outputs.gateway }}"
           echo "frontend=${{ needs.ci-check.outputs.frontend }}"
           echo "payment=${{ needs.ci-check.outputs.payment }}"
-
+          echo "realtime=${{ needs.ci-check.outputs.realtime }}"
   docker-push:
     name: Build & Push (${{ matrix.name }})
     needs: [get-changes]
@@ -103,6 +104,12 @@ jobs:
             dockerfile: smart-parking/apps/payment-service/dockerfile
             context: ./smart-parking
             image_suffix: payment
+          - name: realtime
+            changed: ${{ needs.get-changes.outputs.realtime }}
+            dockerfile: smart-parking/apps/realtime-service/dockerfile
+            context: ./smart-parking
+            image_suffix: realtime
+
 
     steps:
       - name: Skip if unchanged
@@ -162,6 +169,7 @@ jobs:
       parking_ip:     ${{ steps.ips.outputs.parking_ip }}
       reservation_ip: ${{ steps.ips.outputs.reservation_ip }}
       payment_ip:     ${{ steps.ips.outputs.payment_ip }}
+      realtime_ip:    ${{ steps.ips.outputs.realtime_ip }}
       gateway_ips:    ${{ steps.ips.outputs.gateway_ips }}
       frontend_ips:   ${{ steps.ips.outputs.frontend_ips }}
 
@@ -212,6 +220,7 @@ jobs:
           PARKING_IP=$(get_ip "parking")         || exit 1
           RESERVATION_IP=$(get_ip "reservation") || exit 1
           PAYMENT_IP=$(get_ip "payment")         || exit 1
+          REALTIME_IP=$(get_ip "realtime")       || exit 1
           GATEWAY_IPS=$(get_ips_multi "gateway")   || exit 1
           FRONTEND_IPS=$(get_ips_multi "frontend") || exit 1
 
@@ -221,10 +230,11 @@ jobs:
           echo "parking_ip=$PARKING_IP"         >> $GITHUB_OUTPUT
           echo "reservation_ip=$RESERVATION_IP" >> $GITHUB_OUTPUT
           echo "payment_ip=$PAYMENT_IP"         >> $GITHUB_OUTPUT
+          echo "realtime_ip=$REALTIME_IP"       >> $GITHUB_OUTPUT
           echo "gateway_ips=$GATEWAY_IPS"       >> $GITHUB_OUTPUT
           echo "frontend_ips=$FRONTEND_IPS"     >> $GITHUB_OUTPUT
 
-          echo "auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | reservation=$RESERVATION_IP | payment=$PAYMENT_IP | gateway(asg)=$GATEWAY_IPS | frontend(asg)=$FRONTEND_IPS"
+          echo "auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | reservation=$RESERVATION_IP | payment=$PAYMENT_IP | realtime=$REALTIME_IP | gateway(asg)=$GATEWAY_IPS | frontend(asg)=$FRONTEND_IPS"
 
   ensure-postgres:
     name: Ensure Postgres on auth
@@ -325,6 +335,11 @@ jobs:
             image_suffix: payment
             app_port: '3007'
             changed: ${{ needs.get-changes.outputs.payment }}
+          - name: realtime
+            service_name: app
+            image_suffix: realtime
+            app_port: '3008'
+            changed: ${{ needs.get-changes.outputs.realtime }}
 
     steps:
       - name: Skip if unchanged
@@ -340,7 +355,7 @@ jobs:
           echo "PARKING_PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"         >> $GITHUB_ENV
           echo "RESERVATION_PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV
           echo "PAYMENT_PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"         >> $GITHUB_ENV
-          echo "GATEWAY_PRIVATE_IPS=${{ needs.discover-ips.outputs.gateway_ips }}"       >> $GITHUB_ENV
+          echo "REALTIME_PRIVATE_IP=${{ needs.discover-ips.outputs.realtime_ip }}"       >> $GITHUB_ENV          echo "GATEWAY_PRIVATE_IPS=${{ needs.discover-ips.outputs.gateway_ips }}"       >> $GITHUB_ENV
           echo "FRONTEND_PRIVATE_IPS=${{ needs.discover-ips.outputs.frontend_ips }}"     >> $GITHUB_ENV
 
       - name: Resolve target host(s)
@@ -353,6 +368,7 @@ jobs:
             parking)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"     >> $GITHUB_ENV ;;
             reservation) echo "PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV ;;
             payment)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"     >> $GITHUB_ENV ;;
+            realtime)    echo "PRIVATE_IP=${{ needs.discover-ips.outputs.realtime_ip }}"   >> $GITHUB_ENV ;;
             gateway)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.gateway_ips }}"    >> $GITHUB_ENV ;;
             frontend)    echo "PRIVATE_IP=${{ needs.discover-ips.outputs.frontend_ips }}"   >> $GITHUB_ENV ;;
           esac
@@ -482,6 +498,12 @@ jobs:
               patch_env STRIPE_SECRET_KEY       "${{ secrets.STRIPE_SECRET_KEY }}"
               patch_env STRIPE_PUBLIC_KEY       "${{ secrets.STRIPE_PUBLIC_KEY }}"
               patch_env STRIPE_WEBHOOK_SECRET   "${{ secrets.STRIPE_WEBHOOK_SECRET }}"
+            fi
+
+            if [ "${{ matrix.name }}" = "realtime" ]; then
+              patch_env REALTIME_SERVICE_PORT "3008"
+              patch_env REDIS_URL             "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env KAFKA_BROKERS         "${AUTH_PRIVATE_IP}:9092"
             fi
 
             if [ "${{ matrix.name }}" = "frontend" ]; then
