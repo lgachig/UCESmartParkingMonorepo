@@ -27,7 +27,8 @@ module "security_groups" {
 # ── EIPs ───────────────────────────────
 resource "aws_eip" "frontend" { domain = "vpc" }
 resource "aws_eip" "gateway"  { domain = "vpc" }
-resource "aws_eip" "realtime" { domain = "vpc" }
+# NOTA: el EIP de "realtime" se movió a environments/lab-b, junto con la
+# instancia. Ver infra/terraform/environments/lab-b/main.tf
 
 # ── 1) Auth EC2 ───────────────────────────────────────────────────────────────
 module "auth" {
@@ -160,67 +161,7 @@ module "parking" {
   })
 }
 
-# ── 7) Reservation EC2 ────────────────────────────────────────────────────────
-module "reservation" {
-  source             = "../../modules/ec2"
-  environment        = var.environment
-  service_name       = "reservation"
-  instance_type      = var.instance_type
-  key_name           = var.key_name
-  subnet_id          = element(module.vpc.public_subnet_ids, 0)
-  security_group_ids = [module.security_groups.security_group_ids["reservation"]]
-  extra_tags         = { Service = "reservation" }
-  user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
-    dockerhub_user   = var.dockerhub_user
-    docker_image     = "smartparking-reservation"
-    docker_image_tag = var.environment
-    service_port     = 3005
-    is_auth          = false
-    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
-  })
-}
-
-# ── 8) Payment EC2 ────────────────────────────────────────────────────────────
-module "payment" {
-  source             = "../../modules/ec2"
-  environment        = var.environment
-  service_name       = "payment"
-  instance_type      = var.instance_type
-  key_name           = var.key_name
-  subnet_id          = element(module.vpc.public_subnet_ids, 0)
-  security_group_ids = [module.security_groups.security_group_ids["payment"]]
-  extra_tags         = { Service = "payment" }
-  user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
-    dockerhub_user   = var.dockerhub_user
-    docker_image     = "smartparking-payment"
-    docker_image_tag = var.environment
-    service_port     = 3007
-    is_auth          = false
-    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
-  })
-}
-
-# ── 9) Realtime EC2 ─────────────────────────────────
-module "realtime" {
-  source             = "../../modules/ec2"
-  environment        = var.environment
-  service_name       = "realtime"
-  instance_type      = var.instance_type
-  key_name           = var.key_name
-  subnet_id          = element(module.vpc.public_subnet_ids, 0)
-  security_group_ids = [module.security_groups.security_group_ids["realtime"]]
-  extra_tags         = { Service = "realtime" }
-  user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
-    dockerhub_user   = var.dockerhub_user
-    docker_image     = "smartparking-realtime"
-    docker_image_tag = var.environment
-    service_port     = 3008
-    is_auth          = false
-    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
-  })
-}
-
-resource "aws_eip_association" "realtime" {
-  instance_id   = module.realtime.instance_id
-  allocation_id = aws_eip.realtime.id
-}
+# ── reservation, payment y realtime se movieron a environments/lab-b ────────
+# (nueva VPC 10.0.0.0/16 conectada por VPC Peering). Ver
+# infra/terraform/environments/lab-b/main.tf y el runbook de migración
+# en infra/terraform/environments/qa/lab-b-integration.tf

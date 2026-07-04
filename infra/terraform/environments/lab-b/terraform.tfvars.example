@@ -1,0 +1,9 @@
+aws_region        = "us-east-1"
+environment       = "lab-b"
+lab_a_environment = "qa" 
+key_name          = "TU_KEY_PAIR_EC2" # usa el mismo .pem que Lab A para SSH vía bastion
+dockerhub_user    = "TU_USUARIO_DOCKERHUB"
+
+vpc_cidr          = "10.0.0.0/16"
+subnet_cidr       = "10.0.1.0/24"
+availability_zone = "us-east-1a"
