@@ -15,6 +15,7 @@ import { parkingService, type Slot } from '@/services/parking.service';
 import { reservationService, type Reservation } from '@/services/reservation.service';
 import { paymentService } from '@/services/payment.service';
 import { vehicleService } from '@/services/user.service';
+import { realtimeService, type SlotUpdateEvent } from '@/services/realtime.service';
 
 interface MapInnerProps {
   flyToZone?: any;
@@ -88,9 +89,40 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
       () => {},
       { enableHighAccuracy: true }
     );
-    const interval = setInterval(fetchSlots, 10000);
-    return () => { navigator.geolocation.clearWatch(watchId); clearInterval(interval); };
+    return () => { navigator.geolocation.clearWatch(watchId); };
   }, [fetchSlots]);
+
+  const handleSlotUpdate = useCallback((event: SlotUpdateEvent) => {
+    if (event.eventType === 'created') {
+      fetchSlots();
+      return;
+    }
+
+    setSlots((prev) => {
+      const idx = prev.findIndex((s) => s.id === event.id);
+      if (idx === -1 || !event.status) return prev;
+      const next = [...prev];
+      next[idx] = { ...next[idx], status: event.status };
+      return next;
+    });
+  }, [fetchSlots]);
+
+  useEffect(() => {
+    realtimeService.connect();
+
+    const unsubscribeSlotUpdate = realtimeService.onSlotUpdate(handleSlotUpdate);
+    const unsubscribeConnection = realtimeService.onConnectionChange((connected) => {
+      if (connected) {
+        fetchSlots();
+      }
+    });
+
+    return () => {
+      unsubscribeSlotUpdate();
+      unsubscribeConnection();
+      realtimeService.disconnect();
+    };
+  }, [handleSlotUpdate, fetchSlots]);
 
   useEffect(() => {
     if (!selectedSlot) return;

@@ -24,7 +24,7 @@ on:
       infra:
         value: ${{ jobs.changes.outputs.infra }}
   push:
-    branches: [feature/USP-101-dockerfile-cicd-swagger-prometheus, QA, PROD]
+    branches: [feature/USP-102-socketio-client-frontend, QA, PROD]
   pull_request:
 
 permissions:
@@ -96,4 +96,5 @@ jobs:
       - name: Build all
         env:
           NEXT_PUBLIC_GATEWAY_URL: http://placeholder.build
+          NEXT_PUBLIC_REALTIME_URL: http://placeholder.build
         run: cd smart-parking && npx nx run-many --target=build --all --parallel=3
