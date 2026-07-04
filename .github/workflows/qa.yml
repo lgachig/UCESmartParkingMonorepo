@@ -2,10 +2,10 @@ name: QA CI/CD
 
 on:
   push:
-    branches: [feature/USP-101-dockerfile-cicd-swagger-prometheus]
+    branches: [feature/USP-101-dockerfile-cicd-swagger-prometheus, QA]
   pull_request:
     types: [closed]
-    branches: [feature/USP-101-dockerfile-cicd-swagger-prometheus]
+    branches: [feature/USP-101-dockerfile-cicd-swagger-prometheus, QA]
   workflow_dispatch:
     inputs:
       force_deploy_all:
