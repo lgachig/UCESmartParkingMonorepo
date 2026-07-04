@@ -14,7 +14,8 @@ resource "aws_security_group" "microservice" {
     from_port       = 22
     to_port         = 22
     protocol        = "tcp"
-    security_groups = [var.bastion_security_group_id]
+    security_groups = length(var.bastion_cidr_block) > 0 ? null : [var.bastion_security_group_id]
+    cidr_blocks     = length(var.bastion_cidr_block) > 0 ? [var.bastion_cidr_block] : null
     description     = "SSH from bastion only"
   }
 

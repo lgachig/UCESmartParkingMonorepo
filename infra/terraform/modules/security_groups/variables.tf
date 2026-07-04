@@ -16,7 +16,14 @@ variable "allowed_ssh_cidr" {
 
 variable "bastion_security_group_id" {
   type        = string
-  description = "Security group ID of the bastion host. Only the bastion is allowed to SSH into microservice instances."
+  description = "Security group ID of the bastion host (mismo-cuenta). Dejar vacío \"\" si usas bastion_cidr_block en su lugar."
+  default     = ""
+}
+
+variable "bastion_cidr_block" {
+  type        = string
+  description = "CIDR desde el que se permite SSH cuando el bastion vive en OTRA cuenta AWS y no se puede referenciar por Security Group ID (p.ej. Lab B referenciando al bastion de Lab A). Dejar vacío \"\" para usar bastion_security_group_id en su lugar."
+  default     = ""
 }
 
 # ── Soporte ASG + Load Balancer (usado por prod) ──────────────────────────────

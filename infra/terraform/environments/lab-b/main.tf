@@ -36,55 +36,44 @@ module "peering" {
   accepter_name           = var.lab_a_environment
 }
 
-# ── Bastion y Gateway de Lab A, ubicados por tag (para las reglas cruzadas) ──
-# Requiere que los Security Groups de Lab A tengan el tag Name de siempre
-# ("<lab_a_environment>-bastion-sg", "<lab_a_environment>-gateway-sg").
-# Esta referencia cross-VPC de Security Groups SOLO funciona porque el
-# peering está en la MISMA región (us-east-1) y la MISMA cuenta.
-data "aws_security_group" "lab_a_bastion" {
-  filter {
-    name   = "tag:Name"
-    values = ["${var.lab_a_environment}-bastion-sg"]
-  }
-}
-
-data "aws_security_group" "lab_a_gateway" {
-  filter {
-    name   = "tag:Name"
-    values = ["${var.lab_a_environment}-gateway-sg"]
-  }
-}
+# ── CIDR de Lab A, usado en vez de referencias cruzadas por Security Group ID ──
+# Referenciar un SG por ID solo funciona de forma confiable dentro de la
+# MISMA cuenta AWS. Si Lab A y Lab B están en cuentas distintas (caso
+# Academy con dos Learner Labs), un `data "aws_security_group"` aquí busca
+# en la cuenta equivocada y falla con "no matching EC2 Security Group
+# found". Usar el CIDR de la VPC de Lab A evita ese problema por completo,
+# sin necesitar un segundo provider con credenciales de la otra cuenta.
 
 # ── Security Groups de Lab B (reservation, payment, realtime) ───────────────
 # Reutiliza el mismo módulo que Lab A; crea SGs para los 9 servicios pero
 # solo adjuntamos instancias a reservation/payment/realtime — el resto
 # quedan vacíos y no generan ningún costo ni riesgo.
 module "security_groups" {
-  source                    = "../../modules/security_groups"
-  environment               = var.environment
-  vpc_id                    = module.vpc.vpc_id
-  bastion_security_group_id = data.aws_security_group.lab_a_bastion.id
+  source             = "../../modules/security_groups"
+  environment        = var.environment
+  vpc_id             = module.vpc.vpc_id
+  bastion_cidr_block = var.lab_a_vpc_cidr
 }
 
 # ── Reglas cruzadas: tráfico que llega DESDE Lab A hacia Lab B ──────────────
 resource "aws_security_group_rule" "reservation_from_lab_a_gateway" {
-  type                     = "ingress"
-  from_port                = 3005
-  to_port                  = 3005
-  protocol                 = "tcp"
-  source_security_group_id = data.aws_security_group.lab_a_gateway.id
-  security_group_id        = module.security_groups.security_group_ids["reservation"]
-  description              = "reservation accesible desde el gateway de Lab A (peering)"
+  type              = "ingress"
+  from_port         = 3005
+  to_port           = 3005
+  protocol          = "tcp"
+  cidr_blocks       = [var.lab_a_vpc_cidr]
+  security_group_id = module.security_groups.security_group_ids["reservation"]
+  description       = "reservation accesible desde el gateway de Lab A (peering)"
 }
 
 resource "aws_security_group_rule" "payment_from_lab_a_gateway" {
-  type                     = "ingress"
-  from_port                = 3007
-  to_port                  = 3007
-  protocol                 = "tcp"
-  source_security_group_id = data.aws_security_group.lab_a_gateway.id
-  security_group_id        = module.security_groups.security_group_ids["payment"]
-  description              = "payment accesible desde el gateway de Lab A (peering)"
+  type              = "ingress"
+  from_port         = 3007
+  to_port           = 3007
+  protocol          = "tcp"
+  cidr_blocks       = [var.lab_a_vpc_cidr]
+  security_group_id = module.security_groups.security_group_ids["payment"]
+  description       = "payment accesible desde el gateway de Lab A (peering)"
 }
 
 # ── EIP para realtime (el frontend se conecta directo, igual que en Lab A) ──

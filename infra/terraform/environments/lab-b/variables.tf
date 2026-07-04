@@ -18,6 +18,12 @@ variable "lab_a_environment" {
   default     = "qa"
 }
 
+variable "lab_a_vpc_cidr" {
+  type        = string
+  description = "CIDR de la VPC default de Lab A (Account A) — usado en las reglas de SG hacia Lab B en vez de referenciar el SG por ID"
+  default     = "172.31.0.0/16"
+}
+
 variable "vpc_cidr" {
   type        = string
   description = "CIDR de la nueva VPC de Lab B — no debe solaparse con el CIDR de Lab A"
