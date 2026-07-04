@@ -86,14 +86,14 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
     fetchSlots();
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => {},
+      () => { },
       { enableHighAccuracy: true }
     );
     return () => { navigator.geolocation.clearWatch(watchId); };
   }, [fetchSlots]);
 
   const handleSlotUpdate = useCallback((event: SlotUpdateEvent) => {
-    if (event.eventType === 'created') {
+    if (event.eventType === 'slot.created') {
       fetchSlots();
       return;
     }
