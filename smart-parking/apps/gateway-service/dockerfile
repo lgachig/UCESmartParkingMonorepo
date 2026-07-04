@@ -11,6 +11,7 @@ COPY . .
 
 ENV NX_DAEMON=false
 
+RUN npx nx sync
 RUN npx nx build @org/gateway-service
 
 EXPOSE 3006
