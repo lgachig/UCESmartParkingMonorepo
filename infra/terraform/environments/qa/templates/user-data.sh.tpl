@@ -1,6 +1,15 @@
 #!/bin/bash
 set -euxo pipefail
 
+# ── Swap File (prevents OOM on t3.micro) ──────────────────────────────
+if ! swapon --show 2>/dev/null | grep -q /swapfile; then
+  fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo "/swapfile swap swap defaults 0 0" >> /etc/fstab
+fi
+
 dnf update -y
 dnf install -y docker
 systemctl enable docker && systemctl start docker

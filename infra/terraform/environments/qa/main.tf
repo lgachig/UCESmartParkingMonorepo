@@ -223,4 +223,4 @@ module "realtime" {
 resource "aws_eip_association" "realtime" {
   instance_id   = module.realtime.instance_id
   allocation_id = aws_eip.realtime.id
-}x
+}
