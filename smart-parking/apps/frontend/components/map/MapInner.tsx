@@ -97,12 +97,21 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
       fetchSlots();
       return;
     }
-
+    if (event.eventType === 'slot.deleted') {
+      setSlots((prev) => prev.filter((s) => s.id !== event.id));
+      return;
+    }
     setSlots((prev) => {
       const idx = prev.findIndex((s) => s.id === event.id);
-      if (idx === -1 || !event.status) return prev;
+      if (idx === -1) return prev;
       const next = [...prev];
-      next[idx] = { ...next[idx], status: event.status };
+      next[idx] = {
+        ...next[idx],
+        ...(event.status !== undefined && { status: event.status }),
+        ...(event.number !== undefined && { number: event.number }),
+        ...(event.zoneId !== undefined && { zoneId: event.zoneId }),
+        ...(event.facultyId !== undefined && { facultyId: event.facultyId }),
+      };
       return next;
     });
   }, [fetchSlots]);
