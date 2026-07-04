@@ -1,5 +1,22 @@
 #!/usr/bin/env bash
 # ==============================================================================
+# ⚠️  OBSOLETO — NO EJECUTAR ⚠️
+#
+# Este script asume un esquema viejo de 3 Security Groups
+# (gateway / microservices / database). El esquema ACTUAL crea un SG por
+# cada uno de los 9 microservicios (ver
+# terraform/modules/security_groups/main.tf) y todas esas reglas ya se
+# gestionan por Terraform (incluyendo el tráfico cruzado Lab A <-> Lab B en
+# environments/qa/lab-b-integration.tf).
+#
+# Si corres este script vas a crear reglas duplicadas/huérfanas sobre
+# Security Groups que probablemente ni siquiera existen (los IDs son
+# placeholders). Se deja el archivo solo como referencia histórica.
+#
+# Para tocar reglas de Security Group, edita los módulos de Terraform, no
+# este script.
+# ==============================================================================
+#
 # Script: apply-security-rules.sh
 # Purpose: Authorize AWS Security Group rules for least-privilege network access.
 # Usage: Modify the SG IDs below and run this script from your terminal.

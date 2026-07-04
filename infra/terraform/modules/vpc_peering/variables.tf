@@ -37,3 +37,9 @@ variable "accepter_name" {
   type    = string
   default = "lab-a"
 }
+
+variable "accepter_region" {
+  type        = string
+  description = "Región de la cuenta accepter, solo si es distinta a la del requester (peering inter-región). Dejar \"\" si es la misma región (caso normal de este proyecto)."
+  default     = ""
+}

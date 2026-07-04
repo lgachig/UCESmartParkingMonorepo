@@ -57,3 +57,25 @@ variable "dockerhub_user" {
   type        = string
   description = "Docker Hub user para pull de imágenes"
 }
+
+# ── Credenciales de la cuenta de Lab A (accepter del peering) ────────────────
+# OBLIGATORIAS para que el VPC Peering funcione cross-account. Pásalas como
+# variables de entorno TF_VAR_..., no las escribas en terraform.tfvars.
+variable "lab_a_access_key" {
+  type        = string
+  description = "Access Key de la cuenta de Lab A (para aceptar el peering y crear la ruta en su route table). Exportar como TF_VAR_lab_a_access_key."
+  sensitive   = true
+}
+
+variable "lab_a_secret_key" {
+  type        = string
+  description = "Secret Key de la cuenta de Lab A. Exportar como TF_VAR_lab_a_secret_key."
+  sensitive   = true
+}
+
+variable "lab_a_session_token" {
+  type        = string
+  description = "Session Token de la cuenta de Lab A (AWS Academy usa credenciales temporales; dejar vacio si tu cuenta usa credenciales IAM permanentes sin token)."
+  sensitive   = true
+  default     = ""
+}

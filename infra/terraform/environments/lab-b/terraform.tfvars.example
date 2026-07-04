@@ -1,4 +1,11 @@
-key_name       = "LABAQA"             
+# IMPORTANTE: este key_name debe ser el nombre con el que importaste el
+# key pair EC2 EN LA CUENTA DE LAB B. Si quieres seguir usando el mismo
+# archivo .pem que ya tienes (p. ej. LABAQAPRUEBAS.pem) para saltar desde el
+# mismo bastion, importa esa MISMA clave pública (el .pub correspondiente)
+# como key pair en la cuenta de Lab B también, y usa aquí el nombre que le
+# diste ahí (puede ser el mismo nombre, "LABAQAPRUEBAS", o distinto — lo que
+# importa es que la clave PRIVADA .pem coincida con la pública importada).
+key_name       = "LABAQAPRUEBAS"
 dockerhub_user = "lgachig"
 
 aws_region        = "us-east-1"
@@ -8,3 +15,16 @@ vpc_cidr          = "10.0.0.0/16"
 subnet_cidr       = "10.0.1.0/24"
 availability_zone = "us-east-1a"
 lab_a_vpc_cidr    = "172.31.0.0/16"
+
+# ── Credenciales de Lab A (para aceptar el peering) ──────────────────────────
+# NO pongas esto aquí. Expórtalas como variables de entorno antes de
+# terraform plan/apply, con las credenciales temporales de la cuenta de Lab A
+# (las mismas que usas para environments/qa):
+#
+#   export TF_VAR_lab_a_access_key="ASIA..."
+#   export TF_VAR_lab_a_secret_key="..."
+#   export TF_VAR_lab_a_session_token="..."
+#
+# Y las de Lab B (la cuenta de este environment) las tomas de las tuyas
+# normales / perfil aws configure / variables de entorno estándar
+# AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN.

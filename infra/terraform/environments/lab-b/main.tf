@@ -7,13 +7,20 @@ module "vpc" {
   availability_zone = var.availability_zone
 }
 
-# ── Datos de Lab A (VPC default) — para el peering, sin tocar su estado ──────
+# ── Datos de Lab A (VPC default) ─────────────────────────────────────────────
+# CRITICO: estas data sources deben resolverse con las credenciales de Lab A
+# (provider = aws.accepter), NO con las de Lab B (el provider por defecto de
+# este folder). Antes se leían con el provider default (Lab B) — eso buscaba
+# la "VPC default" en la cuenta EQUIVOCADA y era una de las causas de que el
+# peering nunca terminara de armarse bien.
 data "aws_vpc" "lab_a" {
-  default = true
+  provider = aws.accepter
+  default  = true
 }
 
 data "aws_route_table" "lab_a_main" {
-  vpc_id = data.aws_vpc.lab_a.id
+  provider = aws.accepter
+  vpc_id   = data.aws_vpc.lab_a.id
 
   filter {
     name   = "association.main"
@@ -21,9 +28,14 @@ data "aws_route_table" "lab_a_main" {
   }
 }
 
-# ── VPC Peering Lab B <-> Lab A ────────────────────────────────────────────
+# ── VPC Peering Lab B <-> Lab A (cross-account) ─────────────────────────────
 module "peering" {
   source = "../../modules/vpc_peering"
+
+  providers = {
+    aws.requester = aws            # cuenta de Lab B (provider default de este folder)
+    aws.accepter  = aws.accepter   # cuenta de Lab A
+  }
 
   requester_vpc_id         = module.vpc.vpc_id
   requester_cidr           = module.vpc.cidr_block

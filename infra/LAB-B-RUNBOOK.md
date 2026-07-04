@@ -1,11 +1,22 @@
 # Split Lab A / Lab B con VPC Peering
 
+> **⚠️ Corrección (post-incidente):** este runbook decía originalmente que
+> Lab A y Lab B estaban en la "misma cuenta" y que el peering se
+> auto-aceptaba. Eso era incorrecto para este proyecto — Lab A y Lab B son
+> **dos cuentas AWS Academy distintas**, y `auto_accept` NO funciona
+> cross-account (la conexión se queda en `pending-acceptance` para siempre,
+> que es exactamente el síntoma que se reportó: "el peering no funciona").
+> El módulo `vpc_peering` y este runbook ya están corregidos para el caso
+> cross-account real. Ver el nuevo **Paso 0** más abajo.
+
 ## Qué se agregó / cambió
 
 - `terraform/modules/vpc_lab/` → módulo nuevo: crea una VPC **propia** (no la
   default de la cuenta) con CIDR `10.0.0.0/16`, subnet pública, IGW y route table.
 - `terraform/modules/vpc_peering/` → módulo nuevo: crea el `aws_vpc_peering_connection`
-  (auto-accept, misma cuenta/región) + la ruta en cada lado.
+  del lado del requester (Lab B) y lo **acepta explícitamente** del lado del
+  accepter (Lab A) usando un segundo provider con las credenciales de esa
+  cuenta — necesario porque Lab A y Lab B son cuentas AWS distintas.
 - `terraform/modules/vpc/` (Lab A) → se agregaron los outputs `cidr_block` y
   `main_route_table_id` (antes no existían, los necesita el peering).
 - `terraform/environments/lab-b/` → ambiente nuevo, completo: VPC propia,
@@ -40,6 +51,32 @@ etc.) queda intacto — no se toca su estado.
   solo cambia dónde vive la VPC. No necesitas un pipeline de CI/CD nuevo.
 
 ## Orden de aplicación (¡importante, en este orden!)
+
+### Paso 0 — Credenciales de AMBAS cuentas a mano (nuevo)
+El peering ahora se crea con dos providers de Terraform: uno para Lab B
+(donde vive este `environment`) y otro para Lab A (el accepter). Antes de
+`terraform apply` en `lab-b`, necesitas tener a mano las credenciales
+temporales de **ambas** cuentas de AWS Academy:
+
+```bash
+# Credenciales de Lab B (cuenta "default" de este folder — igual que siempre)
+export AWS_ACCESS_KEY_ID="..."
+export AWS_SECRET_ACCESS_KEY="..."
+export AWS_SESSION_TOKEN="..."
+
+# Credenciales de Lab A (la cuenta de environments/qa)
+export TF_VAR_lab_a_access_key="..."
+export TF_VAR_lab_a_secret_key="..."
+export TF_VAR_lab_a_session_token="..."
+```
+
+Las credenciales de AWS Academy expiran cada pocas horas. Si `terraform
+apply` falla con `ExpiredToken` / `InvalidClientTokenId` / `AuthFailure`,
+vuelve a copiar credenciales frescas de **ambas** cuentas y reintenta.
+
+También verifica que el key pair (`LABAQAPRUEBAS` o el que uses) esté
+importado en la cuenta de Lab B, no solo en Lab A — son cuentas separadas,
+un key pair de una no existe automáticamente en la otra.
 
 ### Paso 1 — Sacar reservation/payment/realtime de Lab A
 ```bash
