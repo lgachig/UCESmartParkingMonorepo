@@ -423,30 +423,15 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.QA_EC2_SSH_KEY }}" > ~/.ssh/qa.pem
-          echo "${{ secrets.QA_EC2_SSH_KEY_LAB_B }}" > ~/.ssh/lab_b.pem
-          chmod 400 ~/.ssh/qa.pem ~/.ssh/lab_b.pem
+          chmod 400 ~/.ssh/qa.pem
           ssh-keyscan -H ${{ secrets.QA_BASTION_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Resolve target key
-        if: matrix.changed == 'true'
-        run: |
-          case "${{ matrix.name }}" in
-            reservation|payment|realtime)
-              echo "TARGET_KEY_PATH=~/.ssh/lab_b.pem" >> $GITHUB_ENV
-              echo "TARGET_KEY_SECRET=QA_EC2_SSH_KEY_LAB_B" >> $GITHUB_ENV
-              ;;
-            *)
-              echo "TARGET_KEY_PATH=~/.ssh/qa.pem" >> $GITHUB_ENV
-              echo "TARGET_KEY_SECRET=QA_EC2_SSH_KEY" >> $GITHUB_ENV
-              ;;
-          esac
 
       - name: Wait SSH
         if: matrix.changed == 'true'
         run: |
           FIRST_IP=$(echo "${{ env.PRIVATE_IP }}" | cut -d',' -f1)
           for i in $(seq 1 10); do
-            ssh -i $(eval echo ${{ env.TARGET_KEY_PATH }}) -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            ssh -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
               -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.QA_BASTION_HOST }}" \
               ec2-user@${FIRST_IP} "echo OK" 2>/dev/null && break
             echo "⏳ $i/10..."; sleep 15
@@ -458,7 +443,7 @@ jobs:
         with:
           host: ${{ env.PRIVATE_IP }}
           username: ec2-user
-          key: ${{ (matrix.name == 'reservation' || matrix.name == 'payment' || matrix.name == 'realtime') && secrets.QA_EC2_SSH_KEY_LAB_B || secrets.QA_EC2_SSH_KEY }}
+          key: ${{ secrets.QA_EC2_SSH_KEY }}
           port: 22
           timeout: 120s
           command_timeout: 15m
