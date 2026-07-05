@@ -103,6 +103,8 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
             zoneId: data.zoneId,
             facultyId: data.facultyId,
             timestamp: data.timestamp ?? new Date().toISOString(),
+            latitude: data.latitude,
+            longitude: data.longitude,
         };
         try {
             this.realtimeGateway.emitSlotEvent(eventPayload);

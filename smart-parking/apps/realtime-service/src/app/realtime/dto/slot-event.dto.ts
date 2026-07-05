@@ -7,4 +7,6 @@ export interface SlotEventPayload {
     zoneId?: number;
     facultyId?: number;
     timestamp: string;
+    latitude?: number;
+    longitude?: number;
 }
