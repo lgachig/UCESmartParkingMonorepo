@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { MetricsService } from '../metrics/metrics.service';
 
 export interface SendMailOptions {
     to: string;
@@ -13,7 +14,10 @@ export class MailService {
     private readonly logger = new Logger(MailService.name);
     private transporter: nodemailer.Transporter;
 
-    constructor(private readonly configService: ConfigService) {
+    constructor(
+        private readonly configService: ConfigService,
+        private readonly metrics: MetricsService,
+    ) {
         this.transporter = nodemailer.createTransport({
             host: this.configService.get<string>('SMTP_HOST'),
             port: this.configService.get<number>('SMTP_PORT'),
@@ -33,7 +37,9 @@ export class MailService {
                 subject: options.subject,
                 html: options.html,
             });
+            this.metrics.emailsSentTotal.inc({ type: options.subject });
         } catch (err: any) {
+            this.metrics.emailsFailedTotal.inc({ type: options.subject });
             this.logger.error(
                 `Fallo enviando email a ${options.to} (subject: "${options.subject}"): ${err.message}`,
             );
