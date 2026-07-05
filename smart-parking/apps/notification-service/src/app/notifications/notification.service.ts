@@ -11,17 +11,6 @@ import { paymentProcessedTemplate } from '../mail/templates/payment-processed';
 import { paymentFailedTemplate } from '../mail/templates/payment-failed';
 export type AlertSeverity = 'low' | 'medium' | 'high' | 'critical';
 
-export interface SystemAlertEvent {
-    service: string;
-    severity: AlertSeverity;
-    message: string;
-    timestamp?: string;
-    metadata?: Record<string, unknown>;
-}
-
-const HIGH_SEVERITY: AlertSeverity[] = ['high', 'critical'];
-
-
 interface ReservationCancelledEvent {
     id: string;
     userId: string;
@@ -47,6 +36,16 @@ interface ReservationCreatedEvent {
     expiresAt: string;
     timestamp: string;
 }
+
+export interface SystemAlertEvent {
+    service: string;
+    severity: AlertSeverity;
+    message: string;
+    timestamp?: string;
+    metadata?: Record<string, unknown>;
+}
+
+const HIGH_SEVERITY: AlertSeverity[] = ['high', 'critical'];
 
 const IDEMPOTENCY_TTL_SECONDS = 60 * 60 * 24;
 
