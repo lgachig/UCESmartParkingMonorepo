@@ -24,7 +24,7 @@ on:
       infra:
         value: ${{ jobs.changes.outputs.infra }}
   push:
-    branches: [feature/USP-105-notification-service-rabbitmq-payment-events]
+    branches: ['feature/**']
   pull_request:
 
 permissions:
