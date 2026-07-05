@@ -244,12 +244,34 @@ services:
     networks:
       - smartparking-network
 
+  realtime-service:
+    build:
+      context: ./smart-parking
+      dockerfile: apps/realtime-service/dockerfile
+    container_name: smartparking-realtime-service
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      REALTIME_SERVICE_PORT: 3008
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:29092
+      CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
+    ports:
+      - '3008:3008'
+    networks:
+      - smartparking-network
+
   frontend:
     build:
       context: ./smart-parking/apps/frontend
       dockerfile: dockerfile
       args:
         NEXT_PUBLIC_GATEWAY_URL: http://localhost:3006/api
+        NEXT_PUBLIC_REALTIME_URL: http://localhost:3008
     container_name: smartparking-frontend
     restart: unless-stopped
     depends_on:
@@ -259,6 +281,7 @@ services:
       - parking-service
       - reservation-service
       - payment-service
+      - realtime-service
     ports:
       - '3002:3002'
     networks:

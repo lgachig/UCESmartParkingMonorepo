@@ -2,10 +2,10 @@ name: QA CI/CD
 
 on:
   push:
-    branches: [feature/USP-101-dockerfile-cicd-swagger-prometheus, QA]
+    branches: [feature/USP-102-socketio-client-frontend, QA]
   pull_request:
     types: [closed]
-    branches: [feature/USP-101-dockerfile-cicd-swagger-prometheus, QA]
+    branches: [feature/USP-102-socketio-client-frontend, QA]
   workflow_dispatch:
     inputs:
       force_deploy_all:
@@ -60,6 +60,7 @@ jobs:
     environment: qa
     env:
       QA_GATEWAY_URL: ${{ secrets.QA_GATEWAY_URL }}
+      QA_REALTIME_URL: ${{ secrets.QA_REALTIME_URL }}
     strategy:
       fail-fast: false
       matrix:
@@ -144,6 +145,10 @@ jobs:
             echo "::error::Falta QA_GATEWAY_URL — configúrala en GitHub Environments qa"
             exit 1
           fi
+          if [ -z "$QA_REALTIME_URL" ]; then
+            echo "::error::Falta QA_REALTIME_URL — configúrala en GitHub Environments qa (URL pública del realtime-service, ej. http://<ip-o-dominio>:3008)"
+            exit 1
+          fi
 
       - name: Push frontend
         if: matrix.changed == 'true' && matrix.name == 'frontend'
@@ -155,6 +160,7 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smartparking-frontend:qa
           build-args: |
             NEXT_PUBLIC_GATEWAY_URL=${{ env.QA_GATEWAY_URL }}/api
+            NEXT_PUBLIC_REALTIME_URL=${{ env.QA_REALTIME_URL }}
 
   discover-ips:
     name: Discover Private IPs
@@ -174,7 +180,6 @@ jobs:
       frontend_ips:   ${{ steps.ips.outputs.frontend_ips }}
 
     steps:
-      # ---- Account A (Lab A): auth, user, vehicle, parking, gateway, frontend ----
       - name: Configure AWS credentials (Lab A)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -228,7 +233,6 @@ jobs:
 
           echo "[Lab A] auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | gateway(asg)=$GATEWAY_IPS | frontend(asg)=$FRONTEND_IPS"
 
-      # ---- Account B (Lab B): reservation, payment, realtime ----
       - name: Configure AWS credentials (Lab B)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -263,7 +267,6 @@ jobs:
 
           echo "[Lab B] reservation=$RESERVATION_IP | payment=$PAYMENT_IP | realtime=$REALTIME_IP"
 
-      # ---- Combine both accounts' outputs into this job's outputs ----
       - name: Combine outputs
         id: ips
         run: |
@@ -420,50 +423,27 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.QA_EC2_SSH_KEY }}" > ~/.ssh/qa.pem
-          echo "${{ secrets.QA_EC2_SSH_KEY_LAB_B }}" > ~/.ssh/lab_b.pem
-          chmod 400 ~/.ssh/qa.pem ~/.ssh/lab_b.pem
+          chmod 400 ~/.ssh/qa.pem
           ssh-keyscan -H ${{ secrets.QA_BASTION_HOST }} >> ~/.ssh/known_hosts
-
-      # reservation / payment / realtime live in Lab B (Account B) and were
-      # created with Lab B's own key pair. Everything else is Lab A, where
-      # bastion and target share the same key pair.
-      - name: Resolve target key
-        if: matrix.changed == 'true'
-        run: |
-          case "${{ matrix.name }}" in
-            reservation|payment|realtime)
-              echo "TARGET_KEY_PATH=~/.ssh/lab_b.pem" >> $GITHUB_ENV
-              echo "TARGET_KEY_SECRET=QA_EC2_SSH_KEY_LAB_B" >> $GITHUB_ENV
-              ;;
-            *)
-              echo "TARGET_KEY_PATH=~/.ssh/qa.pem" >> $GITHUB_ENV
-              echo "TARGET_KEY_SECRET=QA_EC2_SSH_KEY" >> $GITHUB_ENV
-              ;;
-          esac
 
       - name: Wait SSH
         if: matrix.changed == 'true'
         run: |
           FIRST_IP=$(echo "${{ env.PRIVATE_IP }}" | cut -d',' -f1)
           for i in $(seq 1 10); do
-            ssh -i $(eval echo ${{ env.TARGET_KEY_PATH }}) -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            ssh -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
               -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/qa.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.QA_BASTION_HOST }}" \
               ec2-user@${FIRST_IP} "echo OK" 2>/dev/null && break
             echo "⏳ $i/10..."; sleep 15
           done
 
-      # NOTE: the bastion hop (proxy_key) is ALWAYS QA_EC2_SSH_KEY (Lab A) —
-      # the bastion only exists in Account A. Only the final hop's key
-      # (key:) switches to Lab B's key pair for reservation/payment/realtime,
-      # since those instances were created with their own key pair in
-      # Account B and don't trust Lab A's key.
       - name: Deploy ${{ matrix.name }} via SSH
         if: matrix.changed == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ env.PRIVATE_IP }}
           username: ec2-user
-          key: ${{ (matrix.name == 'reservation' || matrix.name == 'payment' || matrix.name == 'realtime') && secrets.QA_EC2_SSH_KEY_LAB_B || secrets.QA_EC2_SSH_KEY }}
+          key: ${{ secrets.QA_EC2_SSH_KEY }}
           port: 22
           timeout: 120s
           command_timeout: 15m

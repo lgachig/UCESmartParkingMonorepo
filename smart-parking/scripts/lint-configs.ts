@@ -131,7 +131,7 @@ function lintComposeContent(filePath: string, content: string, startLineOffset: 
         const validServices = [
           'postgres', 'redis', 'kafka', 'rabbitmq', 'auth-service', 'user-service',
           'vehicle-service', 'parking-service', 'reservation-service',
-          'frontend', 'gateway-service', 'payment-service', 'app'
+          'frontend', 'gateway-service', 'payment-service', 'realtime-service', 'app'
         ];
         if (!validServices.includes(serviceName)) {
           logError(filePath, lineNum, `Unknown or invalid service name: '${serviceName}'`);
@@ -235,7 +235,8 @@ function validatePort(filePath: string, line: number, serviceName: string, portS
     'parking-service': '3004',
     'reservation-service': '3005',
     'frontend': '3002',
-    'gateway-service': '3006'
+    'gateway-service': '3006',
+    'realtime-service': '3008'
   };
 
   const expected = expectedHostPorts[serviceName];
