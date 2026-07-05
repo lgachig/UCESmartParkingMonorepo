@@ -52,8 +52,26 @@ export default function SlotsPage() {
     }, 15000);
 
     realtimeService.connect();
-    const handleRealtimeSlotEvent = (_event: SlotUpdateEvent) => {
-      startTransition(() => { fetchData(); });
+    const handleRealtimeSlotEvent = (event: SlotUpdateEvent) => {
+      if (event.eventType === 'slot.created' || event.eventType === 'slot.deleted') {
+        startTransition(() => { fetchData(); });
+        return;
+      }
+      setSlots((prev) => {
+        const idx = prev.findIndex((s) => s.id === event.id);
+        if (idx === -1) return prev;
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          ...(event.status !== undefined && { status: event.status }),
+          ...(event.number !== undefined && { number: String(event.number) }),
+          ...(event.zoneId !== undefined && { zoneId: event.zoneId }),
+          ...(event.facultyId !== undefined && { facultyId: event.facultyId }),
+          ...(event.latitude !== undefined && { latitude: event.latitude }),
+          ...(event.longitude !== undefined && { longitude: event.longitude }),
+        };
+        return next;
+      });
     };
     const unsubscribeSlotUpdate = realtimeService.onSlotUpdate(handleRealtimeSlotEvent);
 

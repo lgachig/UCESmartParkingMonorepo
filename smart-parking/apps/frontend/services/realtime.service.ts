@@ -11,6 +11,8 @@ export interface SlotUpdateEvent {
   zoneId?: number;
   facultyId?: number;
   timestamp: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface RealtimeSubscription {

@@ -111,6 +111,8 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
         ...(event.number !== undefined && { number: String(event.number) }),
         ...(event.zoneId !== undefined && { zoneId: event.zoneId }),
         ...(event.facultyId !== undefined && { facultyId: event.facultyId }),
+        ...(event.latitude !== undefined && { latitude: event.latitude }),
+        ...(event.longitude !== undefined && { longitude: event.longitude }),
       };
       return next;
     });
