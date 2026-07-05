@@ -24,7 +24,7 @@ on:
       infra:
         value: ${{ jobs.changes.outputs.infra }}
   push:
-    branches: [feature/USP-104-notification-service-cancelled-expired-emails]
+    branches: [feature/USP-105-notification-service-rabbitmq-payment-events]
   pull_request:
 
 permissions:

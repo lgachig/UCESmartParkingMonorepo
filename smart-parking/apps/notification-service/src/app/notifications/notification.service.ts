@@ -7,6 +7,8 @@ import { reservationConfirmedTemplate } from '../mail/templates/reservation-conf
 import { ReservationClientService } from '../clients/reservation-client.service';
 import { reservationCancelledTemplate } from '../mail/templates/reservation-cancelled';
 import { reservationExpiredTemplate } from '../mail/templates/reservation-expired';
+import { paymentProcessedTemplate } from '../mail/templates/payment-processed';
+import { paymentFailedTemplate } from '../mail/templates/payment-failed';
 
 interface ReservationCancelledEvent {
     id: string;
@@ -146,6 +148,88 @@ export class NotificationService {
         } catch (err: any) {
             this.logger.error(
                 `Error procesando reservation.expired para reserva ${data.id}: ${err.message}`,
+            );
+        }
+    }
+
+    async handlePaymentCompleted(data: {
+        paymentId?: string;
+        reservationId: string;
+        userId?: string;
+        free?: boolean;
+    }): Promise<void> {
+        const idempotencyKey = `notif:payment-completed:${data.paymentId ?? data.reservationId}`;
+        const acquired = await this.redis.acquireLock(idempotencyKey, IDEMPOTENCY_TTL_SECONDS);
+        if (!acquired) {
+            this.logger.log(`Pago para reserva ${data.reservationId} ya fue notificado, se omite duplicado`);
+            return;
+        }
+
+        try {
+            const reservation = await this.reservationClient.getReservationById(data.reservationId);
+            const userId = data.userId ?? reservation.userId;
+            const user = await this.authClient.getEmailByUserId(userId);
+
+            if (data.free) {
+                // Profesor / tarifa $0: no hablar de "pago", confirmar la reserva
+                const slot = await this.parkingClient.getSlotById(reservation.slotId);
+                await this.mail.send({
+                    to: user.email,
+                    subject: 'Reserva confirmada',
+                    html: reservationConfirmedTemplate({
+                        reservationCode: reservation.reservationCode,
+                        slotNumber: slot.number,
+                        zoneName: slot.zone?.name,
+                        expiresAt: reservation.expiresAt,
+                    }),
+                });
+            } else {
+                await this.mail.send({
+                    to: user.email,
+                    subject: 'Pago procesado',
+                    html: paymentProcessedTemplate({ reservationCode: reservation.reservationCode }),
+                });
+            }
+
+            this.logger.log(`Email de pago (completed) enviado para reserva ${data.reservationId}`);
+        } catch (err: any) {
+            this.logger.error(
+                `Error procesando payment.completed para reserva ${data.reservationId}: ${err.message}`,
+            );
+        }
+    }
+
+    async handlePaymentFailed(data: {
+        paymentId?: string;
+        reservationId: string;
+        userId?: string;
+        reason: string;
+    }): Promise<void> {
+        const idempotencyKey = `notif:payment-failed:${data.paymentId ?? data.reservationId}`;
+        const acquired = await this.redis.acquireLock(idempotencyKey, IDEMPOTENCY_TTL_SECONDS);
+        if (!acquired) {
+            this.logger.log(`Fallo de pago para reserva ${data.reservationId} ya fue notificado, se omite duplicado`);
+            return;
+        }
+
+        try {
+            const reservation = await this.reservationClient.getReservationById(data.reservationId);
+            const userId = data.userId ?? reservation.userId;
+            const user = await this.authClient.getEmailByUserId(userId);
+
+            await this.mail.send({
+                to: user.email,
+                subject: 'Pago no procesado',
+                html: paymentFailedTemplate({
+                    reservationCode: reservation.reservationCode,
+                    reason: data.reason,
+                }),
+            });
+
+            this.logger.log(`Email de pago (failed) enviado para reserva ${data.reservationId}`);
+        } catch (err: any) {
+            this.logger.error(
+                `Error procesando payment.failed para reserva ${data.reservationId}: ${err.message}`,
             );
         }
     }
