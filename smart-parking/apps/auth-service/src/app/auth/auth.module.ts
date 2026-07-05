@@ -8,6 +8,7 @@ import { AuditModule } from '../audit/audit.module';
 import { AppRedisService } from '../redis/redis.service';
 import { AppRedisModule } from '../redis/redis.module';
 import { UserClientModule } from '../user-client/user-client.module';
+import { InternalAuthController } from './internal-auth.controller';
 
 @Module({
   imports: [
@@ -21,11 +22,11 @@ import { UserClientModule } from '../user-client/user-client.module';
       },
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, 
-              JwtStrategy,
-              RolesGuard,
-              AppRedisService
-             ],
+  controllers: [AuthController, InternalAuthController],
+  providers: [AuthService,
+    JwtStrategy,
+    RolesGuard,
+    AppRedisService
+  ],
 })
-export class AuthModule {}
+export class AuthModule { }

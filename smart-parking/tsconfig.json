@@ -35,6 +35,12 @@
     },
     {
       "path": "./apps/realtime-service"
+    },
+    {
+      "path": "./apps/notification-service-e2e"
+    },
+    {
+      "path": "./apps/notification-service"
     }
   ]
 }
