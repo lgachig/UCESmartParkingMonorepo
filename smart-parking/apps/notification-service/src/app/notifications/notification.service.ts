@@ -9,6 +9,18 @@ import { reservationCancelledTemplate } from '../mail/templates/reservation-canc
 import { reservationExpiredTemplate } from '../mail/templates/reservation-expired';
 import { paymentProcessedTemplate } from '../mail/templates/payment-processed';
 import { paymentFailedTemplate } from '../mail/templates/payment-failed';
+export type AlertSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+export interface SystemAlertEvent {
+    service: string;
+    severity: AlertSeverity;
+    message: string;
+    timestamp?: string;
+    metadata?: Record<string, unknown>;
+}
+
+const HIGH_SEVERITY: AlertSeverity[] = ['high', 'critical'];
+
 
 interface ReservationCancelledEvent {
     id: string;
@@ -193,9 +205,11 @@ export class NotificationService {
 
             this.logger.log(`Email de pago (completed) enviado para reserva ${data.reservationId}`);
         } catch (err: any) {
+            await this.redis.releaseLock(idempotencyKey);
             this.logger.error(
                 `Error procesando payment.completed para reserva ${data.reservationId}: ${err.message}`,
             );
+            throw err;
         }
     }
 
@@ -228,8 +242,33 @@ export class NotificationService {
 
             this.logger.log(`Email de pago (failed) enviado para reserva ${data.reservationId}`);
         } catch (err: any) {
+            await this.redis.releaseLock(idempotencyKey);
             this.logger.error(
                 `Error procesando payment.failed para reserva ${data.reservationId}: ${err.message}`,
+            );
+            throw err;
+        }
+    }
+
+    async handleSystemAlert(data: SystemAlertEvent): Promise<void> {
+        const context = {
+            service: data.service,
+            severity: data.severity,
+            timestamp: data.timestamp ?? new Date().toISOString(),
+            metadata: data.metadata,
+        };
+
+        if (data.severity === 'critical') {
+            this.logger.error(`[ALERT][${data.service}][${data.severity}] ${data.message}`, context);
+        } else if (data.severity === 'high') {
+            this.logger.warn(`[ALERT][${data.service}][${data.severity}] ${data.message}`, context);
+        } else {
+            this.logger.log(`[ALERT][${data.service}][${data.severity}] ${data.message}`, context);
+        }
+
+        if (HIGH_SEVERITY.includes(data.severity)) {
+            this.logger.debug(
+                `Alerta de severidad ${data.severity} recibida de ${data.service} — pendiente de notificación a administradores (no implementado en esta fase)`,
             );
         }
     }

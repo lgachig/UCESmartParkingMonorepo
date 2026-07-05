@@ -7,7 +7,8 @@ const EXCHANGE = 'smart-parking';
 const QUEUE = 'notification-service.payment-events';
 const DLQ = 'notification-service.payment-events.dlq';
 const DLX = 'smart-parking.dlx';
-const RETRY_QUEUE = 'notification-service.payment-events.retry';
+const RETRY_QUEUE_COMPLETED = 'notification-service.payment-events.retry.completed';
+const RETRY_QUEUE_FAILED = 'notification-service.payment-events.retry.failed';
 const PAYMENT_COMPLETED_KEY = 'payment.completed';
 const PAYMENT_FAILED_KEY = 'payment.failed';
 const MAX_RETRIES = 3;
@@ -62,14 +63,20 @@ export class RabbitmqConsumerService implements OnModuleInit, OnModuleDestroy {
             await this.channel.bindQueue(QUEUE, EXCHANGE, PAYMENT_COMPLETED_KEY);
             await this.channel.bindQueue(QUEUE, EXCHANGE, PAYMENT_FAILED_KEY);
 
-            await this.channel.assertQueue(RETRY_QUEUE, {
+            await this.channel.assertQueue(RETRY_QUEUE_COMPLETED, {
                 durable: true,
                 arguments: {
                     'x-dead-letter-exchange': EXCHANGE,
                     'x-dead-letter-routing-key': PAYMENT_COMPLETED_KEY,
                 },
             });
-
+            await this.channel.assertQueue(RETRY_QUEUE_FAILED, {
+                durable: true,
+                arguments: {
+                    'x-dead-letter-exchange': EXCHANGE,
+                    'x-dead-letter-routing-key': PAYMENT_FAILED_KEY,
+                },
+            });
             this.logger.log('RabbitMQ consumer connected — notification-service payment events');
 
             this.connection.on('close', () => {
@@ -156,7 +163,7 @@ export class RabbitmqConsumerService implements OnModuleInit, OnModuleDestroy {
 
                     if (retryCount < MAX_RETRIES) {
                         const delayMs = Math.pow(5, retryCount + 1) * 1000;
-                        this.scheduleRetry(raw, retryCount + 1, delayMs, msg.properties);
+                        this.scheduleRetry(raw, retryCount + 1, delayMs, msg.properties, routingKey);
                         this.channel?.ack(msg);
                     } else {
                         this.logger.error(
@@ -178,10 +185,12 @@ export class RabbitmqConsumerService implements OnModuleInit, OnModuleDestroy {
         retryCount: number,
         delayMs: number,
         originalProperties: amqp.MessageProperties,
+        routingKey: string,
     ): void {
         if (!this.channel) return;
-        this.logger.warn(`Scheduling retry ${retryCount}/${MAX_RETRIES} in ${delayMs}ms`);
-        this.channel.sendToQueue(RETRY_QUEUE, Buffer.from(raw), {
+        const targetQueue = routingKey === PAYMENT_FAILED_KEY ? RETRY_QUEUE_FAILED : RETRY_QUEUE_COMPLETED;
+        this.logger.warn(`Scheduling retry ${retryCount}/${MAX_RETRIES} in ${delayMs}ms on ${targetQueue}`);
+        this.channel.sendToQueue(targetQueue, Buffer.from(raw), {
             persistent: true,
             expiration: String(delayMs),
             headers: { ...originalProperties.headers, 'x-retry-count': retryCount },

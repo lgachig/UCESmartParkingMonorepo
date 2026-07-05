@@ -3,7 +3,7 @@ import { Kafka, Consumer, EachMessagePayload } from 'kafkajs';
 import { ConfigService } from '@nestjs/config';
 import { NotificationService } from '../notifications/notification.service';
 
-const TOPICS = ['reservation.created', 'reservation.cancelled', 'reservation.expired'];
+const TOPICS = ['reservation.created', 'reservation.cancelled', 'reservation.expired', 'system.alert'];
 
 @Injectable()
 export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
@@ -58,6 +58,15 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
             data = JSON.parse(raw);
         } catch {
             this.logger.warn(`[${topic}] Discarded malformed message (invalid JSON)`);
+            return;
+        }
+
+        if (topic === 'system.alert') {
+            if (!data.service || !data.severity || !data.message) {
+                this.logger.warn(`[${topic}] Discarded alert missing service/severity/message`);
+                return;
+            }
+            await this.notificationService.handleSystemAlert(data);
             return;
         }
 
