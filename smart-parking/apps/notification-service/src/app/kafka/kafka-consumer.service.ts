@@ -3,7 +3,7 @@ import { Kafka, Consumer, EachMessagePayload } from 'kafkajs';
 import { ConfigService } from '@nestjs/config';
 import { NotificationService } from '../notifications/notification.service';
 
-const TOPICS = ['reservation.created']; // USP-103: solo este topic
+const TOPICS = ['reservation.created', 'reservation.cancelled', 'reservation.expired'];
 
 @Injectable()
 export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
@@ -68,6 +68,16 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
 
         if (topic === 'reservation.created') {
             await this.notificationService.handleReservationCreated(data);
+            return;
+        }
+
+        if (topic === 'reservation.cancelled') {
+            await this.notificationService.handleReservationCancelled(data);
+            return;
+        }
+
+        if (topic === 'reservation.expired') {
+            await this.notificationService.handleReservationExpired(data);
         }
     }
 
