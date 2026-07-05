@@ -24,7 +24,7 @@ on:
       infra:
         value: ${{ jobs.changes.outputs.infra }}
   push:
-    branches: [feature/USP-102-socketio-client-frontend, QA, PROD]
+    branches: [PROD]
   pull_request:
 
 permissions:
