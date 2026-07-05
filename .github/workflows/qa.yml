@@ -2,10 +2,10 @@ name: QA CI/CD
 
 on:
   push:
-    branches: [feature/USP-102-socketio-client-frontend, QA]
+    branches: []
   pull_request:
     types: [closed]
-    branches: [feature/USP-102-socketio-client-frontend, QA]
+    branches: []
   workflow_dispatch:
     inputs:
       force_deploy_all:
