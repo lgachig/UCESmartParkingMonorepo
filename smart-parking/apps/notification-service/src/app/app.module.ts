@@ -21,6 +21,7 @@ import { KafkaModule } from './kafka/kafka.module';
         SMTP_USER: Joi.string().required(),
         SMTP_PASS: Joi.string().required(),
         SMTP_FROM: Joi.string().required(),
+        RESERVATION_SERVICE_URL: Joi.string().required(),
       }),
     }),
     KafkaModule,

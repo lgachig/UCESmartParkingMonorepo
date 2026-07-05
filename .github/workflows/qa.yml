@@ -2,10 +2,10 @@ name: QA CI/CD
 
 on:
   push:
-    branches: []
+    branches: [USP-104-notification-service-cancelled-expired-emails]
   pull_request:
     types: [closed]
-    branches: []
+    branches: [USP-104-notification-service-cancelled-expired-emails]
   workflow_dispatch:
     inputs:
       force_deploy_all:

@@ -24,7 +24,7 @@ on:
       infra:
         value: ${{ jobs.changes.outputs.infra }}
   push:
-    branches: [PROD]
+    branches: [feature/USP-104-notification-service-cancelled-expired-emails]
   pull_request:
 
 permissions:
