@@ -108,7 +108,7 @@ export default function MapInner({ flyToZone, setSuggestionDismissed }: MapInner
       next[idx] = {
         ...next[idx],
         ...(event.status !== undefined && { status: event.status }),
-        ...(event.number !== undefined && { number: event.number }),
+        ...(event.number !== undefined && { number: String(event.number) }),
         ...(event.zoneId !== undefined && { zoneId: event.zoneId }),
         ...(event.facultyId !== undefined && { facultyId: event.facultyId }),
       };
