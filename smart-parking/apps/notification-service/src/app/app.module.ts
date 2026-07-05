@@ -4,6 +4,7 @@ import * as Joi from 'joi';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { KafkaModule } from './kafka/kafka.module';
+import { RabbitmqModule } from './rabbitmq/rabbitmq.module';
 
 @Module({
   imports: [
@@ -22,9 +23,11 @@ import { KafkaModule } from './kafka/kafka.module';
         SMTP_PASS: Joi.string().required(),
         SMTP_FROM: Joi.string().required(),
         RESERVATION_SERVICE_URL: Joi.string().required(),
+        RABBITMQ_URL: Joi.string().required(),
       }),
     }),
     KafkaModule,
+    RabbitmqModule,
   ],
   controllers: [AppController],
   providers: [AppService],

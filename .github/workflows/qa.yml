@@ -2,10 +2,10 @@ name: QA CI/CD
 
 on:
   push:
-    branches: [USP-104-notification-service-cancelled-expired-emails]
+    branches: [feature/USP-105-notification-service-rabbitmq-payment-events]
   pull_request:
     types: [closed]
-    branches: [USP-104-notification-service-cancelled-expired-emails]
+    branches: [feature/USP-105-notification-service-rabbitmq-payment-events]
   workflow_dispatch:
     inputs:
       force_deploy_all:
