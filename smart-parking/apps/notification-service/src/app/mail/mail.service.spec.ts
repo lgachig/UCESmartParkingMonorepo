@@ -11,8 +11,8 @@ describe('MailService', () => {
         SMTP_HOST: 'sandbox.smtp.mailtrap.io',
         SMTP_PORT: 2525,
         SMTP_USER: '49b879b93d7866',
-        SMTP_PASS: 'fake-pass-fea7',
-        SMTP_FROM: 'Private Person <from@example.com>',
+        SMTP_PASS: 'bcadba8048fea7',
+        SMTP_FROM: 'UCE Smart Parking <49b879b93d7866@sandbox.smtp.mailtrap.io>',
     };
 
     let sendMailMock: jest.Mock;
@@ -81,9 +81,6 @@ describe('MailService', () => {
             await buildModule(emptyEnv);
 
             const callArgs = createTransportMock.mock.calls[0][0];
-            // Si esto falla mostrando "undefined", es la prueba de que Nest arma el
-            // transporter con credenciales vacías -> Mailtrap responderá
-            // "Missing credentials for PLAIN/LOGIN" o timeout de conexión.
             expect(callArgs.host).toBeUndefined();
             expect(callArgs.auth.user).toBeUndefined();
             expect(callArgs.auth.pass).toBeUndefined();
