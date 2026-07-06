@@ -27,8 +27,6 @@ module "security_groups" {
 # ── EIPs ───────────────────────────────
 resource "aws_eip" "frontend" { domain = "vpc" }
 resource "aws_eip" "gateway"  { domain = "vpc" }
-# NOTA: el EIP de "realtime" se movió a environments/lab-b, junto con la
-# instancia. Ver infra/terraform/environments/lab-b/main.tf
 
 # ── 1) Auth EC2 ───────────────────────────────────────────────────────────────
 module "auth" {
