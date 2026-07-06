@@ -589,6 +589,12 @@ jobs:
               patch_env NEXT_PUBLIC_GATEWAY_URL "$QA_GATEWAY_URL"
             fi
 
+            echo "🧹 Liberando espacio en disco antes del pull..."
+            df -h / || true
+            docker image prune -af --filter "until=24h" || true
+            docker builder prune -af || true
+            df -h / || true
+
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
             docker-compose -f "$COMPOSE_FILE" pull ${{ matrix.service_name }}
             docker-compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
