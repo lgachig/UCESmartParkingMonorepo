@@ -270,3 +270,13 @@ resource "aws_security_group_rule" "auth_rabbitmq_vpc" {
   security_group_id = aws_security_group.microservice["auth"].id
   description       = "RabbitMQ from VPC"
 }
+
+resource "aws_security_group_rule" "notification_http_from_vpc" {
+  type              = "ingress"
+  from_port         = 3011
+  to_port           = 3011
+  protocol          = "tcp"
+  cidr_blocks       = [data.aws_vpc.selected.cidr_block]
+  security_group_id = aws_security_group.microservice["notification"].id
+  description       = "notification /health y /metrics accesibles desde la VPC (QA)"
+}
