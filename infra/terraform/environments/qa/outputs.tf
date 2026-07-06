@@ -33,6 +33,11 @@ output "parking_private_ip" {
   value       = module.parking.private_ip
 }
 
+output "notification_private_ip" {
+  description = "GitHub Secret: QA_EC2_NOTIFICATION_HOST"
+  value       = module.notification.private_ip
+}
+
 # reservation ahora vive en environments/lab-b — ver su output
 # "reservation_private_ip" ahí para el secret QA_EC2_RESERVATION_HOST.
 

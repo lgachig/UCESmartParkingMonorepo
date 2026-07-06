@@ -161,6 +161,30 @@ module "parking" {
   })
 }
 
+# ── 7) Notification EC2 ───────────────────────────────────────────────────────
+# Servicio sin base de datos propia, sin interfaz pública: mismo patrón que
+# "parking" (EC2 estática, sin EIP). Consume Kafka y RabbitMQ (ambos corren
+# en el EC2 de auth) y llama a auth/parking (misma VPC) y reservation (Lab B,
+# alcanzable vía VPC Peering — ver security_groups de environments/lab-b).
+module "notification" {
+  source             = "../../modules/ec2"
+  environment        = var.environment
+  service_name       = "notification"
+  instance_type      = var.instance_type
+  key_name           = var.key_name
+  subnet_id          = element(module.vpc.public_subnet_ids, 0)
+  security_group_ids = [module.security_groups.security_group_ids["notification"]]
+  extra_tags         = { Service = "notification" }
+  user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
+    dockerhub_user   = var.dockerhub_user
+    docker_image     = "smartparking-notification"
+    docker_image_tag = var.environment
+    service_port     = 3011
+    is_auth          = false
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
+  })
+}
+
 # ── reservation, payment y realtime se movieron a environments/lab-b ────────
 # (nueva VPC 10.0.0.0/16 conectada por VPC Peering). Ver
 # infra/terraform/environments/lab-b/main.tf y el runbook de migración

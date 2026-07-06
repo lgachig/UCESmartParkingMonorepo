@@ -13,7 +13,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d smartparking"]
+      test: [ "CMD-SHELL", "pg_isready -U admin -d smartparking" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -29,7 +29,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -72,7 +72,7 @@ services:
       - '5672:5672'
       - '15672:15672'
     healthcheck:
-      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      test: [ 'CMD', 'rabbitmq-diagnostics', '-q', 'ping' ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -262,6 +262,44 @@ services:
       CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
     ports:
       - '3008:3008'
+    networks:
+      - smartparking-network
+
+  notification-service:
+    build:
+      context: ./smart-parking
+      dockerfile: apps/notification-service/dockerfile
+    container_name: smartparking-notification-service
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      parking-service:
+        condition: service_started
+      reservation-service:
+        condition: service_started
+    environment:
+      NOTIFICATION_SERVICE_PORT: 3011
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:29092
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      INTERNAL_SERVICE_KEY: internal_service_secret_key
+      AUTH_SERVICE_URL: http://auth-service:3000
+      PARKING_SERVICE_URL: http://parking-service:3004
+      RESERVATION_SERVICE_URL: http://reservation-service:3005
+      SMTP_HOST: sandbox.smtp.mailtrap.io
+      SMTP_PORT: 2525
+      SMTP_USER: changeme
+      SMTP_PASS: changeme
+      SMTP_FROM: "UCE Smart Parking <no-reply@smartparking.local>"
+    ports:
+      - '3011:3011'
     networks:
       - smartparking-network
 
