@@ -1,0 +1,19 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY apps/realtime-service/package.json ./apps/realtime-service/
+
+RUN npm install
+
+COPY . .
+
+ENV NX_DAEMON=false
+
+RUN npx nx sync
+RUN npx nx build @org/realtime-service
+
+EXPOSE 3008
+
+CMD ["node", "apps/realtime-service/dist/main.js"]

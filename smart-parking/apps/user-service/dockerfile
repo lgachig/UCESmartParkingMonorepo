@@ -12,6 +12,7 @@ COPY . .
 ENV NX_DAEMON=false
 
 RUN npx prisma generate --config prisma.user.config.ts
+RUN npx nx sync
 RUN npx nx build @org/user-service
 
 EXPOSE 3001

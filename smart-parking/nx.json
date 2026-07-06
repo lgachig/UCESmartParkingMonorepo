@@ -57,11 +57,17 @@
         "reservation-service-e2e/**/*",
         "apps-e2e/**/*",
         "apps-e2e/**/*",
-        "apps/payment-service-e2e/**/*"
+        "apps/payment-service-e2e/**/*",
+        "realtime-service-e2e/**/*",
+        "apps/realtime-service-e2e/**/*",
+        "apps/notification-service-e2e/**/*"
       ]
     }
   ],
   "analytics": true,
+  "sync": {
+    "applyChanges": true
+  },
   "targetDefaults": {
     "test": {
       "dependsOn": ["^build"]

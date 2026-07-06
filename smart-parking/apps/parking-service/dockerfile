@@ -12,6 +12,7 @@ COPY . .
 ENV NX_DAEMON=false
 
 RUN npx prisma generate --config prisma.parking.config.ts
+RUN npx nx sync
 RUN npx nx build @org/parking-service
 
 EXPOSE 3004

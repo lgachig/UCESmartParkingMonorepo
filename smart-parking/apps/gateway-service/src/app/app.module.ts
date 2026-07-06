@@ -25,7 +25,7 @@ import { RequestLoggerMiddleware } from './middlewares/request-logger.middleware
         RESERVATION_SERVICE_URL: Joi.string().required(),
         CORS_ORIGINS: Joi.string().optional(),
         THROTTLE_TTL: Joi.number().default(60000),
-        THROTTLE_LIMIT: Joi.number().default(60),
+        THROTTLE_LIMIT: Joi.number().default(200),
       }),
     }),
     RedisModule.forRootAsync({
@@ -36,7 +36,7 @@ import { RequestLoggerMiddleware } from './middlewares/request-logger.middleware
         url: cfg.get<string>('REDIS_URL'),
       }),
     }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
     HealthModule,
     MetricsModule,
     ProxyModule,

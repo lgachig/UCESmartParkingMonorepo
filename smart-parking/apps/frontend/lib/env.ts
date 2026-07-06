@@ -12,6 +12,11 @@ const gatewayUrl = requireEnv(
   process.env.NEXT_PUBLIC_GATEWAY_URL,
 );
 
+const realtimeUrl = requireEnv(
+  'NEXT_PUBLIC_REALTIME_URL',
+  process.env.NEXT_PUBLIC_REALTIME_URL,
+);
+
 export const env = {
   authApiUrl: gatewayUrl,
   userApiUrl: gatewayUrl,
@@ -19,6 +24,7 @@ export const env = {
   reservationApiUrl: gatewayUrl,
   paymentApiUrl: gatewayUrl,
   parkingApiUrl: `${gatewayUrl}/parking`,
+  realtimeUrl,
   
   appName: process.env.NEXT_PUBLIC_APP_NAME ?? 'UCE Smart Parking',
   routes: {

@@ -12,6 +12,7 @@ COPY . .
 ENV NX_DAEMON=false
 
 RUN npx prisma generate
+RUN npx nx sync
 RUN npx nx build @org/auth-service
 
 EXPOSE 3000

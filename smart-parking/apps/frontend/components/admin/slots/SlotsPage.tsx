@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState, useMemo, startTransition , useCallback } from 'react';
+import { useEffect, useState, useMemo, startTransition, useCallback } from 'react';
 import SlotsHeader from './SlotsHeader';
 import SlotsGrid from './SlotsGrid';
 import SlotModal from './SlotModal';
 import ZoneModal from './ZoneModal';
 import FacultyModal from './FacultyModal';
 import { parkingService, type Slot, type Zone, type Faculty, type SlotStatus } from '@/services/parking.service';
+import { realtimeService, type SlotUpdateEvent } from '@/services/realtime.service';
 
 export default function SlotsPage() {
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -18,7 +19,7 @@ export default function SlotsPage() {
   const [isFacultyModalOpen, setIsFacultyModalOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   const [formData, setFormData] = useState({
     number: '',
     status: 'AVAILABLE' as SlotStatus,
@@ -26,7 +27,7 @@ export default function SlotsPage() {
     longitude: '',
     zone_id: '',
   });
-  
+
   const fetchData = useCallback(async () => {
     try {
       const [z, s, f] = await Promise.all([
@@ -42,15 +43,43 @@ export default function SlotsPage() {
     } finally {
       setLoading(false);
     }
-  }, []); 
+  }, []);
 
   useEffect(() => {
     startTransition(() => { fetchData(); });
     const interval = setInterval(() => {
       startTransition(() => { fetchData(); });
     }, 15000);
-    return () => clearInterval(interval);
-  }, []);
+
+    realtimeService.connect();
+    const handleRealtimeSlotEvent = (event: SlotUpdateEvent) => {
+      if (event.eventType === 'slot.created' || event.eventType === 'slot.deleted') {
+        startTransition(() => { fetchData(); });
+        return;
+      }
+      setSlots((prev) => {
+        const idx = prev.findIndex((s) => s.id === event.id);
+        if (idx === -1) return prev;
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          ...(event.status !== undefined && { status: event.status }),
+          ...(event.number !== undefined && { number: String(event.number) }),
+          ...(event.zoneId !== undefined && { zoneId: event.zoneId }),
+          ...(event.facultyId !== undefined && { facultyId: event.facultyId }),
+          ...(event.latitude !== undefined && { latitude: event.latitude }),
+          ...(event.longitude !== undefined && { longitude: event.longitude }),
+        };
+        return next;
+      });
+    };
+    const unsubscribeSlotUpdate = realtimeService.onSlotUpdate(handleRealtimeSlotEvent);
+
+    return () => {
+      clearInterval(interval);
+      unsubscribeSlotUpdate();
+    };
+  }, [fetchData]);
 
   const filteredSlots = useMemo(() => {
     if (!searchTerm) return slots;
@@ -99,7 +128,6 @@ export default function SlotsPage() {
     }
   };
 
-  // Removed saveZone function as zone operations are now handled internally by ZoneModal
 
   const handleDeleteSlot = async (slot: Slot) => {
     if (!confirm(`¿Borrar puesto ${slot.number}?`)) return;

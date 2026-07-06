@@ -23,6 +23,24 @@
     },
     {
       "path": "./apps/payment-service"
+    },
+    {
+      "path": "./realtime-service-e2e"
+    },
+    {
+      "path": "./realtime-service"
+    },
+    {
+      "path": "./apps/realtime-service-e2e"
+    },
+    {
+      "path": "./apps/realtime-service"
+    },
+    {
+      "path": "./apps/notification-service-e2e"
+    },
+    {
+      "path": "./apps/notification-service"
     }
   ]
 }
