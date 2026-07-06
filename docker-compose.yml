@@ -356,6 +356,7 @@ services:
       PARKING_SERVICE_URL: http://parking-service:3004
       RESERVATION_SERVICE_URL: http://reservation-service:3005
       PAYMENT_SERVICE_URL: http://payment-service:3007
+      NOTIFICATION_SERVICE_URL: http://notification-service:3011
       CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
       STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY}
