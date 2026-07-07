@@ -35,10 +35,11 @@ jobs:
           SONAR_TOKEN: sqp_c7d0fcbf3ec373822e93881cbe2fdcd760d07572
           SONAR_HOST_URL: http://98.90.146.42:9000
         with:
+          projectBaseDir: smart-parking
           args: >
+            -Dsonar.sources=apps,services,packages
             -Dsonar.projectKey=g1-smart-parking
             -Dsonar.projectName=g1-smart-parking
-            -Dsonar.sources=apps,services,packages
             -Dsonar.exclusions=**/node_modules/**,**/.next/**,**/dist/**,**/build/**,**/*.test.ts,**/*.test.tsx,**/*.test.js
             -Dsonar.javascript.lcov.reportPaths=**/coverage/lcov.info
             -Dsonar.typescript.lcov.reportPaths=**/coverage/lcov.info
