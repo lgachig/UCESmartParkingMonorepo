@@ -4,7 +4,7 @@ import { QueryAuditRecordsDto } from './dto/query-audit-records.dto';
 
 @Injectable()
 export class AuditRecordsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async findAll(query: QueryAuditRecordsDto) {
     const page = query.page ?? 1;
@@ -44,6 +44,4 @@ export class AuditRecordsService {
     return this.prisma.auditRecord.findUnique({ where: { id } });
   }
 
-  // No update/delete methods exist here on purpose (USP-109): there must be
-  // no code path that alters an already-created record.
 }
