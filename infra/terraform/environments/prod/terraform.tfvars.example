@@ -1,8 +1,8 @@
 aws_region       = "us-east-1"
 environment      = "prod"
-key_name         = "TU_KEY_PAIR_EC2"
-allowed_ssh_cidr = "TU_IP_PUBLICA/32"
-dockerhub_user   = "TU_USUARIO_DOCKERHUB"
+key_name         = "LABCONTECTION_A"
+allowed_ssh_cidr = "0.0.0.0/0"
+dockerhub_user   = "lgachig"
 
 # ASG de gateway y frontend
 asg_min_size         = 1
