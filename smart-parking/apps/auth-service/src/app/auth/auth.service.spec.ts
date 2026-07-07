@@ -7,6 +7,7 @@ import { AuditService } from '../audit/audit.service';
 import { AppRedisService } from '../redis/redis.service';
 import { ConfigService } from '@nestjs/config';
 import { UserClientService } from '../user-client/user-client.service';
+import { KafkaService } from '../kafka/kafka.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -39,6 +40,7 @@ describe('AuthService', () => {
     decode: jest.fn(),
   };
   const userClientMock = { createProfile: jest.fn() };
+  const kafkaMock = { emit: jest.fn() };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -57,6 +59,7 @@ describe('AuthService', () => {
           },
         },
         { provide: UserClientService, useValue: userClientMock },
+        { provide: KafkaService, useValue: kafkaMock },
       ],
     }).compile();
 
