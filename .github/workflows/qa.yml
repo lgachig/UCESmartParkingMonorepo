@@ -40,6 +40,9 @@ jobs:
       frontend:    ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.frontend == 'true' }}
       payment:     ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.payment == 'true' }}
       realtime:    ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.realtime == 'true' }}
+      notification: ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.notification == 'true' }}
+      audit:       ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.audit == 'true' }}
+
     steps:
       - name: Echo changes
         run: |
@@ -52,6 +55,9 @@ jobs:
           echo "frontend=${{ needs.ci-check.outputs.frontend }}"
           echo "payment=${{ needs.ci-check.outputs.payment }}"
           echo "realtime=${{ needs.ci-check.outputs.realtime }}"
+          echo "notification=${{ needs.ci-check.outputs.notification }}"
+          echo "audit=${{ needs.ci-check.outputs.audit }}"
+
   docker-push:
     name: Build & Push (${{ matrix.name }})
     needs: [get-changes]
@@ -110,7 +116,16 @@ jobs:
             dockerfile: smart-parking/apps/realtime-service/dockerfile
             context: ./smart-parking
             image_suffix: realtime
-
+          - name: notification
+            changed: ${{ needs.get-changes.outputs.notification }}
+            dockerfile: smart-parking/apps/notification-service/dockerfile
+            context: ./smart-parking
+            image_suffix: notification
+          - name: audit
+            changed: ${{ needs.get-changes.outputs.audit }}
+            dockerfile: smart-parking/apps/audit-service/dockerfile
+            context: ./smart-parking
+            image_suffix: audit
 
     steps:
       - name: Skip if unchanged
@@ -173,6 +188,8 @@ jobs:
       user_ip:        ${{ steps.ips.outputs.user_ip }}
       vehicle_ip:     ${{ steps.ips.outputs.vehicle_ip }}
       parking_ip:     ${{ steps.ips.outputs.parking_ip }}
+      notification_ip: ${{ steps.ips.outputs.notification_ip }}
+      audit_ip:       ${{ steps.ips.outputs.audit_ip }}
       reservation_ip: ${{ steps.ips.outputs.reservation_ip }}
       payment_ip:     ${{ steps.ips.outputs.payment_ip }}
       realtime_ip:    ${{ steps.ips.outputs.realtime_ip }}
@@ -221,6 +238,8 @@ jobs:
           USER_IP=$(get_ip "user")               || exit 1
           VEHICLE_IP=$(get_ip "vehicle")         || exit 1
           PARKING_IP=$(get_ip "parking")         || exit 1
+          NOTIFICATION_IP=$(get_ip "notification") || exit 1
+          AUDIT_IP=$(get_ip "audit")               || exit 1
           GATEWAY_IPS=$(get_ips_multi "gateway")   || exit 1
           FRONTEND_IPS=$(get_ips_multi "frontend") || exit 1
 
@@ -228,10 +247,12 @@ jobs:
           echo "user_ip=$USER_IP"           >> $GITHUB_OUTPUT
           echo "vehicle_ip=$VEHICLE_IP"     >> $GITHUB_OUTPUT
           echo "parking_ip=$PARKING_IP"     >> $GITHUB_OUTPUT
+          echo "notification_ip=$NOTIFICATION_IP" >> $GITHUB_OUTPUT
+          echo "audit_ip=$AUDIT_IP"         >> $GITHUB_OUTPUT
           echo "gateway_ips=$GATEWAY_IPS"   >> $GITHUB_OUTPUT
           echo "frontend_ips=$FRONTEND_IPS" >> $GITHUB_OUTPUT
 
-          echo "[Lab A] auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | gateway(asg)=$GATEWAY_IPS | frontend(asg)=$FRONTEND_IPS"
+          echo "[Lab A] auth=$AUTH_IP | user=$USER_IP | vehicle=$VEHICLE_IP | parking=$PARKING_IP | notification=$NOTIFICATION_IP | audit=$AUDIT_IP | gateway(asg)=$GATEWAY_IPS | frontend(asg)=$FRONTEND_IPS"
 
       - name: Configure AWS credentials (Lab B)
         uses: aws-actions/configure-aws-credentials@v4
@@ -274,6 +295,8 @@ jobs:
           echo "user_ip=${{ steps.ips_lab_a.outputs.user_ip }}"               >> $GITHUB_OUTPUT
           echo "vehicle_ip=${{ steps.ips_lab_a.outputs.vehicle_ip }}"         >> $GITHUB_OUTPUT
           echo "parking_ip=${{ steps.ips_lab_a.outputs.parking_ip }}"         >> $GITHUB_OUTPUT
+          echo "notification_ip=${{ steps.ips_lab_a.outputs.notification_ip }}" >> $GITHUB_OUTPUT
+          echo "audit_ip=${{ steps.ips_lab_a.outputs.audit_ip }}"               >> $GITHUB_OUTPUT
           echo "gateway_ips=${{ steps.ips_lab_a.outputs.gateway_ips }}"       >> $GITHUB_OUTPUT
           echo "frontend_ips=${{ steps.ips_lab_a.outputs.frontend_ips }}"     >> $GITHUB_OUTPUT
           echo "reservation_ip=${{ steps.ips_lab_b.outputs.reservation_ip }}" >> $GITHUB_OUTPUT
@@ -319,7 +342,7 @@ jobs:
               [ "$i" -eq 30 ] && { echo "❌ PostgreSQL not ready"; exit 1; }
               sleep 2
             done
-            for db in userdb vehicledb parkingdb reservationdb paymentdb; do
+            for db in userdb vehicledb parkingdb reservationdb paymentdb auditdb; do
               docker exec "$pg_c" psql -U admin -d postgres \
                 -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1 || \
               docker exec "$pg_c" psql -U admin -d postgres -c "CREATE DATABASE ${db};" || true
@@ -384,6 +407,16 @@ jobs:
             image_suffix: realtime
             app_port: '3008'
             changed: ${{ needs.get-changes.outputs.realtime }}
+          - name: notification
+            service_name: app
+            image_suffix: notification
+            app_port: '3011'
+            changed: ${{ needs.get-changes.outputs.notification }}
+          - name: audit
+            service_name: app
+            image_suffix: audit
+            app_port: '3012'
+            changed: ${{ needs.get-changes.outputs.audit }}
 
     steps:
       - name: Skip if unchanged
@@ -397,6 +430,8 @@ jobs:
           echo "USER_PRIVATE_IP=${{ needs.discover-ips.outputs.user_ip }}"               >> $GITHUB_ENV
           echo "VEHICLE_PRIVATE_IP=${{ needs.discover-ips.outputs.vehicle_ip }}"         >> $GITHUB_ENV
           echo "PARKING_PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"         >> $GITHUB_ENV
+          echo "NOTIFICATION_PRIVATE_IP=${{ needs.discover-ips.outputs.notification_ip }}" >> $GITHUB_ENV
+          echo "AUDIT_PRIVATE_IP=${{ needs.discover-ips.outputs.audit_ip }}"             >> $GITHUB_ENV
           echo "RESERVATION_PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV
           echo "PAYMENT_PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"         >> $GITHUB_ENV
           echo "REALTIME_PRIVATE_IP=${{ needs.discover-ips.outputs.realtime_ip }}"       >> $GITHUB_ENV
@@ -411,6 +446,8 @@ jobs:
             user)        echo "PRIVATE_IP=${{ needs.discover-ips.outputs.user_ip }}"        >> $GITHUB_ENV ;;
             vehicle)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.vehicle_ip }}"     >> $GITHUB_ENV ;;
             parking)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.parking_ip }}"     >> $GITHUB_ENV ;;
+            notification) echo "PRIVATE_IP=${{ needs.discover-ips.outputs.notification_ip }}" >> $GITHUB_ENV ;;
+            audit)       echo "PRIVATE_IP=${{ needs.discover-ips.outputs.audit_ip }}"         >> $GITHUB_ENV ;;
             reservation) echo "PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV ;;
             payment)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"     >> $GITHUB_ENV ;;
             realtime)    echo "PRIVATE_IP=${{ needs.discover-ips.outputs.realtime_ip }}"   >> $GITHUB_ENV ;;
@@ -453,7 +490,7 @@ jobs:
           proxy_username: ec2-user
           proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
           proxy_port: 22
-          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,PAYMENT_PRIVATE_IP,QA_GATEWAY_URL,QA_FRONTEND_URL
+          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,PAYMENT_PRIVATE_IP,NOTIFICATION_PRIVATE_IP,AUDIT_PRIVATE_IP,QA_GATEWAY_URL,QA_FRONTEND_URL
           script: |
             set -euo pipefail
 
@@ -510,6 +547,7 @@ jobs:
               patch_env PARKING_SERVICE_URL     "http://${PARKING_PRIVATE_IP}:3004"
               patch_env RESERVATION_SERVICE_URL "http://${RESERVATION_PRIVATE_IP}:3005"
               patch_env PAYMENT_SERVICE_URL     "http://${PAYMENT_PRIVATE_IP}:3007"
+              patch_env NOTIFICATION_SERVICE_URL "http://${NOTIFICATION_PRIVATE_IP}:3011"
               patch_env THROTTLE_TTL            "60000"
               patch_env THROTTLE_LIMIT          "60"
             fi
@@ -551,10 +589,37 @@ jobs:
               patch_env KAFKA_BROKERS         "${AUTH_PRIVATE_IP}:9092"
             fi
 
+            if [ "${{ matrix.name }}" = "notification" ]; then
+              patch_env NOTIFICATION_SERVICE_PORT "3011"
+              patch_env REDIS_URL                 "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env KAFKA_BROKERS             "${AUTH_PRIVATE_IP}:9092"
+              patch_env RABBITMQ_URL              "amqp://guest:guest@${AUTH_PRIVATE_IP}:5672"
+              patch_env AUTH_SERVICE_URL          "http://${AUTH_PRIVATE_IP}:3000"
+              patch_env PARKING_SERVICE_URL       "http://${PARKING_PRIVATE_IP}:3004"
+              patch_env RESERVATION_SERVICE_URL   "http://${RESERVATION_PRIVATE_IP}:3005"
+              patch_env EMAILJS_SERVICE_ID   "${{ secrets.EMAILJS_SERVICE_ID }}"
+              patch_env EMAILJS_TEMPLATE_ID  "${{ secrets.EMAILJS_TEMPLATE_ID }}"
+              patch_env EMAILJS_PUBLIC_KEY   "${{ secrets.EMAILJS_PUBLIC_KEY }}"
+              patch_env EMAILJS_PRIVATE_KEY  "${{ secrets.EMAILJS_PRIVATE_KEY }}"
+            fi
+
+            if [ "${{ matrix.name }}" = "audit" ]; then
+              patch_env AUDIT_SERVICE_PORT    "3012"
+              patch_env AUDIT_DATABASE_URL    "postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/auditdb"
+              patch_env REDIS_URL             "redis://${AUTH_PRIVATE_IP}:6379"
+              patch_env KAFKA_BROKERS         "${AUTH_PRIVATE_IP}:9092"
+            fi
+
             if [ "${{ matrix.name }}" = "frontend" ]; then
               patch_env PORT "3002"
               patch_env NEXT_PUBLIC_GATEWAY_URL "$QA_GATEWAY_URL"
             fi
+
+            echo "🧹 Liberando espacio en disco antes del pull..."
+            df -h / || true
+            docker image prune -af --filter "until=24h" || true
+            docker builder prune -af || true
+            df -h / || true
 
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
             docker-compose -f "$COMPOSE_FILE" pull ${{ matrix.service_name }}
@@ -578,7 +643,7 @@ jobs:
                 sleep 2
               done
 
-              for db in userdb vehicledb parkingdb reservationdb paymentdb; do
+              for db in userdb vehicledb parkingdb reservationdb paymentdb auditdb; do
                 if ! docker exec "$pg_container" psql -U admin -d smartparking -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" 2>/dev/null | grep -q 1; then
                   docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE ${db};" 2>/dev/null || true
                 fi
@@ -639,6 +704,15 @@ jobs:
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e PAYMENT_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb" \
                 app npx prisma migrate deploy --config prisma.payment.config.ts
+            fi
+
+            if [ "${{ matrix.name }}" = "audit" ]; then
+              echo "Resetting auditdb schema..."
+              reset_db_schema auditdb
+              echo "Running audit migrations..."
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e AUDIT_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/auditdb" \
+                app npx prisma migrate deploy --config prisma.audit.config.ts
             fi
 
             echo "✅ ${{ matrix.name }} deployado exitosamente."

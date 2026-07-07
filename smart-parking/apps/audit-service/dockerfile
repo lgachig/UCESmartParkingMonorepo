@@ -1,0 +1,20 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY prisma ./prisma
+
+RUN npm install --frozen-lockfile
+
+COPY . .
+
+ENV NX_DAEMON=false
+
+RUN npx prisma generate --config prisma.audit.config.ts
+RUN npx nx sync
+RUN npx nx build @org/audit-service
+
+EXPOSE 3012
+
+CMD ["node", "apps/audit-service/dist/main.js"]

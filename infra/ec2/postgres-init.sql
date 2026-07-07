@@ -3,3 +3,4 @@ CREATE DATABASE vehicledb;
 CREATE DATABASE parkingdb;
 CREATE DATABASE reservationdb;
 CREATE DATABASE paymentdb;
+CREATE DATABASE auditdb;

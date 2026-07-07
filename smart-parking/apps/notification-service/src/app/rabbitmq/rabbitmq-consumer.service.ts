@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { ConfigService } from '@nestjs/config';
 import * as amqp from 'amqplib';
 import { NotificationService } from '../notifications/notification.service';
+import { MetricsService } from '../metrics/metrics.service';
 
 const EXCHANGE = 'smart-parking';
 const QUEUE = 'notification-service.payment-events';
@@ -24,6 +25,7 @@ export class RabbitmqConsumerService implements OnModuleInit, OnModuleDestroy {
     constructor(
         private readonly configService: ConfigService,
         private readonly notificationService: NotificationService,
+        private readonly metrics: MetricsService,
     ) { }
 
     async onModuleInit() {
@@ -117,6 +119,10 @@ export class RabbitmqConsumerService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
+    ping(): boolean {
+        return !!this.channel && !this.isShuttingDown;
+    }
+
     private async startConsuming(): Promise<void> {
         if (!this.channel) return;
 
@@ -154,6 +160,8 @@ export class RabbitmqConsumerService implements OnModuleInit, OnModuleDestroy {
                         this.logger.warn(`Unrecognized routing key ${routingKey}, discarding`);
                     }
                     this.channel?.ack(msg);
+                    this.metrics.eventsProcessedTotal.inc({ broker: 'rabbitmq', event: routingKey });
+
                 } catch (err) {
                     const error = err as Error;
                     this.logger.error(

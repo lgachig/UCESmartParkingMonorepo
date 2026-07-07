@@ -21,6 +21,10 @@ on:
         value: ${{ jobs.changes.outputs.payment }}
       realtime:
         value: ${{ jobs.changes.outputs.realtime }}
+      notification:
+        value: ${{ jobs.changes.outputs.notification }}
+      audit:
+        value: ${{ jobs.changes.outputs.audit }}
       infra:
         value: ${{ jobs.changes.outputs.infra }}
   push:
@@ -44,6 +48,8 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       payment: ${{ steps.filter.outputs.payment }}
       realtime: ${{ steps.filter.outputs.realtime }}
+      notification: ${{ steps.filter.outputs.notification }}
+      audit: ${{ steps.filter.outputs.audit }}
       infra: ${{ steps.filter.outputs.infra }}
     steps:
       - uses: actions/checkout@v4
@@ -60,6 +66,8 @@ jobs:
             frontend: 'smart-parking/apps/frontend/**'
             payment: 'smart-parking/apps/payment-service/**'
             realtime: 'smart-parking/apps/realtime-service/**'
+            notification: 'smart-parking/apps/notification-service/**'
+            audit: 'smart-parking/apps/audit-service/**'
             infra:
               - 'infra/**'
               - '.github/workflows/**'

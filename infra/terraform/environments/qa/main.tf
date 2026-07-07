@@ -27,8 +27,6 @@ module "security_groups" {
 # ── EIPs ───────────────────────────────
 resource "aws_eip" "frontend" { domain = "vpc" }
 resource "aws_eip" "gateway"  { domain = "vpc" }
-# NOTA: el EIP de "realtime" se movió a environments/lab-b, junto con la
-# instancia. Ver infra/terraform/environments/lab-b/main.tf
 
 # ── 1) Auth EC2 ───────────────────────────────────────────────────────────────
 module "auth" {
@@ -161,7 +159,42 @@ module "parking" {
   })
 }
 
-# ── reservation, payment y realtime se movieron a environments/lab-b ────────
-# (nueva VPC 10.0.0.0/16 conectada por VPC Peering). Ver
-# infra/terraform/environments/lab-b/main.tf y el runbook de migración
-# en infra/terraform/environments/qa/lab-b-integration.tf
+# ── 7) Notification EC2 ───────────────────────────────────────────────────────
+module "notification" {
+  source             = "../../modules/ec2"
+  environment        = var.environment
+  service_name       = "notification"
+  instance_type      = var.instance_type
+  key_name           = var.key_name
+  subnet_id          = element(module.vpc.public_subnet_ids, 0)
+  security_group_ids = [module.security_groups.security_group_ids["notification"]]
+  extra_tags         = { Service = "notification" }
+  user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
+    dockerhub_user   = var.dockerhub_user
+    docker_image     = "smartparking-notification"
+    docker_image_tag = var.environment
+    service_port     = 3011
+    is_auth          = false
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
+  })
+}
+
+# ── 8) Audit EC2 ──────────────────────────────────────────────────────────────
+module "audit" {
+  source             = "../../modules/ec2"
+  environment        = var.environment
+  service_name       = "audit"
+  instance_type      = var.instance_type
+  key_name           = var.key_name
+  subnet_id          = element(module.vpc.public_subnet_ids, 0)
+  security_group_ids = [module.security_groups.security_group_ids["audit"]]
+  extra_tags         = { Service = "audit" }
+  user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
+    dockerhub_user   = var.dockerhub_user
+    docker_image     = "smartparking-audit"
+    docker_image_tag = var.environment
+    service_port     = 3012
+    is_auth          = false
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
+  })
+}

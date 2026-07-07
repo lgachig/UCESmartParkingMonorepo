@@ -20,6 +20,7 @@ import { Role } from './enums/role.enum';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { KafkaService } from '../kafka/kafka.service';
 
 @Injectable()
 export class AuthService {
@@ -32,6 +33,7 @@ export class AuthService {
     private readonly redisService: AppRedisService,
     private readonly configService: ConfigService,
     private readonly userClientService: UserClientService,
+    private readonly kafka: KafkaService,
   ) { }
 
   async register(data: RegisterDto) {
@@ -63,13 +65,16 @@ export class AuthService {
       });
     } catch (error) {
       await this.prisma.user.delete({ where: { id: authUser.id } });
-      // Log temporal para ver el error real
       console.error('Error creating profile:', JSON.stringify(error));
       throw new ConflictException('Failed to create user profile');
     }
 
     await this.auditService.log({
       action: 'USER_REGISTERED',
+      userId: authUser.id,
+      email: authUser.email,
+    });
+    await this.kafka.emit('auth.user_registered', {
       userId: authUser.id,
       email: authUser.email,
     });
@@ -87,6 +92,10 @@ export class AuthService {
         action: 'LOGIN_FAILED_USER_NOT_FOUND',
         email: data.email,
       });
+      await this.kafka.emit('auth.login_failed', {
+        reason: 'user_not_found',
+        email: data.email,
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -95,6 +104,10 @@ export class AuthService {
     if (!isPasswordValid) {
       await this.auditService.log({
         action: 'LOGIN_FAILED_INVALID_PASSWORD',
+        email: data.email,
+      });
+      await this.kafka.emit('auth.login_failed', {
+        reason: 'invalid_password',
         email: data.email,
       });
       throw new UnauthorizedException('Invalid credentials');
@@ -112,6 +125,10 @@ export class AuthService {
 
     await this.auditService.log({
       action: 'USER_LOGIN',
+      userId: user.id,
+      email: user.email,
+    });
+    await this.kafka.emit('auth.user_login', {
       userId: user.id,
       email: user.email,
     });
@@ -143,7 +160,6 @@ export class AuthService {
   }
 
   async refreshToken(token: string) {
-    // Verificar que el token existe en DB y no fue revocado
     const stored = await this.prisma.refreshToken.findFirst({
       where: { token, expiresAt: { gt: new Date() } },
     });
@@ -152,6 +168,9 @@ export class AuthService {
       await this.auditService.log({
         action: 'TOKEN_REFRESH_FAILED',
         metadata: { reason: 'invalid_or_expired' },
+      });
+      await this.kafka.emit('auth.token_refresh_failed', {
+        reason: 'invalid_or_expired',
       });
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
@@ -182,6 +201,10 @@ export class AuthService {
         userId: payload.sub,
         email: payload.email,
       });
+      await this.kafka.emit('auth.token_refreshed', {
+        userId: payload.sub,
+        email: payload.email,
+      });
 
       return tokens;
     } catch {
@@ -189,6 +212,10 @@ export class AuthService {
         action: 'TOKEN_REFRESH_FAILED',
         userId: stored.userId,
         metadata: { reason: 'verification_failed' },
+      });
+      await this.kafka.emit('auth.token_refresh_failed', {
+        userId: stored.userId,
+        reason: 'verification_failed',
       });
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -206,6 +233,10 @@ export class AuthService {
 
     await this.auditService.log({
       action: 'USER_LOGOUT',
+      userId: userId ?? decoded.sub,
+      email,
+    });
+    await this.kafka.emit('auth.user_logout', {
       userId: userId ?? decoded.sub,
       email,
     });
@@ -253,6 +284,10 @@ export class AuthService {
       userId: user.id,
       email: user.email,
     });
+    await this.kafka.emit('auth.password_changed', {
+      userId: user.id,
+      email: user.email,
+    });
 
     return { message: 'Password changed successfully' };
   }
@@ -283,6 +318,10 @@ export class AuthService {
 
       await this.auditService.log({
         action: 'PASSWORD_RESET_REQUESTED',
+        userId: user.id,
+        email: user.email,
+      });
+      await this.kafka.emit('auth.password_reset_requested', {
         userId: user.id,
         email: user.email,
       });
@@ -337,6 +376,10 @@ export class AuthService {
 
     await this.auditService.log({
       action: 'PASSWORD_RESET',
+      userId: user.id,
+      email: user.email,
+    });
+    await this.kafka.emit('auth.password_reset', {
       userId: user.id,
       email: user.email,
     });

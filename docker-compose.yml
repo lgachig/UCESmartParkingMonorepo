@@ -13,7 +13,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d smartparking"]
+      test: [ "CMD-SHELL", "pg_isready -U admin -d smartparking" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -29,7 +29,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -72,7 +72,7 @@ services:
       - '5672:5672'
       - '15672:15672'
     healthcheck:
-      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      test: [ 'CMD', 'rabbitmq-diagnostics', '-q', 'ping' ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -244,6 +244,32 @@ services:
     networks:
       - smartparking-network
 
+  audit-service:
+    build:
+      context: ./smart-parking
+      dockerfile: apps/audit-service/dockerfile
+    container_name: smartparking-audit-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      AUDIT_SERVICE_PORT: 3012
+      AUDIT_DATABASE_URL: postgresql://admin:admin@postgres:5432/auditdb
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:29092
+      JWT_SECRET: your_jwt_secret
+      INTERNAL_SERVICE_KEY: internal_service_secret_key
+      CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
+    ports:
+      - '3012:3012'
+    networks:
+      - smartparking-network
+
   realtime-service:
     build:
       context: ./smart-parking
@@ -262,6 +288,44 @@ services:
       CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
     ports:
       - '3008:3008'
+    networks:
+      - smartparking-network
+
+  notification-service:
+    build:
+      context: ./smart-parking
+      dockerfile: apps/notification-service/dockerfile
+    container_name: smartparking-notification-service
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      parking-service:
+        condition: service_started
+      reservation-service:
+        condition: service_started
+    environment:
+      NOTIFICATION_SERVICE_PORT: 3011
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:29092
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      INTERNAL_SERVICE_KEY: internal_service_secret_key
+      AUTH_SERVICE_URL: http://auth-service:3000
+      PARKING_SERVICE_URL: http://parking-service:3004
+      RESERVATION_SERVICE_URL: http://reservation-service:3005
+      EMAILJS_SERVICE_ID: "${EMAILJS_SERVICE_ID}"
+      EMAILJS_TEMPLATE_ID: "${EMAILJS_TEMPLATE_ID}"
+      EMAILJS_PUBLIC_KEY: "${EMAILJS_PUBLIC_KEY}"
+      EMAILJS_PRIVATE_KEY: "${EMAILJS_PRIVATE_KEY}"
+
+    ports:
+      - '3011:3011'
     networks:
       - smartparking-network
 
@@ -284,6 +348,25 @@ services:
       - realtime-service
     ports:
       - '3002:3002'
+    networks:
+      - smartparking-network
+
+  ai-service:
+    build:
+      context: ./smart-parking
+      dockerfile: apps/ai-service/dockerfile
+    container_name: smartparking-ai-service
+    restart: unless-stopped
+    environment:
+      AI_SERVICE_PORT: 3009
+      JWT_SECRET: your_jwt_secret
+      AI_PROVIDER_API_KEY: your_ai_provider_api_key
+      CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
+      SEARCH_SERVICE_URL: http://search-service:3010
+      PARKING_SERVICE_URL: http://parking-service:3004
+      KAFKA_BROKERS: kafka:29092
+    ports:
+      - '3009:3009'
     networks:
       - smartparking-network
 
@@ -318,6 +401,7 @@ services:
       PARKING_SERVICE_URL: http://parking-service:3004
       RESERVATION_SERVICE_URL: http://reservation-service:3005
       PAYMENT_SERVICE_URL: http://payment-service:3007
+      NOTIFICATION_SERVICE_URL: http://notification-service:3011
       CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
       STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY}

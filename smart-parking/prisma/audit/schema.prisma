@@ -1,0 +1,25 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../../generated/audit-client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model AuditRecord {
+  id            String   @id @default(uuid())
+  sourceService String   @map("source_service")
+  action        String
+  userId        String?  @map("user_id")
+  previousValue Json?    @map("previous_value")
+  newValue      Json?    @map("new_value")
+  rawPayload    Json?    @map("raw_payload")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([sourceService, createdAt])
+  @@index([userId, createdAt])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_records")
+}

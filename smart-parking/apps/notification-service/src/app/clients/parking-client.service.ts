@@ -30,10 +30,10 @@ export class ParkingClientService {
     async getSlotById(slotId: string): Promise<SlotInfo> {
         const response = await firstValueFrom(
             this.httpService.get(
-                `${this.baseUrl}/parking/slots/${slotId}`,
+                `${this.baseUrl}/internal/slots/${slotId}`,
                 { headers: { 'x-service-key': this.serviceKey } },
             ),
         );
-        return response.data;
+        return response.data.data;
     }
 }
