@@ -38,6 +38,6 @@ export class ReservationClientService {
                 { headers: { 'x-service-key': this.serviceKey } },
             ),
         );
-        return response.data;
+        return response.data.data;
     }
 }

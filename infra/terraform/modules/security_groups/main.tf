@@ -3,7 +3,7 @@ data "aws_vpc" "selected" {
 }
 
 resource "aws_security_group" "microservice" {
-  for_each    = toset(["auth", "user", "vehicle", "frontend", "gateway", "parking", "reservation", "payment", "realtime"])
+  for_each    = toset(["auth", "user", "vehicle", "frontend", "gateway", "parking", "reservation", "payment", "realtime", "notification"])
   name        = "${var.environment}-${each.value}-sg"
   description = "Security Group for ${var.environment}-${each.value}"
   vpc_id      = var.vpc_id
@@ -81,6 +81,7 @@ resource "aws_security_group_rule" "private_from_gateway" {
     parking     = 3004
     reservation = 3005
     payment     = 3007
+    notification = 3011
   })
   type                     = "ingress"
   from_port                = each.value
@@ -142,7 +143,7 @@ resource "aws_security_group_rule" "frontend_from_auth" {
 }
 
 locals {
-  internal_sgs = toset(["user", "vehicle", "gateway", "parking", "reservation", "payment", "realtime"])
+  internal_sgs = toset(["user", "vehicle", "gateway", "parking", "reservation", "payment", "realtime", "notification"])
 }
 
 resource "aws_security_group_rule" "auth_postgres" {
@@ -168,7 +169,7 @@ resource "aws_security_group_rule" "auth_redis" {
 }
 
 resource "aws_security_group_rule" "auth_kafka" {
-  for_each                 = toset(["parking", "reservation", "payment", "realtime"])
+  for_each                 = toset(["parking", "reservation", "payment", "realtime", "notification"])
   type                     = "ingress"
   from_port                = 9092
   to_port                  = 9092
@@ -176,6 +177,26 @@ resource "aws_security_group_rule" "auth_kafka" {
   source_security_group_id = aws_security_group.microservice[each.value].id
   security_group_id        = aws_security_group.microservice["auth"].id
   description              = "Kafka from ${each.value}"
+}
+
+resource "aws_security_group_rule" "auth_from_notification" {
+  type                     = "ingress"
+  from_port                = 3000
+  to_port                  = 3000
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.microservice["notification"].id
+  security_group_id        = aws_security_group.microservice["auth"].id
+  description              = "auth accessible from notification (user email lookup)"
+}
+
+resource "aws_security_group_rule" "parking_from_notification" {
+  type                     = "ingress"
+  from_port                = 3004
+  to_port                  = 3004
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.microservice["notification"].id
+  security_group_id        = aws_security_group.microservice["parking"].id
+  description              = "parking accessible from notification (slot lookup)"
 }
 
 resource "aws_security_group_rule" "reservation_from_payment" {
@@ -200,7 +221,7 @@ resource "aws_security_group_rule" "user_from_payment" {
 
 
 resource "aws_security_group_rule" "auth_rabbitmq" {
-  for_each                 = toset(["payment"])
+  for_each                 = toset(["payment", "notification"])
   type                     = "ingress"
   from_port                = 5672
   to_port                  = 5672
@@ -249,4 +270,14 @@ resource "aws_security_group_rule" "auth_rabbitmq_vpc" {
   cidr_blocks       = [data.aws_vpc.selected.cidr_block]
   security_group_id = aws_security_group.microservice["auth"].id
   description       = "RabbitMQ from VPC"
+}
+
+resource "aws_security_group_rule" "notification_http_from_vpc" {
+  type              = "ingress"
+  from_port         = 3011
+  to_port           = 3011
+  protocol          = "tcp"
+  cidr_blocks       = [data.aws_vpc.selected.cidr_block]
+  security_group_id = aws_security_group.microservice["notification"].id
+  description       = "notification /health y /metrics accesibles desde la VPC (QA)"
 }

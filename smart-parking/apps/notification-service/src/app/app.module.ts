@@ -5,6 +5,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { KafkaModule } from './kafka/kafka.module';
 import { RabbitmqModule } from './rabbitmq/rabbitmq.module';
+import { HealthModule } from './health/health.module';
+import { MetricsModule } from './metrics/metrics.module';
 
 @Module({
   imports: [
@@ -17,17 +19,18 @@ import { RabbitmqModule } from './rabbitmq/rabbitmq.module';
         INTERNAL_SERVICE_KEY: Joi.string().required(),
         AUTH_SERVICE_URL: Joi.string().required(),
         PARKING_SERVICE_URL: Joi.string().required(),
-        SMTP_HOST: Joi.string().required(),
-        SMTP_PORT: Joi.number().required(),
-        SMTP_USER: Joi.string().required(),
-        SMTP_PASS: Joi.string().required(),
-        SMTP_FROM: Joi.string().required(),
+        EMAILJS_SERVICE_ID: Joi.string().required(),
+        EMAILJS_TEMPLATE_ID: Joi.string().required(),
+        EMAILJS_PUBLIC_KEY: Joi.string().required(),
+        EMAILJS_PRIVATE_KEY: Joi.string().required(),
         RESERVATION_SERVICE_URL: Joi.string().required(),
         RABBITMQ_URL: Joi.string().required(),
       }),
     }),
     KafkaModule,
     RabbitmqModule,
+    HealthModule,
+    MetricsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

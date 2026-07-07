@@ -17,4 +17,13 @@ export class AppRedisService {
     async releaseLock(key: string): Promise<void> {
         await this.redis.del(key);
     }
+
+    async ping(): Promise<boolean> {
+        try {
+            const res = await this.redis.ping();
+            return res === 'PONG';
+        } catch {
+            return false;
+        }
+    }
 }
