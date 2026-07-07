@@ -8,6 +8,11 @@ export class QueryAuditRecordsDto {
   @IsString()
   sourceService?: string;
 
+  @ApiPropertyOptional({ example: 'u-123', description: 'Filter by the user who triggered the event' })
+  @IsOptional()
+  @IsString()
+  userId?: string;
+
   @ApiPropertyOptional({ example: 'reservation.cancelled', description: 'Filter by action/event type' })
   @IsOptional()
   @IsString()
