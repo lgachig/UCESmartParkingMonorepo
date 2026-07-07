@@ -3,7 +3,7 @@ data "aws_vpc" "selected" {
 }
 
 resource "aws_security_group" "microservice" {
-  for_each    = toset(["auth", "user", "vehicle", "frontend", "gateway", "parking", "reservation", "payment", "realtime", "notification"])
+  for_each    = toset(["auth", "user", "vehicle", "frontend", "gateway", "parking", "reservation", "payment", "realtime", "notification", "audit"])
   name        = "${var.environment}-${each.value}-sg"
   description = "Security Group for ${var.environment}-${each.value}"
   vpc_id      = var.vpc_id
@@ -82,6 +82,7 @@ resource "aws_security_group_rule" "private_from_gateway" {
     reservation = 3005
     payment     = 3007
     notification = 3011
+    audit       = 3012
   })
   type                     = "ingress"
   from_port                = each.value
@@ -143,7 +144,7 @@ resource "aws_security_group_rule" "frontend_from_auth" {
 }
 
 locals {
-  internal_sgs = toset(["user", "vehicle", "gateway", "parking", "reservation", "payment", "realtime", "notification"])
+  internal_sgs = toset(["user", "vehicle", "gateway", "parking", "reservation", "payment", "realtime", "notification", "audit"])
 }
 
 resource "aws_security_group_rule" "auth_postgres" {
@@ -280,4 +281,14 @@ resource "aws_security_group_rule" "notification_http_from_vpc" {
   cidr_blocks       = [data.aws_vpc.selected.cidr_block]
   security_group_id = aws_security_group.microservice["notification"].id
   description       = "notification /health y /metrics accesibles desde la VPC (QA)"
+}
+
+resource "aws_security_group_rule" "audit_http_from_vpc" {
+  type              = "ingress"
+  from_port         = 3012
+  to_port           = 3012
+  protocol          = "tcp"
+  cidr_blocks       = [data.aws_vpc.selected.cidr_block]
+  security_group_id = aws_security_group.microservice["audit"].id
+  description       = "audit /health, /metrics y /api/audit accesibles desde la VPC (QA)"
 }
