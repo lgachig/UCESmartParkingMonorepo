@@ -1,0 +1,30 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../../generated/audit-client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// USP-109: base structure only. Fields such as previousValue/newValue exist
+// because the query endpoint needs something to filter/display, but the
+// full column optimization for high-volume queries is USP-111 scope.
+// USP-110 (Kafka consumer) is what will actually populate this table.
+model AuditRecord {
+  id            String   @id @default(uuid())
+  sourceService String   @map("source_service")
+  action        String
+  userId        String?  @map("user_id")
+  previousValue Json?    @map("previous_value")
+  newValue      Json?    @map("new_value")
+  rawPayload    Json?    @map("raw_payload")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Indexes needed for USP-109's filters (service, action, date range).
+  // Further composite/covering indexes for large-scale performance are USP-111.
+  @@index([sourceService])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_records")
+}
