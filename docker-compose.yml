@@ -351,6 +351,22 @@ services:
     networks:
       - smartparking-network
 
+  ai-service:
+    build:
+      context: ./smart-parking
+      dockerfile: apps/ai-service/dockerfile
+    container_name: smartparking-ai-service
+    restart: unless-stopped
+    environment:
+      AI_SERVICE_PORT: 3013
+      JWT_SECRET: your_jwt_secret
+      AI_PROVIDER_API_KEY: your_ai_provider_api_key
+      CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
+    ports:
+      - '3013:3013'
+    networks:
+      - smartparking-network
+
   gateway-service:
     build:
       context: ./smart-parking

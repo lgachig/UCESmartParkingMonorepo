@@ -47,6 +47,9 @@
     },
     {
       "path": "./apps/audit-service"
+    },
+    {
+      "path": "./apps/ai-service"
     }
   ]
 }
