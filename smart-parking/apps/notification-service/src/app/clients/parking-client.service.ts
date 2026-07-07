@@ -34,6 +34,6 @@ export class ParkingClientService {
                 { headers: { 'x-service-key': this.serviceKey } },
             ),
         );
-        return response.data;
+        return response.data.data;
     }
 }
