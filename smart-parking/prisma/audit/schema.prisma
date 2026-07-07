@@ -7,10 +7,6 @@ datasource db {
   provider = "postgresql"
 }
 
-// USP-109: base structure only. Fields such as previousValue/newValue exist
-// because the query endpoint needs something to filter/display, but the
-// full column optimization for high-volume queries is USP-111 scope.
-// USP-110 (Kafka consumer) is what will actually populate this table.
 model AuditRecord {
   id            String   @id @default(uuid())
   sourceService String   @map("source_service")
@@ -21,9 +17,8 @@ model AuditRecord {
   rawPayload    Json?    @map("raw_payload")
   createdAt     DateTime @default(now()) @map("created_at")
 
-  // Indexes needed for USP-109's filters (service, action, date range).
-  // Further composite/covering indexes for large-scale performance are USP-111.
-  @@index([sourceService])
+  @@index([sourceService, createdAt])
+  @@index([userId, createdAt])
   @@index([action])
   @@index([createdAt])
   @@map("audit_records")

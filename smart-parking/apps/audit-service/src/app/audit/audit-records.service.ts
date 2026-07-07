@@ -12,6 +12,7 @@ export class AuditRecordsService {
 
     const where = {
       ...(query.sourceService && { sourceService: query.sourceService }),
+      ...(query.userId && { userId: query.userId }),
       ...(query.action && { action: query.action }),
       ...((query.from || query.to) && {
         createdAt: {

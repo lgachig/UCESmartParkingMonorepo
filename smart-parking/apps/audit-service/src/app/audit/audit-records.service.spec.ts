@@ -53,6 +53,17 @@ describe('AuditRecordsService', () => {
     );
   });
 
+  it('builds a where clause from the userId filter (USP-111)', async () => {
+    prismaMock.auditRecord.findMany.mockResolvedValue([]);
+    prismaMock.auditRecord.count.mockResolvedValue(0);
+
+    await service.findAll({ userId: 'u-123' });
+
+    expect(prismaMock.auditRecord.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'u-123' } }),
+    );
+  });
+
   it('defaults to page 1 / limit 25 when no pagination is given', async () => {
     prismaMock.auditRecord.findMany.mockResolvedValue([]);
     prismaMock.auditRecord.count.mockResolvedValue(0);
@@ -70,4 +81,5 @@ describe('AuditRecordsService', () => {
     expect((service as any).delete).toBeUndefined();
     expect((service as any).remove).toBeUndefined();
   });
+
 });
