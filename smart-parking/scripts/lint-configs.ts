@@ -129,7 +129,7 @@ function lintComposeContent(filePath: string, content: string, startLineOffset: 
         currentSection = null;
 
         const validServices = [
-          'postgres', 'redis', 'kafka', 'rabbitmq', 'auth-service', 'user-service',
+          'postgres', 'redis', 'kafka', 'rabbitmq', 'mongo', 'auth-service', 'user-service',
           'vehicle-service', 'parking-service', 'reservation-service',
           'frontend', 'gateway-service', 'payment-service', 'realtime-service',
           'notification-service', 'audit-service', 'ai-service', 'app'
