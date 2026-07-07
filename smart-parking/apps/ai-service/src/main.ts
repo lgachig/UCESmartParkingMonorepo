@@ -38,7 +38,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document, { useGlobalPrefix: false });
 
-  const port = configService.get<number>('AI_SERVICE_PORT') || 3013;
+  const port = configService.get<number>('AI_SERVICE_PORT') || 3009;
   await app.listen(port);
   Logger.log(`🚀 AI Service running on: http://localhost:${port}/api`);
   Logger.log(`📚 Swagger docs: http://localhost:${port}/docs`);
