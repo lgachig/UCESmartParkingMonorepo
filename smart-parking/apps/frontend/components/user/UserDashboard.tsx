@@ -3,29 +3,30 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { parkingService, type Slot, type Zone } from '@/services/parking.service';
+import { aiService } from '@/services/ai.service';
 import ZoneMenu from './ZoneMenu';
-import SmartSuggestionCard from './SmartSuggestionCard';
+import SmartSuggestionCard, { type SuggestionType } from './SmartSuggestionCard';
 import MapView from '../map/MapView';
+import { CENTRO_UCE } from '../map/mapConstants';
+
+interface SmartSuggestion {
+  type: SuggestionType;
+  slot: Slot;
+}
 
 export default function UserDashboard() {
   const { user } = useAuth();
   const [zones, setZones] = useState<Zone[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
-  const [history, setHistory] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      const savedHistory = localStorage.getItem('my_reservation_history');
-      if (savedHistory) {
-        try { return JSON.parse(savedHistory); } catch {}
-      }
-    }
-    return [];
-  });
   const [activeSession, setActiveSession] = useState<string | null>(null);
-  
+
   const [flyToZone, setFlyToZone] = useState<any>(null);
   const [zonesMenuOpen, setZonesMenuOpen] = useState(false);
   const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   const [isReserving, setIsReserving] = useState(false);
+
+  const [aiSuggestion, setAiSuggestion] = useState<SmartSuggestion | null>(null);
+  const [aiChecked, setAiChecked] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -57,7 +58,7 @@ export default function UserDashboard() {
     setTimeout(() => {
       fetchData();
     }, 0);
-    
+
     const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
   }, [fetchData]);
@@ -66,15 +67,6 @@ export default function UserDashboard() {
     const handleStorageChange = () => {
       const savedActive = localStorage.getItem('my_reserved_slot_id');
       setActiveSession(savedActive);
-
-      const savedHistory = localStorage.getItem('my_reservation_history');
-      if (savedHistory) {
-        try {
-          setHistory(JSON.parse(savedHistory));
-        } catch {
-          setHistory([]);
-        }
-      }
     };
     window.addEventListener('storage', handleStorageChange);
     const pollLocal = setInterval(handleStorageChange, 1000);
@@ -85,56 +77,64 @@ export default function UserDashboard() {
     };
   }, []);
 
-  const credits = useMemo(() => {
-    const limit = user?.role === 'PROFESSOR' ? 5 : 3;
-    return Math.max(0, limit - history.length);
-  }, [user, history]);
+  useEffect(() => {
+    if (!slots.length || activeSession || aiChecked) return;
 
-  const usualSlotNumber = useMemo(() => {
-    if (!history?.length) return null;
-    const counts = history.reduce((acc: any, num: string) => {
-      acc[num] = (acc[num] || 0) + 1;
-      return acc;
-    }, {});
-    const entries = Object.entries(counts);
-    if (entries.length === 0) return null;
-    return entries.reduce((a: any, b: any) => (counts[a[0]] >= counts[b[0]] ? a : b))[0];
-  }, [history]);
+    const askRecommendation = (lat?: number, lng?: number) => {
+      aiService
+        .getRecommendations(lat, lng)
+        .then((result) => {
+          if (!result.slotIds?.length) return;
 
-  const usualSlot = useMemo(
-    () => (usualSlotNumber ? slots.find((s) => String(s.number) === String(usualSlotNumber)) : null),
-    [slots, usualSlotNumber]
-  );
+          const topSlotId = result.slotIds[0];
+          const slot = slots.find((s) => s.id === topSlotId);
 
-  const smartSuggestion = useMemo(() => {
-    if (suggestionDismissed || credits === 0 || activeSession) {
-      return null;
+          if (!slot || slot.status !== 'AVAILABLE') return;
+
+          const wasReplaced = !!result.replacedFavorite;
+          setAiSuggestion({
+            type: wasReplaced ? 'ai-alternative' : 'ai',
+            slot,
+          });
+        })
+        .catch((err) => {
+          // El ai-service puede no estar disponible; no rompemos el dashboard por esto
+          console.error('No se pudo obtener recomendación del ai-service:', err);
+        })
+        .finally(() => setAiChecked(true));
+    };
+
+    if (typeof window !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => askRecommendation(pos.coords.latitude, pos.coords.longitude),
+        () => askRecommendation(CENTRO_UCE[0], CENTRO_UCE[1]),
+        { timeout: 3000 },
+      );
+    } else {
+      askRecommendation(CENTRO_UCE[0], CENTRO_UCE[1]);
     }
-    if (usualSlot && usualSlot.status === 'AVAILABLE') {
-      return { type: 'usual', slot: usualSlot };
-    }
-    return null;
-  }, [credits, usualSlot, suggestionDismissed, activeSession]);
+  }, [slots, activeSession, aiChecked]);
 
-  const handleAcceptUsualSpot = async () => {
+  const smartSuggestion = useMemo<SmartSuggestion | null>(() => {
+    if (suggestionDismissed || activeSession) return null;
+    return aiSuggestion;
+  }, [aiSuggestion, suggestionDismissed, activeSession]);
+
+  const handleAcceptSuggestion = async () => {
     const slot = smartSuggestion?.slot;
     if (!slot || !user?.id) return;
     setIsReserving(true);
     try {
       await parkingService.reserveSlot(slot.id);
-      
+
       localStorage.setItem('my_reserved_slot_id', slot.id);
       setActiveSession(slot.id);
-
-      const nextHistory = [...history, slot.number];
-      localStorage.setItem('my_reservation_history', JSON.stringify(nextHistory));
-      setHistory(nextHistory);
 
       setFlyToZone({ centerLatitude: slot.latitude, centerLongitude: slot.longitude });
       setSuggestionDismissed(true);
       fetchData();
     } catch (err) {
-      console.error('Error reserving usual spot:', err);
+      console.error('Error reservando el puesto sugerido:', err);
     } finally {
       setIsReserving(false);
     }
@@ -162,7 +162,7 @@ export default function UserDashboard() {
         <SmartSuggestionCard
           suggestion={smartSuggestion}
           onDismiss={() => setSuggestionDismissed(true)}
-          onReserve={handleAcceptUsualSpot}
+          onReserve={handleAcceptSuggestion}
           isReserving={isReserving}
         />
       )}
