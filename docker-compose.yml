@@ -293,11 +293,11 @@ services:
       AUTH_SERVICE_URL: http://auth-service:3000
       PARKING_SERVICE_URL: http://parking-service:3004
       RESERVATION_SERVICE_URL: http://reservation-service:3005
-      SMTP_HOST: "${SMTP_HOST:-sandbox.smtp.mailtrap.io}"
-      SMTP_PORT: "${SMTP_PORT:-2525}"
-      SMTP_USER: "${SMTP_USER:-49b879b93d7866}"
-      SMTP_PASS: "${SMTP_PASS:-bcadba8048fea7}"
-      SMTP_FROM: '${SMTP_FROM:-UCE Smart Parking <49b879b93d7866@sandbox.smtp.mailtrap.io>}'
+      EMAILJS_SERVICE_ID: "${EMAILJS_SERVICE_ID}"
+      EMAILJS_TEMPLATE_ID: "${EMAILJS_TEMPLATE_ID}"
+      EMAILJS_PUBLIC_KEY: "${EMAILJS_PUBLIC_KEY}"
+      EMAILJS_PRIVATE_KEY: "${EMAILJS_PRIVATE_KEY}"
+
     ports:
       - '3011:3011'
     networks:

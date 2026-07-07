@@ -1,28 +1,23 @@
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
+import axios from 'axios';
 import { MailService } from './mail.service';
 import { MetricsService } from '../metrics/metrics.service';
 
-jest.mock('nodemailer');
+jest.mock('axios');
 
 describe('MailService', () => {
-    const validEnv: Record<string, string | number> = {
-        SMTP_HOST: 'sandbox.smtp.mailtrap.io',
-        SMTP_PORT: 2525,
-        SMTP_USER: '49b879b93d7866',
-        SMTP_PASS: 'bcadba8048fea7',
-        SMTP_FROM: 'UCE Smart Parking <49b879b93d7866@sandbox.smtp.mailtrap.io>',
+    const validEnv: Record<string, string> = {
+        EMAILJS_SERVICE_ID: 'service_abc123',
+        EMAILJS_TEMPLATE_ID: 'template_abc123',
+        EMAILJS_PUBLIC_KEY: 'public_key_abc123',
+        EMAILJS_PRIVATE_KEY: 'private_key_abc123',
     };
 
-    let sendMailMock: jest.Mock;
-    let createTransportMock: jest.Mock;
+    let axiosPostMock: jest.Mock;
 
-    const buildModule = async (env: Record<string, string | number | undefined>) => {
-        sendMailMock = jest.fn().mockResolvedValue({ messageId: '<fake-id@mailtrap>' });
-        createTransportMock = (nodemailer.createTransport as jest.Mock).mockReturnValue({
-            sendMail: sendMailMock,
-        });
+    const buildModule = async (env: Record<string, string | undefined>) => {
+        axiosPostMock = (axios.post as jest.Mock).mockResolvedValue({ data: 'OK' });
 
         const moduleRef = await Test.createTestingModule({
             providers: [
@@ -53,42 +48,8 @@ describe('MailService', () => {
         jest.clearAllMocks();
     });
 
-    describe('configuración del transporter (createTransport)', () => {
-        it('debe crear el transporter con host/port/user/pass tomados del ConfigService', async () => {
-            await buildModule(validEnv);
-
-            expect(createTransportMock).toHaveBeenCalledTimes(1);
-            expect(createTransportMock).toHaveBeenCalledWith({
-                host: validEnv.SMTP_HOST,
-                port: validEnv.SMTP_PORT,
-                secure: false,
-                auth: {
-                    user: validEnv.SMTP_USER,
-                    pass: validEnv.SMTP_PASS,
-                },
-            });
-        });
-
-        it('detecta el bug típico: variables SMTP_* undefined si el CI/CD no las inyectó', async () => {
-            const emptyEnv = {
-                SMTP_HOST: undefined,
-                SMTP_PORT: undefined,
-                SMTP_USER: undefined,
-                SMTP_PASS: undefined,
-                SMTP_FROM: undefined,
-            };
-
-            await buildModule(emptyEnv);
-
-            const callArgs = createTransportMock.mock.calls[0][0];
-            expect(callArgs.host).toBeUndefined();
-            expect(callArgs.auth.user).toBeUndefined();
-            expect(callArgs.auth.pass).toBeUndefined();
-        });
-    });
-
     describe('send()', () => {
-        it('envía el correo con from/to/subject/html correctos y registra la métrica de éxito', async () => {
+        it('envía el correo con service_id/template_id/keys correctos y registra la métrica de éxito', async () => {
             const { mailService, metrics } = await buildModule(validEnv);
 
             await mailService.send({
@@ -97,41 +58,36 @@ describe('MailService', () => {
                 html: '<p>Tu reserva fue confirmada</p>',
             });
 
-            expect(sendMailMock).toHaveBeenCalledTimes(1);
-            expect(sendMailMock).toHaveBeenCalledWith({
-                from: validEnv.SMTP_FROM,
-                to: 'destinatario@example.com',
-                subject: 'Reserva confirmada',
-                html: '<p>Tu reserva fue confirmada</p>',
-            });
+            expect(axiosPostMock).toHaveBeenCalledTimes(1);
+            expect(axiosPostMock).toHaveBeenCalledWith(
+                'https://api.emailjs.com/api/v1.0/email/send',
+                expect.objectContaining({
+                    service_id: validEnv.EMAILJS_SERVICE_ID,
+                    template_id: validEnv.EMAILJS_TEMPLATE_ID,
+                    user_id: validEnv.EMAILJS_PUBLIC_KEY,
+                    accessToken: validEnv.EMAILJS_PRIVATE_KEY,
+                    template_params: expect.objectContaining({
+                        to_email: 'destinatario@example.com',
+                        subject: 'Reserva confirmada',
+                        html_content: '<p>Tu reserva fue confirmada</p>',
+                    }),
+                }),
+            );
             expect(metrics.emailsSentTotal.inc).toHaveBeenCalledWith({
                 type: 'Reserva confirmada',
             });
             expect(metrics.emailsFailedTotal.inc).not.toHaveBeenCalled();
         });
 
-        it('si Mailtrap/SMTP rechaza el envío, propaga el error y registra la métrica de fallo', async () => {
-            const { mailService, metrics } = await buildModule(validEnv);
+        it('detecta el bug típico: variables EMAILJS_* undefined si el CI/CD no las inyectó', async () => {
+            const emptyEnv = {
+                EMAILJS_SERVICE_ID: undefined,
+                EMAILJS_TEMPLATE_ID: undefined,
+                EMAILJS_PUBLIC_KEY: undefined,
+                EMAILJS_PRIVATE_KEY: undefined,
+            };
 
-            const smtpError = new Error('Invalid login: 535 5.7.8 Authentication credentials invalid');
-            sendMailMock.mockRejectedValueOnce(smtpError);
-
-            await expect(
-                mailService.send({
-                    to: 'destinatario@example.com',
-                    subject: 'Pago no procesado',
-                    html: '<p>Fallo</p>',
-                }),
-            ).rejects.toThrow('Authentication credentials invalid');
-
-            expect(metrics.emailsFailedTotal.inc).toHaveBeenCalledWith({
-                type: 'Pago no procesado',
-            });
-            expect(metrics.emailsSentTotal.inc).not.toHaveBeenCalled();
-        });
-
-        it('si SMTP_FROM no está seteado, el correo sale con from=undefined (síntoma de variables faltantes)', async () => {
-            const { mailService } = await buildModule({ ...validEnv, SMTP_FROM: undefined });
+            const { mailService } = await buildModule(emptyEnv);
 
             await mailService.send({
                 to: 'destinatario@example.com',
@@ -139,9 +95,30 @@ describe('MailService', () => {
                 html: '<p>ok</p>',
             });
 
-            expect(sendMailMock).toHaveBeenCalledWith(
-                expect.objectContaining({ from: undefined }),
-            );
+            const callArgs = axiosPostMock.mock.calls[0][1];
+            expect(callArgs.service_id).toBeUndefined();
+            expect(callArgs.user_id).toBeUndefined();
+            expect(callArgs.accessToken).toBeUndefined();
+        });
+
+        it('si EmailJS rechaza el envío, propaga el error y registra la métrica de fallo', async () => {
+            const { mailService, metrics } = await buildModule(validEnv);
+
+            const apiError = new Error('Request failed with status code 401');
+            axiosPostMock.mockRejectedValueOnce(apiError);
+
+            await expect(
+                mailService.send({
+                    to: 'destinatario@example.com',
+                    subject: 'Pago no procesado',
+                    html: '<p>Fallo</p>',
+                }),
+            ).rejects.toThrow('Request failed with status code 401');
+
+            expect(metrics.emailsFailedTotal.inc).toHaveBeenCalledWith({
+                type: 'Pago no procesado',
+            });
+            expect(metrics.emailsSentTotal.inc).not.toHaveBeenCalled();
         });
     });
 });

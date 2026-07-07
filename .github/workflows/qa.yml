@@ -578,11 +578,10 @@ jobs:
               patch_env AUTH_SERVICE_URL          "http://${AUTH_PRIVATE_IP}:3000"
               patch_env PARKING_SERVICE_URL       "http://${PARKING_PRIVATE_IP}:3004"
               patch_env RESERVATION_SERVICE_URL   "http://${RESERVATION_PRIVATE_IP}:3005"
-              patch_env SMTP_HOST                 "${{ secrets.QA_SMTP_HOST }}"
-              patch_env SMTP_PORT                 "${{ secrets.QA_SMTP_PORT }}"
-              patch_env SMTP_USER                 "${{ secrets.QA_SMTP_USER }}"
-              patch_env SMTP_PASS                 "${{ secrets.QA_SMTP_PASS }}"
-              patch_env SMTP_FROM                 "${{ secrets.QA_SMTP_FROM }}"
+              patch_env EMAILJS_SERVICE_ID   "${{ secrets.EMAILJS_SERVICE_ID }}"
+              patch_env EMAILJS_TEMPLATE_ID  "${{ secrets.EMAILJS_TEMPLATE_ID }}"
+              patch_env EMAILJS_PUBLIC_KEY   "${{ secrets.EMAILJS_PUBLIC_KEY }}"
+              patch_env EMAILJS_PRIVATE_KEY  "${{ secrets.EMAILJS_PRIVATE_KEY }}"
             fi
 
             if [ "${{ matrix.name }}" = "frontend" ]; then
