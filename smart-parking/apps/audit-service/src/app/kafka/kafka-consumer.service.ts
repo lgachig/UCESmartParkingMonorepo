@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Consumer, Kafka } from 'kafkajs';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { MetricsService } from '../metrics/metrics.service';
 
 const ALL_BUSINESS_TOPICS = /^(?!__).+/;
 
@@ -21,6 +22,7 @@ export class AuditKafkaConsumerService
     constructor(
         private readonly configService: ConfigService,
         private readonly prisma: PrismaService,
+        private readonly metrics: MetricsService,
     ) {
         const brokersString =
             this.configService.get<string>('KAFKA_BROKERS') || 'kafka:29092';
@@ -98,6 +100,7 @@ export class AuditKafkaConsumerService
                 this.logger.warn(
                     `[${topic}] Unparseable message recorded raw (offset=${message.offset}): ${parseError}`,
                 );
+                this.metrics.eventsAuditedTotal.inc({ topic, status: 'raw' });
             } else {
                 await this.prisma.auditRecord.create({
                     data: {
@@ -109,8 +112,10 @@ export class AuditKafkaConsumerService
                     },
                 });
                 this.logger.log(`[${topic}] Event recorded (offset=${message.offset})`);
+                this.metrics.eventsAuditedTotal.inc({ topic, status: 'recorded' });
             }
         } catch (err: any) {
+            this.metrics.eventsAuditedTotal.inc({ topic, status: 'failed' });
             this.logger.error(
                 `[${topic}] Failed to persist event (offset=${message.offset})`,
                 err?.stack,

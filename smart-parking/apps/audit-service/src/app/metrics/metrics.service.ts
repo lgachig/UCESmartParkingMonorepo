@@ -20,6 +20,13 @@ export class MetricsService implements OnModuleInit {
     registers: [this.register],
   });
 
+  readonly eventsAuditedTotal = new client.Counter({
+    name: 'audit_events_consumed_total',
+    help: 'Total Kafka events persisted to the audit trail, per topic',
+    labelNames: ['topic', 'status'] as const,
+    registers: [this.register],
+  });
+
   onModuleInit() {
     client.collectDefaultMetrics({
       register: this.register,
