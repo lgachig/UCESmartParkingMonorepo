@@ -20,6 +20,13 @@ export class MetricsService implements OnModuleInit {
         registers: [this.register],
     });
 
+    readonly circuitBreakerTrips = new client.Counter({
+        name: 'ai_circuit_breaker_trips_total',
+        help: 'Total times the circuit breaker toward an external dependency tripped open',
+        labelNames: ['target'] as const,
+        registers: [this.register],
+    });
+
     onModuleInit() {
         client.collectDefaultMetrics({
             register: this.register,

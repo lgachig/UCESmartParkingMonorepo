@@ -25,6 +25,8 @@ import { MetricsMiddleware } from './middlewares/metrics.middleware';
         AI_DATABASE_URL: Joi.string().required(),
         CORS_ORIGINS: Joi.string().optional(),
         JWT_SECRET: Joi.string().required(),
+        SEARCH_SERVICE_URL: Joi.string().required(),
+        PARKING_SERVICE_URL: Joi.string().required(),
       }),
     }),
     MongooseModule.forRootAsync({
