@@ -24,6 +24,7 @@ import { RequestLoggerMiddleware } from './middlewares/request-logger.middleware
         PARKING_SERVICE_URL: Joi.string().required(),
         RESERVATION_SERVICE_URL: Joi.string().required(),
         NOTIFICATION_SERVICE_URL: Joi.string().required(),
+        AI_SERVICE_URL: Joi.string().required(),
         CORS_ORIGINS: Joi.string().optional(),
         THROTTLE_TTL: Joi.number().default(60000),
         THROTTLE_LIMIT: Joi.number().default(200),

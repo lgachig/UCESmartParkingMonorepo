@@ -206,6 +206,27 @@ export class NotificationProxyController {
   }
 }
 
+@ApiExcludeController()
+@Controller('api/recommendations')
+@UseGuards(JwtGatewayGuard)
+export class AiProxyController {
+  private readonly proxy;
+  constructor(private readonly cfg: ConfigService) {
+    const target = cfg.get<string>('AI_SERVICE_URL')!;
+    Logger.log(`AiProxy → ${target}`, 'ProxyModule');
+    this.proxy = makeProxy(target);
+  }
+  @All()
+  handleRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+
+  @All('*path')
+  handle(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    this.proxy(req, res, next);
+  }
+}
+
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 
@@ -219,7 +240,8 @@ import { AuthModule } from '../auth/auth.module';
     ReservationProxyController,
     PaymentProxyController,
     StripeWebhookProxyController,
-    NotificationProxyController
+    NotificationProxyController,
+    AiProxyController
   ],
 })
 export class ProxyModule { }

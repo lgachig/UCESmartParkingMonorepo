@@ -42,6 +42,7 @@ jobs:
       realtime:    ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.realtime == 'true' }}
       notification: ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.notification == 'true' }}
       audit:       ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.audit == 'true' }}
+      ai:          ${{ github.event_name == 'workflow_dispatch' || needs.ci-check.outputs.infra == 'true' || needs.ci-check.outputs.ai == 'true' }}
 
     steps:
       - name: Echo changes
@@ -57,6 +58,7 @@ jobs:
           echo "realtime=${{ needs.ci-check.outputs.realtime }}"
           echo "notification=${{ needs.ci-check.outputs.notification }}"
           echo "audit=${{ needs.ci-check.outputs.audit }}"
+          echo "ai=${{ needs.ci-check.outputs.ai }}"
 
   docker-push:
     name: Build & Push (${{ matrix.name }})
@@ -126,6 +128,11 @@ jobs:
             dockerfile: smart-parking/apps/audit-service/dockerfile
             context: ./smart-parking
             image_suffix: audit
+          - name: ai
+            changed: ${{ needs.get-changes.outputs.ai }}
+            dockerfile: smart-parking/apps/ai-service/dockerfile
+            context: ./smart-parking
+            image_suffix: ai
 
     steps:
       - name: Skip if unchanged
@@ -195,6 +202,7 @@ jobs:
       realtime_ip:    ${{ steps.ips.outputs.realtime_ip }}
       gateway_ips:    ${{ steps.ips.outputs.gateway_ips }}
       frontend_ips:   ${{ steps.ips.outputs.frontend_ips }}
+      ai_ip:          ${{ steps.ips.outputs.ai_ip }}
 
     steps:
       - name: Configure AWS credentials (Lab A)
@@ -281,12 +289,14 @@ jobs:
           RESERVATION_IP=$(get_ip "reservation") || exit 1
           PAYMENT_IP=$(get_ip "payment")         || exit 1
           REALTIME_IP=$(get_ip "realtime")       || exit 1
+          AI_IP=$(get_ip "ai")                   || exit 1
 
           echo "reservation_ip=$RESERVATION_IP" >> $GITHUB_OUTPUT
           echo "payment_ip=$PAYMENT_IP"         >> $GITHUB_OUTPUT
           echo "realtime_ip=$REALTIME_IP"       >> $GITHUB_OUTPUT
+          echo "ai_ip=$AI_IP"                   >> $GITHUB_OUTPUT
 
-          echo "[Lab B] reservation=$RESERVATION_IP | payment=$PAYMENT_IP | realtime=$REALTIME_IP"
+          echo "[Lab B] reservation=$RESERVATION_IP | payment=$PAYMENT_IP | realtime=$REALTIME_IP | ai=$AI_IP"
 
       - name: Combine outputs
         id: ips
@@ -302,6 +312,8 @@ jobs:
           echo "reservation_ip=${{ steps.ips_lab_b.outputs.reservation_ip }}" >> $GITHUB_OUTPUT
           echo "payment_ip=${{ steps.ips_lab_b.outputs.payment_ip }}"         >> $GITHUB_OUTPUT
           echo "realtime_ip=${{ steps.ips_lab_b.outputs.realtime_ip }}"       >> $GITHUB_OUTPUT
+          echo "ai_ip=${{ steps.ips_lab_b.outputs.ai_ip }}"                     >> $GITHUB_OUTPUT
+          
 
   ensure-postgres:
     name: Ensure Postgres on auth
@@ -349,10 +361,54 @@ jobs:
             done
             echo "✅ Postgres listo en auth"
 
+
+  ensure-mongo:
+    name: Ensure MongoDB on auth
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    needs: [discover-ips]
+    runs-on: ubuntu-latest
+    environment: qa
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.QA_EC2_SSH_KEY }}" > ~/.ssh/qa.pem
+          chmod 400 ~/.ssh/qa.pem
+          ssh-keyscan -H ${{ secrets.QA_BASTION_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Start MongoDB on auth EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ needs.discover-ips.outputs.auth_ip }}
+          username: ec2-user
+          key: ${{ secrets.QA_EC2_SSH_KEY }}
+          port: 22
+          timeout: 120s
+          command_timeout: 10m
+          script_stop: true
+          proxy_host: ${{ secrets.QA_BASTION_HOST }}
+          proxy_username: ec2-user
+          proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
+          proxy_port: 22
+          script: |
+            set -euo pipefail
+            if [ "$(docker ps -aq -f name=^smartparking-mongo$)" ]; then
+              docker start smartparking-mongo
+            else
+              docker run -d --name smartparking-mongo --restart unless-stopped \
+                -p 27017:27017 -v smartparking_mongo_data:/data/db mongo:7
+            fi
+            for i in $(seq 1 15); do
+              docker exec smartparking-mongo mongosh --quiet --eval "db.adminCommand('ping')" &>/dev/null && break
+              [ "$i" -eq 15 ] && { echo "❌ MongoDB not ready"; exit 1; }
+              sleep 2
+            done
+            echo "✅ MongoDB listo en auth"
+
   deploy:
     name: Deploy ${{ matrix.name }}
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
-    needs: [get-changes, discover-ips, ensure-postgres]
+    needs: [get-changes, discover-ips, ensure-postgres, ensure-mongo]
     runs-on: ubuntu-latest
     environment: qa
     env:
@@ -417,6 +473,11 @@ jobs:
             image_suffix: audit
             app_port: '3012'
             changed: ${{ needs.get-changes.outputs.audit }}
+          - name: ai
+            service_name: app
+            image_suffix: ai
+            app_port: '3009'
+            changed: ${{ needs.get-changes.outputs.ai }}
 
     steps:
       - name: Skip if unchanged
@@ -490,7 +551,7 @@ jobs:
           proxy_username: ec2-user
           proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
           proxy_port: 22
-          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,PAYMENT_PRIVATE_IP,NOTIFICATION_PRIVATE_IP,AUDIT_PRIVATE_IP,QA_GATEWAY_URL,QA_FRONTEND_URL
+          envs: AUTH_PRIVATE_IP,USER_PRIVATE_IP,VEHICLE_PRIVATE_IP,PARKING_PRIVATE_IP,RESERVATION_PRIVATE_IP,PAYMENT_PRIVATE_IP,NOTIFICATION_PRIVATE_IP,AUDIT_PRIVATE_IP,AI_PRIVATE_IP,QA_GATEWAY_URL,QA_FRONTEND_URL
           script: |
             set -euo pipefail
 
@@ -548,6 +609,7 @@ jobs:
               patch_env RESERVATION_SERVICE_URL "http://${RESERVATION_PRIVATE_IP}:3005"
               patch_env PAYMENT_SERVICE_URL     "http://${PAYMENT_PRIVATE_IP}:3007"
               patch_env NOTIFICATION_SERVICE_URL "http://${NOTIFICATION_PRIVATE_IP}:3011"
+              patch_env AI_SERVICE_URL           "http://${AI_PRIVATE_IP}:3009"
               patch_env THROTTLE_TTL            "60000"
               patch_env THROTTLE_LIMIT          "60"
             fi
@@ -713,6 +775,14 @@ jobs:
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e AUDIT_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/auditdb" \
                 app npx prisma migrate deploy --config prisma.audit.config.ts
+            fi
+
+            if [ "${{ matrix.name }}" = "ai" ]; then
+              patch_env AI_SERVICE_PORT     "3009"
+              patch_env AI_DATABASE_URL     "mongodb://${AUTH_PRIVATE_IP}:27017/aidb"
+              patch_env SEARCH_SERVICE_URL  "http://search-service.qa.internal:3010"
+              patch_env PARKING_SERVICE_URL "http://${PARKING_PRIVATE_IP}:3004"
+              patch_env KAFKA_BROKERS       "${AUTH_PRIVATE_IP}:9092"
             fi
 
             echo "✅ ${{ matrix.name }} deployado exitosamente."
