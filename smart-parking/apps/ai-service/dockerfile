@@ -11,7 +11,7 @@ COPY . .
 ENV NX_DAEMON=false
 
 RUN npx nx sync
-RUN npx nx build @org/ai-service
+RUN npx nx build ai-service
 
 EXPOSE 3009
 
