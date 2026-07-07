@@ -11,12 +11,14 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { RequestLoggerMiddleware } from './middlewares/request-logger.middleware';
 import { MetricsMiddleware } from './middlewares/metrics.middleware';
+import { KafkaConsumerModule } from './kafka/kafka-consumer.module';
 
 @Module({
   imports: [
     RecommendationsModule,
     HealthModule,
     MetricsModule,
+    KafkaConsumerModule,
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
     ConfigModule.forRoot({
       isGlobal: true,

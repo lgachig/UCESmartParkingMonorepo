@@ -27,6 +27,13 @@ export class MetricsService implements OnModuleInit {
         registers: [this.register],
     });
 
+    readonly usageHistoryUpdatesTotal = new client.Counter({
+        name: 'ai_usage_history_updates_total',
+        help: 'Total usage history updates processed from reservation.checkout events',
+        labelNames: ['status'] as const,
+        registers: [this.register],
+    });
+
     onModuleInit() {
         client.collectDefaultMetrics({
             register: this.register,

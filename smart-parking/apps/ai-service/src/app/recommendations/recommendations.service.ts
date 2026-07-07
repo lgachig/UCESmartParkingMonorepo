@@ -60,4 +60,12 @@ export class RecommendationsService {
 
         return { slotIds };
     }
+
+    async recordUsage(userId: string, slotId: string): Promise<void> {
+        await this.usageHistoryModel.findOneAndUpdate(
+            { userId, slotId },
+            { $inc: { usageCount: 1 } },
+            { upsert: true, new: true },
+        );
+    }
 }
