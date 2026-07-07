@@ -178,3 +178,23 @@ module "notification" {
     env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
   })
 }
+
+# ── 8) Audit EC2 ──────────────────────────────────────────────────────────────
+module "audit" {
+  source             = "../../modules/ec2"
+  environment        = var.environment
+  service_name       = "audit"
+  instance_type      = var.instance_type
+  key_name           = var.key_name
+  subnet_id          = element(module.vpc.public_subnet_ids, 0)
+  security_group_ids = [module.security_groups.security_group_ids["audit"]]
+  extra_tags         = { Service = "audit" }
+  user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
+    dockerhub_user   = var.dockerhub_user
+    docker_image     = "smartparking-audit"
+    docker_image_tag = var.environment
+    service_port     = 3012
+    is_auth          = false
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
+  })
+}

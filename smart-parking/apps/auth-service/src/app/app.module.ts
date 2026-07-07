@@ -15,22 +15,25 @@ import { HealthModule } from './health/health.module';
 import { UserClientModule } from './user-client/user-client.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { MetricsMiddleware } from './middlewares/metrics.middleware';
+import { KafkaModule } from './kafka/kafka.module';
+
 
 @Module({
-  imports: [PrismaModule, HealthModule, MetricsModule, UserClientModule, AppRedisModule, AuditModule, AuthModule, ThrottlerModule.forRoot([{ttl: 60000,limit: 10,},]),
+  imports: [PrismaModule, HealthModule, MetricsModule, UserClientModule, AppRedisModule, AuditModule, KafkaModule, AuthModule, ThrottlerModule.forRoot([{ ttl: 60000, limit: 10, },]),
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: Joi.object({
         PORT: Joi.number().default(3000),
-        JWT_SECRET:Joi.string().required(),
-        JWT_REFRESH_SECRET:Joi.string().required(),
+        JWT_SECRET: Joi.string().required(),
+        JWT_REFRESH_SECRET: Joi.string().required(),
         DATABASE_URL: Joi.string().required(),
         REDIS_URL: Joi.string().required(),
         USER_SERVICE_URL: Joi.string().required().default('http://localhost:3001'),
         INTERNAL_SERVICE_KEY: Joi.string().required(),
         CORS_ORIGINS: Joi.string().optional(),
         FRONTEND_URL: Joi.string().optional(),
-      }),}),],
+      }),
+    }),],
   controllers: [AppController],
   providers: [AppService, MetricsMiddleware, {
     provide: APP_GUARD,

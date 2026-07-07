@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { AuditKafkaConsumerService } from './kafka-consumer.service';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { MetricsService } from '../metrics/metrics.service';
 
 jest.mock('kafkajs', () => {
     const mockConsumer = {
@@ -30,12 +31,17 @@ describe('AuditKafkaConsumerService', () => {
         get: jest.fn().mockReturnValue('kafka:29092'),
     };
 
+    const metricsMock = {
+        eventsAuditedTotal: { inc: jest.fn() },
+    };
+
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 AuditKafkaConsumerService,
                 { provide: ConfigService, useValue: configMock },
                 { provide: PrismaService, useValue: prismaMock },
+                { provide: MetricsService, useValue: metricsMock },
             ],
         }).compile();
 
@@ -77,6 +83,10 @@ describe('AuditKafkaConsumerService', () => {
         );
         expect((service as any).update).toBeUndefined();
         expect((service as any).delete).toBeUndefined();
+        expect(metricsMock.eventsAuditedTotal.inc).toHaveBeenCalledWith({
+            topic: 'reservation.cancelled',
+            status: 'recorded',
+        });
     });
 
     it('records unparseable messages with their raw content instead of discarding them', async () => {
@@ -99,6 +109,10 @@ describe('AuditKafkaConsumerService', () => {
                 }),
             }),
         );
+        expect(metricsMock.eventsAuditedTotal.inc).toHaveBeenCalledWith({
+            topic: 'slot.updated',
+            status: 'raw',
+        });
     });
 
     it('rethrows on DB failure so kafkajs does not commit the offset (no silent event loss)', async () => {
@@ -110,5 +124,10 @@ describe('AuditKafkaConsumerService', () => {
                 offset: '12',
             }),
         ).rejects.toThrow('DB down');
+
+        expect(metricsMock.eventsAuditedTotal.inc).toHaveBeenCalledWith({
+            topic: 'payment.completed',
+            status: 'failed',
+        });
     });
 });

@@ -244,6 +244,32 @@ services:
     networks:
       - smartparking-network
 
+  audit-service:
+    build:
+      context: ./smart-parking
+      dockerfile: apps/audit-service/dockerfile
+    container_name: smartparking-audit-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      AUDIT_SERVICE_PORT: 3012
+      AUDIT_DATABASE_URL: postgresql://admin:admin@postgres:5432/auditdb
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:29092
+      JWT_SECRET: your_jwt_secret
+      INTERNAL_SERVICE_KEY: internal_service_secret_key
+      CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
+    ports:
+      - '3012:3012'
+    networks:
+      - smartparking-network
+
   realtime-service:
     build:
       context: ./smart-parking
