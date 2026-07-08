@@ -402,9 +402,11 @@ jobs:
               "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO admin; GRANT ALL ON SCHEMA public TO public;"
 
             echo "Running parking migrations..."
-            docker-compose -f "$COMPOSE_FILE" exec -T \
+            docker-compose -f "$COMPOSE_FILE" stop app
+            docker-compose -f "$COMPOSE_FILE" run --rm \
               -e PARKING_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb" \
               app npx prisma migrate deploy --config prisma.parking.config.ts
+            docker-compose -f "$COMPOSE_FILE" up -d app
 
             echo "✅ parkingdb sincronizado"
 
