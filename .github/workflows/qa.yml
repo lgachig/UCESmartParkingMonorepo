@@ -361,8 +361,6 @@ jobs:
             done
             echo "✅ Postgres listo en auth"
 
-    needs: [get-changes, discover-ips, ensure-postgres, ensure-mongo, ensure-parking-schema]
-
   ensure-parking-schema:
     name: Ensure parkingdb schema is up to date
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
