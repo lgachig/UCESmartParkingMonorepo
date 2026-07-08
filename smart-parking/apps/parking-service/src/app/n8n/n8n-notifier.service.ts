@@ -12,7 +12,11 @@ export class N8nNotifierService {
     }
 
     async notify(eventType: string, aggregateId: string, payload: Record<string, unknown>): Promise<void> {
-        if (!this.webhookUrl) return;
+        if (!this.webhookUrl) {
+            const msg = 'N8N_WEBHOOK_URL no configurada';
+            this.logger.warn(msg);
+            throw new Error(msg);
+        }
 
         try {
             await axios.post(
@@ -21,7 +25,8 @@ export class N8nNotifierService {
                 { timeout: 5000 },
             );
         } catch (err: any) {
-            this.logger.warn(`No se pudo notificar a n8n (${eventType}/${aggregateId}): ${err?.message}`);
+            this.logger.error(`No se pudo notificar a n8n (${eventType}/${aggregateId}): ${err?.message}`);
+            throw err;
         }
     }
 }

@@ -12,6 +12,7 @@ export interface OutboxSummaryCounts {
     pending: number;
     processed: number;
     failed: number;
+    n8n: { sent: number; failed: number };
 }
 
 export interface OutboxSummaryResult {
@@ -132,10 +133,16 @@ export class UpstreamHealthService {
             const body = await res.json().catch(() => null);
             if (!body || typeof body !== 'object') return null;
 
+            const raw = body as Partial<OutboxSummaryCounts> & { n8n?: { sent?: number; failed?: number } };
+
             return {
-                pending: Number((body as OutboxSummaryCounts).pending ?? 0),
-                processed: Number((body as OutboxSummaryCounts).processed ?? 0),
-                failed: Number((body as OutboxSummaryCounts).failed ?? 0),
+                pending: Number(raw.pending ?? 0),
+                processed: Number(raw.processed ?? 0),
+                failed: Number(raw.failed ?? 0),
+                n8n: {
+                    sent: Number(raw.n8n?.sent ?? 0),
+                    failed: Number(raw.n8n?.failed ?? 0),
+                },
             };
         } catch (err) {
             this.logger.warn(`No se pudo leer outbox summary (${endpoint}): ${(err as Error).message}`);

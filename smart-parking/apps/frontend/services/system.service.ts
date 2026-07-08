@@ -11,6 +11,7 @@ export interface OutboxSummaryCounts {
     pending: number;
     processed: number;
     failed: number;
+    n8n: { sent: number; failed: number };
 }
 
 export interface OutboxSummary {

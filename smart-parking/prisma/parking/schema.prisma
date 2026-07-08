@@ -75,8 +75,18 @@ model OutboxEvent {
   retryCount    Int          @default(0) @map("retry_count")
   errorMessage  String?      @map("error_message")
 
+  // Estado de la notificación a n8n, independiente del estado de outbox/Kafka.
+  // null   => este eventType no dispara notificación a n8n
+  // SENT   => n8n confirmó recepción del webhook
+  // FAILED => n8n no respondió / respondió con error (visible en el dashboard)
+  n8nStatus     String?      @map("n8n_status")
+  n8nError      String?      @map("n8n_error")
+  n8nRetryCount Int          @default(0) @map("n8n_retry_count")
+  n8nSentAt     DateTime?    @map("n8n_sent_at")
+
   @@index([status])
   @@index([aggregateId])
+  @@index([n8nStatus])
   @@map("outbox_events")
 }
 

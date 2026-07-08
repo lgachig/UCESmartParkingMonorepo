@@ -66,11 +66,7 @@ export class OutboxProcessorService {
           await this.outbox.markProcessed(event.id);
 
           if (N8N_EVENTS.has(event.eventType)) {
-            await this.n8n.notify(
-              event.eventType,
-              event.aggregateId,
-              event.payload as Record<string, unknown>,
-            );
+            await this.notifyN8nAndTrack(event.id, event.eventType, event.aggregateId, event.n8nRetryCount, event.payload as Record<string, unknown>);
           }
         } catch (err: any) {
           this.logger.error(
@@ -86,8 +82,42 @@ export class OutboxProcessorService {
       }
 
       this.logger.log(`Outbox: procesados ${events.length} evento(s)`);
+
+      await this.retryFailedN8n();
     } finally {
       this.running = false;
     }
+  }
+
+  private async notifyN8nAndTrack(
+    id: string,
+    eventType: string,
+    aggregateId: string,
+    n8nRetryCount: number,
+    payload: Record<string, unknown>,
+  ) {
+    try {
+      await this.n8n.notify(eventType, aggregateId, payload);
+      await this.outbox.markN8nSent(id);
+    } catch (err: any) {
+      await this.outbox.markN8nFailed(id, n8nRetryCount, err?.message ?? 'unknown error');
+    }
+  }
+
+  private async retryFailedN8n() {
+    const pending = await this.outbox.findN8nRetryBatch(50);
+    if (pending.length === 0) return;
+
+    for (const event of pending) {
+      await this.notifyN8nAndTrack(
+        event.id,
+        event.eventType,
+        event.aggregateId,
+        event.n8nRetryCount,
+        event.payload as Record<string, unknown>,
+      );
+    }
+
+    this.logger.log(`n8n: reintentados ${pending.length} evento(s)`);
   }
 }
