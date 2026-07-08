@@ -759,10 +759,27 @@ jobs:
                 sudo fallocate -l 2G /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
                 sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
               fi
+              echo "🔍 Estado antes de migrar (reservation):"
+              echo "--- swap ---"; swapon --show || echo "  (sin swap activo)"
+              echo "--- memoria ---"; free -h
+              echo "--- disco ---"; df -h /
               echo "Running reservation migrations..."
+              set +e
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e RESERVATION_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/reservationdb" \
                 app npx prisma migrate deploy --config prisma.reservation.config.ts
+              migrate_status=$?
+              set -e
+              if [ "$migrate_status" -ne 0 ]; then
+                echo "❌ Migración falló con status $migrate_status"
+                echo "--- memoria tras el fallo ---"; free -h
+                echo "--- disco tras el fallo ---"; df -h /
+                echo "--- últimos eventos OOM del kernel ---"
+                sudo dmesg -T 2>/dev/null | grep -i -E "out of memory|oom|killed process" | tail -20 || echo "  (dmesg no disponible o sin acceso; puede requerir sudo/journalctl)"
+                echo "--- logs del contenedor app ---"
+                docker-compose -f "$COMPOSE_FILE" logs --tail=50 app || true
+                exit "$migrate_status"
+              fi
             fi
 
             if [ "${{ matrix.name }}" = "payment" ]; then
