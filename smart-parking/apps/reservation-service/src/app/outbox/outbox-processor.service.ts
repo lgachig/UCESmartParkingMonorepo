@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { KafkaService } from '../kafka/kafka.service';
 import { OutboxService } from './outbox.service';
+import { N8nNotifierService } from '../n8n/n8n-notifier.service';
 
 const EVENT_TOPIC_MAP: Record<string, string> = {
   RESERVATION_CREATED: 'reservation.created',
@@ -11,6 +12,8 @@ const EVENT_TOPIC_MAP: Record<string, string> = {
   RESERVATION_EXPIRED: 'reservation.expired',
 };
 
+const N8N_EVENTS = new Set(['RESERVATION_CREATED', 'RESERVATION_CANCELLED']);
+
 @Injectable()
 export class OutboxProcessorService {
   private readonly logger = new Logger(OutboxProcessorService.name);
@@ -19,11 +22,11 @@ export class OutboxProcessorService {
   constructor(
     private readonly outbox: OutboxService,
     private readonly kafka: KafkaService,
-  ) {}
+    private readonly n8n: N8nNotifierService,
+  ) { }
 
   @Cron(CronExpression.EVERY_10_SECONDS)
   async processPendingEvents() {
-    // Evita solapamiento si un ciclo anterior sigue corriendo
     if (this.running) return;
     this.running = true;
 
@@ -43,8 +46,6 @@ export class OutboxProcessorService {
         }
 
         try {
-          // idempotencia: el consumidor debe deduplicar por payload.id + eventType,
-          // aquí incluimos siempre el outboxEventId para que el consumer lo use como clave.
           await this.kafka.emitStrict(topic, {
             outboxEventId: event.id,
             eventType: event.eventType,
@@ -52,6 +53,14 @@ export class OutboxProcessorService {
             ...(event.payload as Record<string, unknown>),
           });
           await this.outbox.markProcessed(event.id);
+
+          if (N8N_EVENTS.has(event.eventType)) {
+            await this.n8n.notify(
+              event.eventType,
+              event.aggregateId,
+              event.payload as Record<string, unknown>,
+            );
+          }
         } catch (err: any) {
           this.logger.error(
             `Error publicando outbox event ${event.id} (${event.eventType})`,

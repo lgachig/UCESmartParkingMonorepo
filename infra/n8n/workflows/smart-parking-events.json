@@ -1,0 +1,122 @@
+{
+    "name": "Smart Parking - Outbox Events",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "smart-parking-events",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "webhook-node",
+            "name": "Webhook Outbox",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                240,
+                300
+            ],
+            "webhookId": "smart-parking-events"
+        },
+        {
+            "parameters": {
+                "jsCode": "const body = $input.first().json.body ?? $input.first().json;\nconst eventType = body.eventType;\nconst aggregateId = body.aggregateId;\nconst payload = body.payload || {};\n\nlet severity = 'low';\nlet message = `Evento ${eventType} (${aggregateId})`;\n\nif (eventType === 'PAYMENT_FAILED') {\n  severity = 'high';\n  message = `Pago fallido para reserva/agregado ${aggregateId}: ${payload.reason || payload.errorMessage || 'sin detalle'}`;\n} else if (eventType === 'PAYMENT_COMPLETED') {\n  severity = 'low';\n  message = `Pago confirmado (${aggregateId}) por ${payload.amount ?? '-'} ${payload.currency ?? ''}`;\n} else if (eventType === 'RESERVATION_CREATED') {\n  severity = 'low';\n  message = `Nueva reserva creada (${aggregateId}) para el slot ${payload.slotId ?? '-'}`;\n} else if (eventType === 'RESERVATION_CANCELLED') {\n  severity = 'medium';\n  message = `Reserva cancelada (${aggregateId})`;\n} else if (eventType === 'PARKING_LOW_AVAILABILITY') {\n  severity = payload.occupancyPercent >= 98 ? 'critical' : 'high';\n  message = `Baja disponibilidad en zona ${payload.zoneName || payload.zoneId}: ${payload.occupancyPercent}% ocupado (${payload.occupiedSlots}/${payload.totalSlots})`;\n}\n\nreturn [{\n  json: {\n    service: body.source || 'outbox',\n    severity,\n    message,\n    metadata: { eventType, aggregateId, payload },\n  },\n}];"
+            },
+            "id": "code-node",
+            "name": "Normalizar Alerta",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                460,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "http://notification-service:3011/internal/system-alerts",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "x-service-key",
+                            "value": "internal_service_secret_key"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify($json) }}",
+                "options": {
+                    "timeout": 5000
+                }
+            },
+            "id": "http-node",
+            "name": "Notificar Admin",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                680,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { \"received\": true } }}",
+                "options": {}
+            },
+            "id": "respond-node",
+            "name": "Responder Webhook",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                900,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook Outbox": {
+            "main": [
+                [
+                    {
+                        "node": "Normalizar Alerta",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Normalizar Alerta": {
+            "main": [
+                [
+                    {
+                        "node": "Notificar Admin",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Notificar Admin": {
+            "main": [
+                [
+                    {
+                        "node": "Responder Webhook",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": true,
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

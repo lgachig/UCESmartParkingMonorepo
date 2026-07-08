@@ -8,6 +8,18 @@ export interface UpstreamStatus {
     error?: string;
 }
 
+export interface OutboxSummaryCounts {
+    pending: number;
+    processed: number;
+    failed: number;
+}
+
+export interface OutboxSummaryResult {
+    parking: OutboxSummaryCounts | null;
+    reservation: OutboxSummaryCounts | null;
+    payment: OutboxSummaryCounts | null;
+}
+
 @Injectable()
 export class UpstreamHealthService {
     private readonly logger = new Logger(UpstreamHealthService.name);
@@ -80,6 +92,53 @@ export class UpstreamHealthService {
             return match ? Number(match[1]) : null;
         } catch (err) {
             this.logger.warn(`No se pudo leer /metrics de realtime-service: ${(err as Error).message}`);
+            return null;
+        } finally {
+            clearTimeout(timeout);
+        }
+    }
+
+    async getOutboxSummary(): Promise<OutboxSummaryResult> {
+        const serviceKey = this.configService.get<string>('INTERNAL_SERVICE_KEY');
+
+        const [parking, reservation, payment] = await Promise.all([
+            this.fetchOutboxSummary(this.configService.get<string>('PARKING_SERVICE_URL'), serviceKey),
+            this.fetchOutboxSummary(this.configService.get<string>('RESERVATION_SERVICE_URL'), serviceKey),
+            this.fetchOutboxSummary(this.configService.get<string>('PAYMENT_SERVICE_URL'), serviceKey),
+        ]);
+
+        return { parking, reservation, payment };
+    }
+
+    private async fetchOutboxSummary(
+        url: string | undefined,
+        serviceKey: string | undefined,
+    ): Promise<OutboxSummaryCounts | null> {
+        if (!url || !serviceKey) return null;
+
+        const cleanUrl = url.replace(/\/+$/, '');
+        const endpoint = `${cleanUrl}/api/internal/outbox/summary`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+
+        try {
+            const res = await fetch(endpoint, {
+                signal: controller.signal,
+                headers: { 'x-service-key': serviceKey },
+            });
+
+            if (!res.ok) return null;
+
+            const body = await res.json().catch(() => null);
+            if (!body || typeof body !== 'object') return null;
+
+            return {
+                pending: Number((body as OutboxSummaryCounts).pending ?? 0),
+                processed: Number((body as OutboxSummaryCounts).processed ?? 0),
+                failed: Number((body as OutboxSummaryCounts).failed ?? 0),
+            };
+        } catch (err) {
+            this.logger.warn(`No se pudo leer outbox summary (${endpoint}): ${(err as Error).message}`);
             return null;
         } finally {
             clearTimeout(timeout);

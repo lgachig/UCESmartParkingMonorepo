@@ -57,4 +57,25 @@ export class OutboxService {
       },
     });
   }
+
+  async getSummary(): Promise<{ pending: number; processed: number; failed: number }> {
+    const groups = await this.prisma.outboxEvent.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    });
+
+    const summary = { pending: 0, processed: 0, failed: 0 };
+
+    for (const group of groups) {
+      if (group.status === 'PENDING') {
+        summary.pending = group._count._all;
+      } else if (group.status === 'PROCESSED') {
+        summary.processed = group._count._all;
+      } else if (group.status === 'FAILED') {
+        summary.failed = group._count._all;
+      }
+    }
+
+    return summary;
+  }
 }

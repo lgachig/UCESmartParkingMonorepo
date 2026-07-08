@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { parkingService, type Slot, type GlobalStats } from '@/services/parking.service';
 import { getAdminAnalytics, type AdminAnalytics } from '@/lib/admin-metrics';
+import SystemHealthPanel from '@/components/admin/SystemHealthPanel';
 
 interface StatCardProps {
   icon: React.ReactNode;
@@ -211,14 +212,7 @@ export default function AdminDashboardPage() {
 
         <div ref={dashboardRef} style={{ backgroundColor: '#f8fafc', padding: '10px' }}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 xl:gap-8 mb-8">
-            <StatCard
-              icon={<Users className="w-6 h-6 xl:w-8 xl:h-8" />}
-              label="Sesiones"
-              value={analytics.stats.totalSessions}
-              trend="+12%"
-              colorBg="#eff6ff"
-              colorText="#1d4ed8"
-            />
+
             <StatCard
               icon={<Car className="w-6 h-6 xl:w-8 xl:h-8" />}
               label="Ocupación"
@@ -243,6 +237,11 @@ export default function AdminDashboardPage() {
               colorBg="#fff7ed"
               colorText="#c2410c"
             />
+          </div>
+
+          {/* Panel de Estado del Sistema */}
+          <div className="mb-8">
+            <SystemHealthPanel />
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 xl:gap-8 mb-8">
@@ -423,8 +422,8 @@ export default function AdminDashboardPage() {
                         <td className="p-4 xl:p-8 text-center">
                           <span
                             className={`px-3 py-1 xl:px-6 xl:py-2 rounded-lg text-[10px] xl:text-sm font-black uppercase tracking-wide border ${row.status === 'active'
-                                ? 'bg-blue-50 text-blue-600 border-blue-200'
-                                : 'bg-gray-50 text-gray-400 border-gray-200'
+                              ? 'bg-blue-50 text-blue-600 border-blue-200'
+                              : 'bg-gray-50 text-gray-400 border-gray-200'
                               }`}
                           >
                             {row.status === 'active' ? 'En Curso' : 'Fin'}

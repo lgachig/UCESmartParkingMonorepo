@@ -7,12 +7,25 @@ export interface ServiceStatus {
     error?: string;
 }
 
+export interface OutboxSummaryCounts {
+    pending: number;
+    processed: number;
+    failed: number;
+}
+
+export interface OutboxSummary {
+    parking: OutboxSummaryCounts | null;
+    reservation: OutboxSummaryCounts | null;
+    payment: OutboxSummaryCounts | null;
+}
+
 export interface SystemStatus {
     generatedAt: string;
     overallStatus: 'operational' | 'degraded';
     services: ServiceStatus[];
     summary: { total: number; up: number; down: number; downNames: string[] };
     realtime: { connected: boolean; activeConnections: number | null };
+    outbox: OutboxSummary;
 }
 
 export const systemService = {

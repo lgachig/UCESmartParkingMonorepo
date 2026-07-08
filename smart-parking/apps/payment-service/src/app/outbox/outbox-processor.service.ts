@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { RabbitmqService } from '../rabbitmq/rabbitmq.service';
 import { OutboxService } from './outbox.service';
+import { N8nNotifierService } from '../n8n/n8n-notifier.service';
 
 const EXCHANGE = 'smart-parking';
 
@@ -11,6 +12,8 @@ const EVENT_ROUTING_KEY_MAP: Record<string, string> = {
   PAYMENT_FAILED: 'payment.failed',
 };
 
+const N8N_EVENTS = new Set(['PAYMENT_COMPLETED', 'PAYMENT_FAILED']);
+
 @Injectable()
 export class OutboxProcessorService {
   private readonly logger = new Logger(OutboxProcessorService.name);
@@ -19,7 +22,8 @@ export class OutboxProcessorService {
   constructor(
     private readonly outbox: OutboxService,
     private readonly rabbitmq: RabbitmqService,
-  ) {}
+    private readonly n8n: N8nNotifierService,
+  ) { }
 
   @Cron(CronExpression.EVERY_10_SECONDS)
   async processPendingEvents() {
@@ -49,7 +53,6 @@ export class OutboxProcessorService {
 
           await channel.assertExchange(EXCHANGE, 'topic', { durable: true });
 
-          // idempotencia: incluimos outboxEventId para que el consumer dedupe por esta clave.
           const content = Buffer.from(
             JSON.stringify({
               outboxEventId: event.id,
@@ -61,6 +64,14 @@ export class OutboxProcessorService {
           channel.publish(EXCHANGE, routingKey, content, { persistent: true });
 
           await this.outbox.markProcessed(event.id);
+
+          if (N8N_EVENTS.has(event.eventType)) {
+            await this.n8n.notify(
+              event.eventType,
+              event.aggregateId,
+              event.payload as Record<string, unknown>,
+            );
+          }
         } catch (err: any) {
           this.logger.error(
             `Error publicando outbox event ${event.id} (${event.eventType})`,

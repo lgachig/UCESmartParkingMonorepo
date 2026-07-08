@@ -19,9 +19,10 @@ export class SystemStatusController {
             throw new ForbiddenException('Solo un administrador puede ver el estado del sistema');
         }
 
-        const [services, realtimeConnections] = await Promise.all([
+        const [services, realtimeConnections, outbox] = await Promise.all([
             this.upstreamHealthService.checkAll(),
             this.upstreamHealthService.getRealtimeConnections(),
+            this.upstreamHealthService.getOutboxSummary(),
         ]);
 
         const servicesDown = services.filter((s) => !s.up);
@@ -40,6 +41,7 @@ export class SystemStatusController {
                 connected: realtimeConnections !== null,
                 activeConnections: realtimeConnections,
             },
+            outbox,
         };
     }
 }

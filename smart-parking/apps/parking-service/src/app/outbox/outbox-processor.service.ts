@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { KafkaService } from '../kafka/kafka.service';
 import { OutboxService } from './outbox.service';
+import { N8nNotifierService } from '../n8n/n8n-notifier.service';
 
 const EVENT_TOPIC_MAP: Record<string, string> = {
   SLOT_RESERVED: 'slot.reserved',
@@ -9,7 +10,10 @@ const EVENT_TOPIC_MAP: Record<string, string> = {
   SLOT_RELEASED: 'slot.released',
   SLOT_MAINTENANCE: 'slot.maintenance',
   SLOT_ENABLED: 'slot.enabled',
+  PARKING_LOW_AVAILABILITY: 'parking.low_availability',
 };
+
+const N8N_EVENTS = new Set(['PARKING_LOW_AVAILABILITY']);
 
 @Injectable()
 export class OutboxProcessorService {
@@ -19,7 +23,8 @@ export class OutboxProcessorService {
   constructor(
     private readonly outbox: OutboxService,
     private readonly kafka: KafkaService,
-  ) {}
+    private readonly n8n: N8nNotifierService,
+  ) { }
 
   @Cron(CronExpression.EVERY_10_SECONDS)
   async processPendingEvents() {
@@ -42,7 +47,6 @@ export class OutboxProcessorService {
         }
 
         try {
-          // idempotencia: el consumidor debe deduplicar por outboxEventId.
           await this.kafka.emitStrict(topic, {
             outboxEventId: event.id,
             eventType: event.eventType,
@@ -50,6 +54,14 @@ export class OutboxProcessorService {
             ...(event.payload as Record<string, unknown>),
           });
           await this.outbox.markProcessed(event.id);
+
+          if (N8N_EVENTS.has(event.eventType)) {
+            await this.n8n.notify(
+              event.eventType,
+              event.aggregateId,
+              event.payload as Record<string, unknown>,
+            );
+          }
         } catch (err: any) {
           this.logger.error(
             `Error publicando outbox event ${event.id} (${event.eventType})`,

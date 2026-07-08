@@ -16,6 +16,7 @@ import { RequestLoggerMiddleware } from './middlewares/request-logger.middleware
       validationSchema: Joi.object({
         GATEWAY_PORT: Joi.number().default(3006),
         JWT_SECRET: Joi.string().required(),
+        INTERNAL_SERVICE_KEY: Joi.string().required(),
         REDIS_URL: Joi.string().required(),
         AUTH_SERVICE_URL: Joi.string().required(),
         USER_SERVICE_URL: Joi.string().required(),

@@ -180,12 +180,15 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+      n8n:
+        condition: service_started
     environment:
       PARKING_SERVICE_PORT: 3004
       PARKING_DATABASE_URL: postgresql://admin:admin@postgres:5432/parkingdb
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: kafka:29092
       JWT_SECRET: your_jwt_secret
+      N8N_WEBHOOK_URL: http://n8n:5678/webhook/smart-parking-events
       INTERNAL_SERVICE_KEY: internal_service_secret_key
       CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
     ports:
@@ -206,10 +209,13 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+      n8n:
+        condition: service_started
     environment:
       RESERVATION_SERVICE_PORT: 3005
       RESERVATION_DATABASE_URL: postgresql://admin:admin@postgres:5432/reservationdb
       REDIS_URL: redis://redis:6379
+      N8N_WEBHOOK_URL: http://n8n:5678/webhook/smart-parking-events
       KAFKA_BROKERS: kafka:29092
       JWT_SECRET: your_jwt_secret
       INTERNAL_SERVICE_KEY: internal_service_secret_key
@@ -241,6 +247,8 @@ services:
         condition: service_started
       kafka:
         condition: service_started
+      n8n:
+        condition: service_started
     environment:
       PAYMENT_SERVICE_PORT: 3007
       PAYMENT_DATABASE_URL: postgresql://admin:admin@postgres:5432/paymentdb
@@ -249,6 +257,7 @@ services:
       JWT_SECRET: your_jwt_secret
       INTERNAL_SERVICE_KEY: internal_service_secret_key
       RESERVATION_SERVICE_URL: http://reservation-service:3005
+      N8N_WEBHOOK_URL: http://n8n:5678/webhook/smart-parking-events
       USER_SERVICE_URL: http://user-service:3001
       KAFKA_BROKERS: kafka:29092
       CORS_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
@@ -419,6 +428,7 @@ services:
     environment:
       GATEWAY_PORT: 3006
       JWT_SECRET: your_jwt_secret
+      INTERNAL_SERVICE_KEY: internal_service_secret_key
       REDIS_URL: redis://redis:6379
       AUTH_SERVICE_URL: http://auth-service:3000
       USER_SERVICE_URL: http://user-service:3001

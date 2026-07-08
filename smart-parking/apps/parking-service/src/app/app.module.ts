@@ -31,6 +31,7 @@ import { ScheduleModule } from '@nestjs/schedule';
         PARKING_SERVICE_PORT: Joi.number().default(3004),
         PARKING_DATABASE_URL: Joi.string().required(),
         JWT_SECRET: Joi.string().required(),
+        N8N_WEBHOOK_URL: Joi.string().optional(),
         REDIS_URL: Joi.string().required(),
         KAFKA_BROKERS: Joi.string().default('kafka:29092'),
         INTERNAL_SERVICE_KEY: Joi.string().required(),

@@ -37,6 +37,7 @@ import { ScheduleModule } from '@nestjs/schedule';
         RESERVATION_SERVICE_URL: Joi.string().required(),
         KAFKA_BROKERS: Joi.string().default('kafka:29092'),
         USER_SERVICE_URL: Joi.string().required(),
+        N8N_WEBHOOK_URL: Joi.string().optional(),
         CORS_ORIGINS: Joi.string().optional(),
         STRIPE_SECRET_KEY: Joi.string().optional().allow(''),
         STRIPE_PUBLIC_KEY: Joi.string().optional().allow(''),

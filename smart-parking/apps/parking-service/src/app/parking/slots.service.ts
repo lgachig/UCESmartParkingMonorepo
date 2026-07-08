@@ -18,7 +18,7 @@ export class SlotsService {
     private readonly redis: AppRedisService,
     private readonly zonesService: ZonesService,
     private readonly facultiesService: FacultiesService,
-  ) {}
+  ) { }
 
   private async invalidateCache() {
     await this.redis.delete('parking:stats:global');
@@ -176,8 +176,7 @@ export class SlotsService {
 
     if (!allowed) {
       throw new BadRequestException(
-        `Cannot change slot state from ${slot.status} to ${toStatus}. Expected current state: ${
-          Array.isArray(fromStatus) ? fromStatus.join(' or ') : fromStatus
+        `Cannot change slot state from ${slot.status} to ${toStatus}. Expected current state: ${Array.isArray(fromStatus) ? fromStatus.join(' or ') : fromStatus
         }`,
       );
     }
@@ -221,6 +220,27 @@ export class SlotsService {
         previousStatus: slot.status,
         timestamp: new Date().toISOString(),
       });
+
+      if (toStatus === SlotStatus.RESERVED || toStatus === SlotStatus.OCCUPIED) {
+        const zoneSlots = await tx.slot.findMany({ where: { zoneId: fresh.zoneId } });
+        const totalInZone = zoneSlots.length;
+        const takenInZone = zoneSlots.filter((s) =>
+          [SlotStatus.RESERVED, SlotStatus.OCCUPIED].includes(s.status as SlotStatus),
+        ).length;
+        const occupancyPercent = totalInZone > 0 ? Math.round((takenInZone / totalInZone) * 100) : 0;
+
+        if (totalInZone > 0 && occupancyPercent >= 90) {
+          await this.outbox.record(tx, 'PARKING_LOW_AVAILABILITY', String(fresh.zoneId), {
+            zoneId: fresh.zoneId,
+            zoneName: fresh.zone?.name,
+            facultyId: fresh.facultyId,
+            totalSlots: totalInZone,
+            occupiedSlots: takenInZone,
+            occupancyPercent,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
 
       return fresh;
     });

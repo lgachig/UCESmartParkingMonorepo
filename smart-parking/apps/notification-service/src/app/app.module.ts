@@ -7,6 +7,7 @@ import { KafkaModule } from './kafka/kafka.module';
 import { RabbitmqModule } from './rabbitmq/rabbitmq.module';
 import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { SystemAlertsModule } from './system-alerts/system-alerts.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { MetricsModule } from './metrics/metrics.module';
       }),
     }),
     KafkaModule,
+    SystemAlertsModule,
     RabbitmqModule,
     HealthModule,
     MetricsModule,
