@@ -657,7 +657,7 @@ jobs:
               patch_env AUDIT_SERVICE_URL "http://${AUDIT_PRIVATE_IP}:3012"
               patch_env AI_SERVICE_URL           "http://${AI_PRIVATE_IP}:3009"
               patch_env THROTTLE_TTL            "60000"
-              patch_env THROTTLE_LIMIT          "60"
+              patch_env THROTTLE_LIMIT          "200"
             fi
 
             if [ "${{ matrix.name }}" = "parking" ]; then

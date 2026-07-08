@@ -88,6 +88,16 @@ resource "aws_security_group_rule" "payment_from_lab_a_gateway" {
   description       = "payment accesible desde el gateway de Lab A (peering)"
 }
 
+resource "aws_security_group_rule" "ai_from_lab_a_gateway" {
+  type              = "ingress"
+  from_port         = 3009
+  to_port           = 3009
+  protocol          = "tcp"
+  cidr_blocks       = [var.lab_a_vpc_cidr]
+  security_group_id = module.security_groups.security_group_ids["ai"]
+  description       = "ai accesible desde el gateway de Lab A (peering)"
+}
+
 # ── EIP para realtime (el frontend se conecta directo, igual que en Lab A) ──
 resource "aws_eip" "realtime" { domain = "vpc" }
 
