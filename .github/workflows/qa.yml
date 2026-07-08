@@ -361,6 +361,54 @@ jobs:
             done
             echo "✅ Postgres listo en auth"
 
+    needs: [get-changes, discover-ips, ensure-postgres, ensure-mongo, ensure-parking-schema]
+
+  ensure-parking-schema:
+    name: Ensure parkingdb schema is up to date
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    needs: [discover-ips, ensure-postgres]
+    runs-on: ubuntu-latest
+    environment: qa
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.QA_EC2_SSH_KEY }}" > ~/.ssh/qa.pem
+          chmod 400 ~/.ssh/qa.pem
+          ssh-keyscan -H ${{ secrets.QA_BASTION_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Reset & migrate parkingdb
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ needs.discover-ips.outputs.parking_ip }}
+          username: ec2-user
+          key: ${{ secrets.QA_EC2_SSH_KEY }}
+          port: 22
+          timeout: 120s
+          command_timeout: 10m
+          script_stop: true
+          proxy_host: ${{ secrets.QA_BASTION_HOST }}
+          proxy_username: ec2-user
+          proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
+          proxy_port: 22
+          envs: >-
+            AUTH_PRIVATE_IP
+          script: |
+            set -euo pipefail
+            COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
+            AUTH_PRIVATE_IP="${{ needs.discover-ips.outputs.auth_ip }}"
+
+            echo "Resetting parkingdb schema..."
+            docker run --rm -e PGPASSWORD=admin -e PGCONNECT_TIMEOUT=5 postgres:16 \
+              psql -h "${AUTH_PRIVATE_IP}" -U admin -d parkingdb -v ON_ERROR_STOP=1 -c \
+              "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO admin; GRANT ALL ON SCHEMA public TO public;"
+
+            echo "Running parking migrations..."
+            docker-compose -f "$COMPOSE_FILE" exec -T \
+              -e PARKING_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/parkingdb" \
+              app npx prisma migrate deploy --config prisma.parking.config.ts
+
+            echo "✅ parkingdb sincronizado"
 
   ensure-mongo:
     name: Ensure MongoDB on auth
@@ -404,7 +452,7 @@ jobs:
   deploy:
     name: Deploy ${{ matrix.name }}
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
-    needs: [get-changes, discover-ips, ensure-postgres, ensure-mongo]
+    needs: [get-changes, discover-ips, ensure-postgres, ensure-mongo, ensure-parking-schema]
     runs-on: ubuntu-latest
     environment: qa
     env:
