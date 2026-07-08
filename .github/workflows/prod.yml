@@ -777,8 +777,9 @@ jobs:
             if [ "${{ matrix.name }}" = "ai" ]; then
               patch_env AI_SERVICE_PORT     "3009"
               patch_env AI_DATABASE_URL     "mongodb://${AUTH_PRIVATE_IP}:27017/aidb"
+              patch_env SEARCH_SERVICE_URL  "http://search-service.prod.internal:3010"
               patch_env PARKING_SERVICE_URL "http://${PARKING_PRIVATE_IP}:3004"
-              patch_env SEARCH_SERVICE_URL "http://<host>:<puerto>"
+              patch_env SEARCH_SERVICE_URL  "http://${SEARCH_PRIVATE_IP}:3010"
               patch_env KAFKA_BROKERS       "${AUTH_PRIVATE_IP}:9092"
             fi
 
@@ -815,7 +816,7 @@ jobs:
                 sleep 2
               done
 
-              for db in userdb vehicledb parkingdb reservationdb paymentdb; do
+              for db in userdb vehicledb parkingdb reservationdb paymentdb auditdb; do
                 if ! docker exec "$pg_container" psql -U admin -d smartparking -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" 2>/dev/null | grep -q 1; then
                   docker exec "$pg_container" psql -U admin -d smartparking -c "CREATE DATABASE ${db};" 2>/dev/null || true
                 fi
