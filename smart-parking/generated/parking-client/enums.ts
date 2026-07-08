@@ -18,3 +18,12 @@ export const SlotStatus = {
 } as const
 
 export type SlotStatus = (typeof SlotStatus)[keyof typeof SlotStatus]
+
+
+export const OutboxStatus = {
+  PENDING: 'PENDING',
+  PROCESSED: 'PROCESSED',
+  FAILED: 'FAILED'
+} as const
+
+export type OutboxStatus = (typeof OutboxStatus)[keyof typeof OutboxStatus]

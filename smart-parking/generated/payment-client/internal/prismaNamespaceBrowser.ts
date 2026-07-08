@@ -53,6 +53,7 @@ export const AnyNull = runtime.AnyNull
 export const ModelName = {
   Payment: 'Payment',
   Receipt: 'Receipt',
+  OutboxEvent: 'OutboxEvent',
   AuditLog: 'AuditLog'
 } as const
 
@@ -103,6 +104,25 @@ export const ReceiptScalarFieldEnum = {
 } as const
 
 export type ReceiptScalarFieldEnum = (typeof ReceiptScalarFieldEnum)[keyof typeof ReceiptScalarFieldEnum]
+
+
+export const OutboxEventScalarFieldEnum = {
+  id: 'id',
+  eventType: 'eventType',
+  aggregateId: 'aggregateId',
+  payload: 'payload',
+  status: 'status',
+  createdAt: 'createdAt',
+  processedAt: 'processedAt',
+  retryCount: 'retryCount',
+  errorMessage: 'errorMessage',
+  n8nStatus: 'n8nStatus',
+  n8nError: 'n8nError',
+  n8nRetryCount: 'n8nRetryCount',
+  n8nSentAt: 'n8nSentAt'
+} as const
+
+export type OutboxEventScalarFieldEnum = (typeof OutboxEventScalarFieldEnum)[keyof typeof OutboxEventScalarFieldEnum]
 
 
 export const AuditLogScalarFieldEnum = {

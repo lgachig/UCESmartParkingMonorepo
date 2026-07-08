@@ -57,6 +57,11 @@ export type Zone = Prisma.ZoneModel
  */
 export type Slot = Prisma.SlotModel
 /**
+ * Model OutboxEvent
+ * 
+ */
+export type OutboxEvent = Prisma.OutboxEventModel
+/**
  * Model AuditLog
  * 
  */

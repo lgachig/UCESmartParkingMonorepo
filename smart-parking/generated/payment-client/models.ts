@@ -10,5 +10,6 @@
  */
 export type * from './models/Payment.js'
 export type * from './models/Receipt.js'
+export type * from './models/OutboxEvent.js'
 export type * from './models/AuditLog.js'
 export type * from './commonInputTypes.js'

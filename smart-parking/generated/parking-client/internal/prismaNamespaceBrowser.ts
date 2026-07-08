@@ -54,6 +54,7 @@ export const ModelName = {
   Faculty: 'Faculty',
   Zone: 'Zone',
   Slot: 'Slot',
+  OutboxEvent: 'OutboxEvent',
   AuditLog: 'AuditLog'
 } as const
 
@@ -113,6 +114,25 @@ export const SlotScalarFieldEnum = {
 export type SlotScalarFieldEnum = (typeof SlotScalarFieldEnum)[keyof typeof SlotScalarFieldEnum]
 
 
+export const OutboxEventScalarFieldEnum = {
+  id: 'id',
+  eventType: 'eventType',
+  aggregateId: 'aggregateId',
+  payload: 'payload',
+  status: 'status',
+  createdAt: 'createdAt',
+  processedAt: 'processedAt',
+  retryCount: 'retryCount',
+  errorMessage: 'errorMessage',
+  n8nStatus: 'n8nStatus',
+  n8nError: 'n8nError',
+  n8nRetryCount: 'n8nRetryCount',
+  n8nSentAt: 'n8nSentAt'
+} as const
+
+export type OutboxEventScalarFieldEnum = (typeof OutboxEventScalarFieldEnum)[keyof typeof OutboxEventScalarFieldEnum]
+
+
 export const AuditLogScalarFieldEnum = {
   id: 'id',
   action: 'action',
@@ -131,6 +151,13 @@ export const SortOrder = {
 } as const
 
 export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
+
+
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
 
 
 export const NullableJsonNullValueInput = {

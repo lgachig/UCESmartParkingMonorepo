@@ -11,5 +11,6 @@
 export type * from './models/Faculty.js'
 export type * from './models/Zone.js'
 export type * from './models/Slot.js'
+export type * from './models/OutboxEvent.js'
 export type * from './models/AuditLog.js'
 export type * from './commonInputTypes.js'

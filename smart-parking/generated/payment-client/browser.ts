@@ -28,6 +28,11 @@ export type Payment = Prisma.PaymentModel
  */
 export type Receipt = Prisma.ReceiptModel
 /**
+ * Model OutboxEvent
+ * 
+ */
+export type OutboxEvent = Prisma.OutboxEventModel
+/**
  * Model AuditLog
  * 
  */
