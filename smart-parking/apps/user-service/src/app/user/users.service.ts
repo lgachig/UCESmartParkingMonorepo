@@ -127,6 +127,61 @@ export class UsersService {
     return this.findByAuthUserId(authUserId);
   }
 
+  async getStats() {
+    const now = new Date();
+    const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const [total, active, inactive, newLast7Days, newLast30Days, byRoleRaw] =
+      await Promise.all([
+        this.prismaService.userProfile.count(),
+        this.prismaService.userProfile.count({ where: { isActive: true } }),
+        this.prismaService.userProfile.count({ where: { isActive: false } }),
+        this.prismaService.userProfile.count({
+          where: { createdAt: { gte: last7Days } },
+        }),
+        this.prismaService.userProfile.count({
+          where: { createdAt: { gte: last30Days } },
+        }),
+        this.prismaService.userProfile.groupBy({
+          by: ['role'],
+          where: { isActive: true },
+          _count: { _all: true },
+        }),
+      ]);
+
+    const byRole = byRoleRaw.reduce(
+      (acc: Record<string, number>, row: { role: string; _count: { _all: number } }) => {
+        acc[row.role] = row._count._all;
+        return acc;
+      },
+      {},
+    );
+
+    const recentProfiles = await this.prismaService.userProfile.findMany({
+      where: { createdAt: { gte: last30Days } },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      total,
+      active,
+      inactive,
+      newLast7Days,
+      newLast30Days,
+      byRole,
+      recentProfiles,
+    };
+  }
+
   async updateMe(authUserId: string, data: UpdateUserProfileDto) {
     const profile = await this.findByAuthUserId(authUserId);
     const updated = await this.prismaService.userProfile.update({

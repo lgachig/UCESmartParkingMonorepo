@@ -155,3 +155,23 @@ resource "aws_eip_association" "realtime" {
   instance_id   = module.realtime.instance_id
   allocation_id = aws_eip.realtime.id
 }
+
+# ── 4) AI EC2 ────────────────────────────────────────────────────────────────
+module "ai" {
+  source             = "../../modules/ec2"
+  environment        = var.environment
+  service_name       = "ai"
+  instance_type      = var.instance_type
+  key_name           = var.key_name
+  subnet_id          = module.vpc.public_subnet_id
+  security_group_ids = [module.security_groups.security_group_ids["ai"]]
+  extra_tags         = { Service = "ai" }
+  user_data = templatefile("${path.module}/templates/user-data.sh.tpl", {
+    dockerhub_user   = var.dockerhub_user
+    docker_image     = "smartparking-ai"
+    docker_image_tag = var.lab_a_environment
+    service_port     = 3009
+    is_auth          = false
+    env_content      = "DOCKERHUB_USER=${var.dockerhub_user}"
+  })
+}

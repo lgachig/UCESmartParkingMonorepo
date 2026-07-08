@@ -3,26 +3,38 @@
 import { X, Loader2 } from 'lucide-react';
 import type { Slot } from '@/services/parking.service';
 
+export type SuggestionType = 'ai' | 'ai-alternative';
+
 interface SmartSuggestionCardProps {
-  suggestion: { type: string; slot: Slot } | null;
+  suggestion: { type: SuggestionType; slot: Slot } | null;
   onDismiss: () => void;
   onReserve: () => Promise<void>;
   isReserving: boolean;
 }
 
-export default function SmartSuggestionCard({ suggestion, onDismiss, onReserve, isReserving }: SmartSuggestionCardProps) {
+export default function SmartSuggestionCard({
+  suggestion,
+  onDismiss,
+  onReserve,
+  isReserving,
+}: SmartSuggestionCardProps) {
   if (!suggestion?.slot) return null;
+
+  const isAlternative = suggestion.type === 'ai-alternative';
 
   return (
     <div className="absolute bottom-4 md:bottom-24 left-1/2 -translate-x-1/2 z-50 w-[90%] md:w-[92%] max-w-md bg-white p-4 md:p-5 rounded-2xl md:rounded-[2rem] shadow-2xl border-t-4 border-[#003366] flex flex-col gap-2 md:gap-3 animate-in slide-in-from-bottom-4">
       <div className="flex justify-between items-start">
-        <p className="font-black text-[#003366] uppercase text-xs md:text-sm">¿Tu puesto de siempre?</p>
+        <p className="font-black text-[#003366] uppercase text-xs md:text-sm">
+          {isAlternative ? 'Tu puesto no está libre — te sugerimos otro' : '¿Quieres estacionarte aquí?'}
+        </p>
         <button onClick={onDismiss} className="p-1 hover:bg-gray-100 rounded-full cursor-pointer">
           <X size={18} className="md:w-[20px] md:h-[20px]" />
         </button>
       </div>
       <p className="text-gray-600 font-bold text-xs md:text-sm">
-        Puesto #{suggestion.slot?.number} libre. Reserva ahora.
+        Puesto #{suggestion.slot?.number} libre{suggestion.slot?.zone?.name ? ` en ${suggestion.slot.zone.name}` : ''}.
+        Recomendado según tu historial de uso.
       </p>
       <button
         onClick={onReserve}

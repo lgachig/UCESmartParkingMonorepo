@@ -3,7 +3,7 @@ data "aws_vpc" "selected" {
 }
 
 resource "aws_security_group" "microservice" {
-  for_each    = toset(["auth", "user", "vehicle", "frontend", "gateway", "parking", "reservation", "payment", "realtime", "notification", "audit"])
+  for_each    = toset(["auth", "user", "vehicle", "frontend", "gateway", "parking", "reservation", "payment", "realtime", "notification", "audit", "ai"])
   name        = "${var.environment}-${each.value}-sg"
   description = "Security Group for ${var.environment}-${each.value}"
   vpc_id      = var.vpc_id
@@ -291,4 +291,24 @@ resource "aws_security_group_rule" "audit_http_from_vpc" {
   cidr_blocks       = [data.aws_vpc.selected.cidr_block]
   security_group_id = aws_security_group.microservice["audit"].id
   description       = "audit /health, /metrics y /api/audit accesibles desde la VPC (QA)"
+}
+
+resource "aws_security_group_rule" "auth_mongo_vpc" {
+  type              = "ingress"
+  from_port         = 27017
+  to_port           = 27017
+  protocol          = "tcp"
+  cidr_blocks       = [data.aws_vpc.selected.cidr_block]
+  security_group_id = aws_security_group.microservice["auth"].id
+  description       = "MongoDB from VPC"
+}
+
+resource "aws_security_group_rule" "ai_http_from_vpc" {
+  type              = "ingress"
+  from_port         = 3009
+  to_port           = 3009
+  protocol          = "tcp"
+  cidr_blocks       = [data.aws_vpc.selected.cidr_block]
+  security_group_id = aws_security_group.microservice["ai"].id
+  description       = "ai /health, /metrics y /api accesibles desde su propia VPC"
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { DashboardShell } from '@/components/layout/DashboardShell';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -11,6 +11,7 @@ import {
   XCircle, FileText, Filter, LayoutDashboard, Loader2,
 } from 'lucide-react';
 import { parkingService, type Slot, type GlobalStats } from '@/services/parking.service';
+import { getAdminAnalytics, type AdminAnalytics } from '@/lib/admin-metrics';
 
 interface StatCardProps {
   icon: React.ReactNode;
@@ -40,20 +41,6 @@ function StatCard({ icon, label, value, trend, colorBg, colorText }: StatCardPro
       </div>
     </div>
   );
-}
-
-interface Session {
-  id: string;
-  start_time: string;
-  end_time?: string;
-  status: 'active' | 'finished';
-  parking_slots: {
-    number: string;
-  };
-  profiles?: {
-    full_name: string;
-    role_id: string;
-  };
 }
 
 export default function AdminDashboardPage() {
@@ -91,158 +78,40 @@ export default function AdminDashboardPage() {
     return () => clearInterval(interval);
   }, [isMounted]);
 
-  // Generate deterministic mock session histories using slot data to feed the analytics
-  const analytics = useMemo(() => {
-    if (!slots.length) {
-      return {
-        filteredSessions: [],
-        dataReport: { dayCounts: [], hourCounts: [], roleCounts: [], topUsers: [] },
-        stats: { totalSessions: 0, activeNow: 0, mostUsedSlot: '-', avgTime: '0 min' },
-      };
-    }
+  const emptyAnalytics: AdminAnalytics = {
+    filteredSessions: [],
+    dataReport: { dayCounts: [], hourCounts: [], roleCounts: [], topUsers: [] },
+    stats: { totalSessions: 0, activeNow: 0, mostUsedSlot: '-', avgTime: '0 min' },
+    userStats: { total: 0, active: 0, inactive: 0, newLast7Days: 0, newLast30Days: 0, byRole: {}, recentProfiles: [] },
+  };
 
-    const mockNames = ['Luis Achig', 'María Flores', 'Carlos Torres', 'Ana Benavídez', 'José Gómez', 'Elena Castro'];
-    const sessions: Session[] = [];
+  const [analytics, setAnalytics] = useState<AdminAnalytics>(emptyAnalytics);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
-    slots.forEach((slot) => {
-      // Create a stable seed based on slot uuid
-      const charSum = slot.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  // Combina datos reales de reservation-service, user-service y parking-service
+  // (ver apps/frontend/lib/admin-metrics.ts) — sin datos simulados.
+  useEffect(() => {
+    if (!isMounted || !slots.length || !globalStats) return;
 
-      // Generate 4 finished historical sessions per slot
-      const numSessions = 4;
-      for (let i = 0; i < numSessions; i++) {
-        const date = new Date();
-        const daysAgo = (charSum + i * 3) % 7;
-        date.setDate(date.getDate() - daysAgo);
+    let cancelled = false;
+    setAnalyticsLoading(true);
 
-        // Hour between 7:00 and 21:00 (15 hours range)
-        const hour = 7 + ((charSum + i * 7) % 15);
-        const minute = (charSum * (i + 1)) % 60;
-        date.setHours(hour, minute, 0, 0);
+    getAdminAnalytics(slots, globalStats.occupied + globalStats.reserved, filters)
+      .then((result) => {
+        if (!cancelled) setAnalytics(result);
+      })
+      .catch((err) => {
+        console.error('Error fetching admin analytics:', err);
+        if (!cancelled) setAnalytics(emptyAnalytics);
+      })
+      .finally(() => {
+        if (!cancelled) setAnalyticsLoading(false);
+      });
 
-        const durationMinutes = 30 + ((charSum * (i + 2)) % 180);
-        const start_time = date.toISOString();
-        const end_time = new Date(date.getTime() + durationMinutes * 60000).toISOString();
-
-        const userIndex = (charSum + i) % mockNames.length;
-        const name = mockNames[userIndex];
-        const role_id = userIndex === 2 || userIndex === 3 ? 'r002' : 'r001'; // Carlos & Ana are Docente, others Estudiante
-
-        sessions.push({
-          id: `sess-${slot.id.substring(0, 4)}-${i}`,
-          start_time,
-          end_time,
-          status: 'finished',
-          parking_slots: { number: slot.number },
-          profiles: { full_name: name, role_id },
-        });
-      }
-
-      // Generate 1 active session if slot is currently occupied or reserved
-      if (slot.status === 'OCCUPIED' || slot.status === 'RESERVED') {
-        const date = new Date();
-        const hoursAgo = (charSum % 3) + 1;
-        date.setHours(date.getHours() - hoursAgo);
-
-        const userIndex = charSum % mockNames.length;
-        const name = mockNames[userIndex];
-        const role_id = userIndex === 2 || userIndex === 3 ? 'r002' : 'r001';
-
-        sessions.push({
-          id: `sess-${slot.id.substring(0, 4)}-active`,
-          start_time: date.toISOString(),
-          status: 'active',
-          parking_slots: { number: slot.number },
-          profiles: { full_name: name, role_id },
-        });
-      }
-    });
-
-    // Apply date filters
-    const filtered = sessions.filter((s) => {
-      const sessionDateStr = new Date(s.start_time).toISOString().split('T')[0];
-      return (
-        (!filters.startDate || sessionDateStr >= filters.startDate) &&
-        (!filters.endDate || sessionDateStr <= filters.endDate)
-      );
-    });
-
-    // Day distribution
-    const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-    const dayCounts = days.map((day) => ({ name: day, visitas: 0 }));
-
-    // Hour distribution (7:00 to 21:00)
-    const hourCounts = Array.from({ length: 15 }, (_, i) => ({ hora: `${i + 7}:00`, cantidad: 0 }));
-
-    const userMap: Record<string, number> = {};
-    const slotMap: Record<string, number> = {};
-    let activeNow = 0;
-    let totalDurationMinutes = 0;
-    let finishedSessionsCount = 0;
-
-    filtered.forEach((s) => {
-      const date = new Date(s.start_time);
-      dayCounts[date.getDay()].visitas++;
-
-      const hour = date.getHours();
-      if (hour >= 7 && hour <= 21) {
-        hourCounts[hour - 7].cantidad++;
-      }
-
-      const userName = s.profiles?.full_name || 'Anónimo';
-      userMap[userName] = (userMap[userName] || 0) + 1;
-
-      if (s.parking_slots?.number) {
-        slotMap[s.parking_slots.number] = (slotMap[s.parking_slots.number] || 0) + 1;
-      }
-
-      if (s.status === 'active') {
-        activeNow++;
-      } else if (s.end_time) {
-        totalDurationMinutes += (new Date(s.end_time).getTime() - new Date(s.start_time).getTime()) / 60000;
-        finishedSessionsCount++;
-      }
-    });
-
-    const topUsers = Object.entries(userMap)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
-
-    const mostUsedSlot = Object.entries(slotMap).sort((a, b) => b[1] - a[1])[0]?.[0] || '-';
-    const avgMinutes = finishedSessionsCount > 0 ? Math.round(totalDurationMinutes / finishedSessionsCount) : 0;
-    const avgTimeStr = avgMinutes > 60 ? `${Math.floor(avgMinutes / 60)}h ${avgMinutes % 60}m` : `${avgMinutes} min`;
-
-    // Mock role distribution profiles (Student, Professor, Admin)
-    const mockProfiles = Array.from({ length: Math.max(30, slots.length * 3) }, (_, idx) => {
-      const role_id = idx % 20 < 13 ? 'r001' : idx % 20 < 18 ? 'r002' : 'r003';
-      return { role_id };
-    });
-
-    const roleStats = mockProfiles.reduce((acc: Record<string, number>, curr) => {
-      const name = curr.role_id === 'r001' ? 'Estudiante' : curr.role_id === 'r002' ? 'Docente' : 'Admin';
-      acc[name] = (acc[name] || 0) + 1;
-      return acc;
-    }, {});
-
-    const roleCounts = Object.entries(roleStats).map(([name, value]) => ({ name, value }));
-
-    // Sort filtered sessions descending by start_time
-    const sortedFiltered = [...filtered].sort(
-      (a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
-    );
-
-    return {
-      filteredSessions: sortedFiltered,
-      dataReport: { dayCounts, hourCounts, roleCounts, topUsers },
-      stats: {
-        totalSessions: filtered.length,
-        activeNow: globalStats ? globalStats.occupied + globalStats.reserved : activeNow,
-        mostUsedSlot,
-        avgTime: avgTimeStr,
-      },
+    return () => {
+      cancelled = true;
     };
-  }, [slots, globalStats, filters]);
+  }, [isMounted, slots, globalStats, filters]);
 
   const exportChartsToPDF = async () => {
     if (!dashboardRef.current) return;
@@ -250,7 +119,7 @@ export default function AdminDashboardPage() {
       setIsExporting(true);
       const { default: jsPDF } = await import('jspdf');
       const { default: html2canvas } = await import('html2canvas');
-      
+
       await new Promise((r) => setTimeout(r, 800));
       const canvas = await html2canvas(dashboardRef.current, {
         scale: 2,
@@ -261,7 +130,7 @@ export default function AdminDashboardPage() {
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
+
       pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 10, pdfWidth, pdfHeight);
       pdf.save(`Reporte_UCE_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (err) {
@@ -408,7 +277,7 @@ export default function AdminDashboardPage() {
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-10">
                   <span className="text-4xl xl:text-6xl font-black text-gray-800 leading-none">
-                    {slots.length * 3}
+                    {analytics.userStats.total}
                   </span>
                   <span className="text-xs xl:text-base text-gray-400 font-black uppercase tracking-widest mt-1">
                     Total
@@ -436,9 +305,8 @@ export default function AdminDashboardPage() {
                   >
                     <div className="flex items-center gap-4">
                       <span
-                        className={`w-8 h-8 xl:w-12 xl:h-12 flex items-center justify-center rounded-xl font-black text-sm xl:text-xl ${
-                          i === 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-white text-gray-400 border'
-                        }`}
+                        className={`w-8 h-8 xl:w-12 xl:h-12 flex items-center justify-center rounded-xl font-black text-sm xl:text-xl ${i === 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-white text-gray-400 border'
+                          }`}
                       >
                         #{i + 1}
                       </span>
@@ -515,7 +383,8 @@ export default function AdminDashboardPage() {
               <h3 className="text-lg xl:text-3xl font-black text-gray-800 flex gap-2 items-center">
                 <FileText size={24} className="text-[#CC0000] xl:w-10 xl:h-10" /> Bitácora
               </h3>
-              <span className="bg-blue-50 text-blue-800 px-3 py-1 xl:px-6 xl:py-2 rounded-xl font-black text-xs xl:text-sm uppercase tracking-widest border border-blue-100">
+              <span className="bg-blue-50 text-blue-800 px-3 py-1 xl:px-6 xl:py-2 rounded-xl font-black text-xs xl:text-sm uppercase tracking-widest border border-blue-100 flex items-center gap-2">
+                {analyticsLoading && <Loader2 className="animate-spin" size={14} />}
                 {analytics.filteredSessions.length} Recientes
               </span>
             </div>
@@ -553,11 +422,10 @@ export default function AdminDashboardPage() {
                         </td>
                         <td className="p-4 xl:p-8 text-center">
                           <span
-                            className={`px-3 py-1 xl:px-6 xl:py-2 rounded-lg text-[10px] xl:text-sm font-black uppercase tracking-wide border ${
-                              row.status === 'active'
+                            className={`px-3 py-1 xl:px-6 xl:py-2 rounded-lg text-[10px] xl:text-sm font-black uppercase tracking-wide border ${row.status === 'active'
                                 ? 'bg-blue-50 text-blue-600 border-blue-200'
                                 : 'bg-gray-50 text-gray-400 border-gray-200'
-                            }`}
+                              }`}
                           >
                             {row.status === 'active' ? 'En Curso' : 'Fin'}
                           </span>

@@ -13,9 +13,11 @@ import { RabbitmqModule } from './rabbitmq/rabbitmq.module';
 import { PaymentModule } from './payment/payment.module';
 import { RequestLoggerMiddleware } from './middlewares/request-logger.middleware';
 import { MetricsMiddleware } from './middlewares/metrics.middleware';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     PaymentModule,
     HealthModule,
     MetricsModule,

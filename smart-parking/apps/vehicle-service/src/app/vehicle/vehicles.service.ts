@@ -12,7 +12,43 @@ export class VehiclesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
-  ) {}
+  ) { }
+
+  async getStats() {
+    const now = new Date();
+    const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const [total, newLast7Days, newLast30Days, byModel] = await Promise.all([
+      this.prisma.vehicle.count(),
+      this.prisma.vehicle.count({ where: { createdAt: { gte: last7Days } } }),
+      this.prisma.vehicle.count({ where: { createdAt: { gte: last30Days } } }),
+      this.prisma.vehicle.groupBy({
+        by: ['model'],
+        _count: { _all: true },
+        orderBy: { _count: { model: 'desc' } },
+        take: 5,
+      }),
+    ]);
+
+    return {
+      total,
+      newLast7Days,
+      newLast30Days,
+      topModels: byModel.map((m: { model: string; _count: { _all: number } }) => ({
+        model: m.model,
+        count: m._count._all,
+      })),
+    };
+  }
+
+  async findById(id: string) {
+    const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found');
+    }
+    return vehicle;
+  }
 
   async findMine(authUserId: string) {
     const vehicle = await this.prisma.vehicle.findUnique({

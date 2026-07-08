@@ -9,5 +9,6 @@
  * 🟢 You can import this file directly.
  */
 export type * from './models/Reservation.js'
+export type * from './models/OutboxEvent.js'
 export type * from './models/AuditLog.js'
 export type * from './commonInputTypes.js'

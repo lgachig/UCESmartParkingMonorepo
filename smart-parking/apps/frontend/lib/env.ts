@@ -24,8 +24,9 @@ export const env = {
   reservationApiUrl: gatewayUrl,
   paymentApiUrl: gatewayUrl,
   parkingApiUrl: `${gatewayUrl}/parking`,
+  aiApiUrl: gatewayUrl,
   realtimeUrl,
-  
+
   appName: process.env.NEXT_PUBLIC_APP_NAME ?? 'UCE Smart Parking',
   routes: {
     admin: process.env.NEXT_PUBLIC_ROUTE_ADMIN ?? '/admin',
