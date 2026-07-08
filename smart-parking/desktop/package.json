@@ -2,13 +2,15 @@
   "name": "desktop",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "dev:vite": "vite",
+    "dev:electron": "tsc -p electron -w",
+    "dev": "concurrently -k \"npm:dev:vite\" \"wait-on tcp:5173 && tsc -p electron && electron .\"",
+    "build": "vite build && tsc -p electron",
+    "build:dist": "npm run build && electron-builder"
   },
+  "main": "electron/main.js",
   "dependencies": {
     "axios": "^1.18.1",
     "react": "^19.2.7",
