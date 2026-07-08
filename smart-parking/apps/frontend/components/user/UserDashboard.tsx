@@ -80,7 +80,7 @@ export default function UserDashboard() {
   }, []);
 
   useEffect(() => {
-    if (!slots.length || activeSession || aiChecked) return;
+    if (!slots.length || activeSession) return;
 
     const askRecommendation = (lat?: number, lng?: number) => {
       aiService
@@ -94,16 +94,15 @@ export default function UserDashboard() {
           if (!slot || slot.status !== 'AVAILABLE') return;
 
           const wasReplaced = !!result.replacedFavorite;
+
           setAiSuggestion({
             type: wasReplaced ? 'ai-alternative' : 'ai',
             slot,
           });
         })
         .catch((err) => {
-          // El ai-service puede no estar disponible; no rompemos el dashboard por esto
           console.error('No se pudo obtener recomendación del ai-service:', err);
-        })
-        .finally(() => setAiChecked(true));
+        });
     };
 
     if (typeof window !== 'undefined' && navigator.geolocation) {
@@ -115,7 +114,7 @@ export default function UserDashboard() {
     } else {
       askRecommendation(CENTRO_UCE[0], CENTRO_UCE[1]);
     }
-  }, [slots, activeSession, aiChecked]);
+  }, [slots, activeSession]);
 
   const smartSuggestion = useMemo<SmartSuggestion | null>(() => {
     if (suggestionDismissed || activeSession) return null;
