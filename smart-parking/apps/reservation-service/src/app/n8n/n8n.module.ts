@@ -1,13 +1,8 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '../../infrastructure/database/prisma.module';
-import { KafkaModule } from '../kafka/kafka.module';
-import { OutboxService } from './outbox.service';
-import { OutboxProcessorService } from './outbox-processor.service';
-import { N8nModule } from '../n8n/n8n.module';
+import { N8nNotifierService } from './n8n-notifier.service';
 
 @Module({
-    imports: [PrismaModule, KafkaModule, N8nModule],
-    providers: [OutboxService, OutboxProcessorService],
-    exports: [OutboxService],
+    providers: [N8nNotifierService],
+    exports: [N8nNotifierService],
 })
-export class OutboxModule { }
+export class N8nModule { }
