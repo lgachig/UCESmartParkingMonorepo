@@ -259,14 +259,14 @@ jobs:
             echo "$ips"
           }
 
-          AUTH_IP=$(get_ip "auth")
-          USER_IP=$(get_ip "user")
-          VEHICLE_IP=$(get_ip "vehicle")
-          PARKING_IP=$(get_ip "parking")
-          NOTIFICATION_IP=$(get_ip "notification")
-          AUDIT_IP=$(get_ip "audit")
-          GATEWAY_IPS=$(get_ips_multi "gateway")
-          FRONTEND_IPS=$(get_ips_multi "frontend")
+          AUTH_IP=$(get_ip "auth")               || exit 1
+          USER_IP=$(get_ip "user")               || exit 1
+          VEHICLE_IP=$(get_ip "vehicle")         || exit 1
+          PARKING_IP=$(get_ip "parking")         || exit 1
+          NOTIFICATION_IP=$(get_ip "notification") || exit 1
+          AUDIT_IP=$(get_ip "audit")               || exit 1
+          GATEWAY_IPS=$(get_ips_multi "gateway")   || exit 1
+          FRONTEND_IPS=$(get_ips_multi "frontend") || exit 1
 
           echo "auth_ip=$AUTH_IP"           >> $GITHUB_OUTPUT
           echo "user_ip=$USER_IP"           >> $GITHUB_OUTPUT
@@ -849,6 +849,15 @@ jobs:
               docker-compose -f "$COMPOSE_FILE" exec -T \
                 -e PAYMENT_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/paymentdb" \
                 app npx prisma migrate deploy --config prisma.payment.config.ts
+            fi
+
+            if [ "${{ matrix.name }}" = "audit" ]; then
+              echo "Resetting auditdb schema..."
+              reset_db_schema auditdb
+              echo "Running audit migrations..."
+              docker-compose -f "$COMPOSE_FILE" exec -T \
+                -e AUDIT_DATABASE_URL="postgresql://admin:admin@${AUTH_PRIVATE_IP}:5432/auditdb" \
+                app npx prisma migrate deploy --config prisma.audit.config.ts
             fi
 
             echo "✅ ${{ matrix.name }} deployado exitosamente."

@@ -169,7 +169,6 @@ module "gateway_asg" {
   })
 }
 
-# gateway solo acepta tráfico desde su propio ALB
 resource "aws_security_group_rule" "gateway_from_alb" {
   type                     = "ingress"
   from_port                = 3006
@@ -240,5 +239,3 @@ module "audit" {
   })
 }
 
-# reservation, payment, realtime y ai viven en environments/prod-lab-b (Account B).
-# Ver lab-b-integration.tf y outputs de prod-lab-b para las IPs.
