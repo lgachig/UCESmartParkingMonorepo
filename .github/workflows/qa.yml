@@ -675,6 +675,14 @@ jobs:
               patch_env NEXT_PUBLIC_GATEWAY_URL "$QA_GATEWAY_URL"
             fi
 
+            if [ "${{ matrix.name }}" = "ai" ]; then
+              patch_env AI_SERVICE_PORT     "3009"
+              patch_env AI_DATABASE_URL     "mongodb://${AUTH_PRIVATE_IP}:27017/aidb"
+              patch_env SEARCH_SERVICE_URL  "http://search-service.qa.internal:3010"
+              patch_env PARKING_SERVICE_URL "http://${PARKING_PRIVATE_IP}:3004"
+              patch_env KAFKA_BROKERS       "${AUTH_PRIVATE_IP}:9092"
+            fi
+
             echo "🧹 Liberando espacio en disco antes del pull..."
             df -h / || true
             docker image prune -af --filter "until=24h" || true
@@ -775,12 +783,6 @@ jobs:
                 app npx prisma migrate deploy --config prisma.audit.config.ts
             fi
 
-            if [ "${{ matrix.name }}" = "ai" ]; then
-              patch_env AI_SERVICE_PORT     "3009"
-              patch_env AI_DATABASE_URL     "mongodb://${AUTH_PRIVATE_IP}:27017/aidb"
-              patch_env SEARCH_SERVICE_URL  "http://search-service.qa.internal:3010"
-              patch_env PARKING_SERVICE_URL "http://${PARKING_PRIVATE_IP}:3004"
-              patch_env KAFKA_BROKERS       "${AUTH_PRIVATE_IP}:9092"
-            fi
+            
 
             echo "✅ ${{ matrix.name }} deployado exitosamente."
