@@ -32,7 +32,16 @@ export class OutboxProcessorService {
     this.running = true;
 
     try {
-      const events = await this.outbox.findPendingBatch(50);
+      let events;
+      try {
+        events = await this.outbox.findPendingBatch(50);
+      } catch (err: any) {
+        this.logger.error(
+          'No se pudo leer outbox_events (¿tabla no existe o DB no disponible?)',
+          err?.stack,
+        );
+        return;
+      }
       if (events.length === 0) return;
 
       for (const event of events) {
