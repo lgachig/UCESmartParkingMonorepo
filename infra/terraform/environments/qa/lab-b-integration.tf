@@ -86,3 +86,13 @@ resource "aws_security_group_rule" "auth_mongo_from_labb" {
   security_group_id = module.security_groups.security_group_ids["auth"]
   description       = "MongoDB desde Lab B (ai), via peering"
 }
+
+resource "aws_security_group_rule" "ai_http_from_labb" {
+  type              = "ingress"
+  from_port         = 3009
+  to_port           = 3009
+  protocol          = "tcp"
+  cidr_blocks       = [var.lab_b_vpc_cidr]
+  security_group_id = module.security_groups.security_group_ids["ai"]
+  description       = "ai accesible desde Lab B (gateway), via peering"
+}
