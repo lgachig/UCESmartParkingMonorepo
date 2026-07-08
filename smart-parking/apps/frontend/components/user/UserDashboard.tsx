@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { parkingService, type Slot, type Zone } from '@/services/parking.service';
+import { reservationService } from '@/services/reservation.service';
+import { vehicleService } from '@/services/user.service';
 import { aiService } from '@/services/ai.service';
 import ZoneMenu from './ZoneMenu';
 import SmartSuggestionCard, { type SuggestionType } from './SmartSuggestionCard';
@@ -125,7 +127,13 @@ export default function UserDashboard() {
     if (!slot || !user?.id) return;
     setIsReserving(true);
     try {
-      await parkingService.reserveSlot(slot.id);
+      const vehicle = await vehicleService.getMyVehicle();
+      if (!vehicle) {
+        console.error('Debes registrar un vehículo antes de reservar');
+        return;
+      }
+
+      const reservation = await reservationService.create({ slotId: slot.id, vehicleId: vehicle.id });
 
       localStorage.setItem('my_reserved_slot_id', slot.id);
       setActiveSession(slot.id);
