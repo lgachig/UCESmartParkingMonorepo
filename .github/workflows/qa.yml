@@ -492,6 +492,7 @@ jobs:
           echo "RESERVATION_PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV
           echo "PAYMENT_PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"         >> $GITHUB_ENV
           echo "REALTIME_PRIVATE_IP=${{ needs.discover-ips.outputs.realtime_ip }}"       >> $GITHUB_ENV
+          echo "AI_PRIVATE_IP=${{ needs.discover-ips.outputs.ai_ip }}"                   >> $GITHUB_ENV
           echo "GATEWAY_PRIVATE_IPS=${{ needs.discover-ips.outputs.gateway_ips }}"       >> $GITHUB_ENV
           echo "FRONTEND_PRIVATE_IPS=${{ needs.discover-ips.outputs.frontend_ips }}"     >> $GITHUB_ENV
 
@@ -508,6 +509,7 @@ jobs:
             reservation) echo "PRIVATE_IP=${{ needs.discover-ips.outputs.reservation_ip }}" >> $GITHUB_ENV ;;
             payment)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.payment_ip }}"     >> $GITHUB_ENV ;;
             realtime)    echo "PRIVATE_IP=${{ needs.discover-ips.outputs.realtime_ip }}"   >> $GITHUB_ENV ;;
+            ai)          echo "PRIVATE_IP=${{ needs.discover-ips.outputs.ai_ip }}"         >> $GITHUB_ENV ;;
             gateway)     echo "PRIVATE_IP=${{ needs.discover-ips.outputs.gateway_ips }}"    >> $GITHUB_ENV ;;
             frontend)    echo "PRIVATE_IP=${{ needs.discover-ips.outputs.frontend_ips }}"   >> $GITHUB_ENV ;;
           esac
