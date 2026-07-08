@@ -12,13 +12,17 @@ export class ParkingClientService {
 
     async isSlotAvailable(slotId: string): Promise<boolean> {
         const baseUrl = this.configService.get<string>('PARKING_SERVICE_URL');
+        const serviceKey = this.configService.get<string>('INTERNAL_SERVICE_KEY');
         try {
             const response = await firstValueFrom(
-                this.httpService.get(`${baseUrl}/api/slots/${slotId}/status`),
+                this.httpService.get(
+                    `${baseUrl}/api/internal/slots/${slotId}/availability`,
+                    { headers: { 'x-service-key': serviceKey } },
+                ),
             );
-            return response.data?.status === 'AVAILABLE';
+            return response.data?.data === true;
         } catch {
-            return true;
+            return false;
         }
     }
 }
