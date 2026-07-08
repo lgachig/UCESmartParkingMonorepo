@@ -386,6 +386,7 @@ jobs:
           timeout: 120s
           command_timeout: 10m
           script_stop: true
+          debug: true
           proxy_host: ${{ secrets.QA_BASTION_HOST }}
           proxy_username: ec2-user
           proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
