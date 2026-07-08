@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Get, Param, Post, Put, Req, UseGuards,
+  Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags,
@@ -17,7 +17,7 @@ import { Role } from '../auth/enums/role.enum';
 @UseGuards(JwtAuthGuard)
 @Controller('reservations')
 export class ReservationsController {
-  constructor(private readonly reservationsService: ReservationsService) {}
+  constructor(private readonly reservationsService: ReservationsService) { }
 
   @ApiOperation({ summary: 'Create a reservation (student, professor, guest)' })
   @ApiBody({ type: CreateReservationDto })
@@ -71,6 +71,23 @@ export class ReservationsController {
   @Get('statistics')
   getStatistics() {
     return this.reservationsService.getStatistics();
+  }
+
+  @ApiOperation({ summary: 'Get recent reservations for admin dashboard/log (admin)' })
+  @ApiResponse({ status: 200, description: 'Recent reservations, newest first' })
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get('recent')
+  findRecent(
+    @Query('limit') limit?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.reservationsService.findRecent(
+      limit ? parseInt(limit, 10) : 100,
+      startDate,
+      endDate,
+    );
   }
 
   @ApiOperation({ summary: 'Get reservation by ID' })

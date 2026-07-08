@@ -92,6 +92,12 @@ services:
     image: rabbitmq:3-management
     restart: unless-stopped
     ports: ["5672:5672", "15672:15672"]
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports: ["27017:27017"]
+    volumes:
+      - mongo_data:/data/db
   auth-service:
     image: ${dockerhub_user}/${docker_image}:${docker_image_tag}
     container_name: smartparking-auth-service
@@ -102,6 +108,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  mongo_data:
 COMPOSE
 local_ip=$(hostname -I | awk '{print $1}')
 sed -i "s/_LOCAL_IP_/$local_ip/g" /opt/smartparking/docker-compose.yml

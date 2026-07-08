@@ -1,18 +1,11 @@
 FROM node:20-alpine
-
 WORKDIR /app
-
 COPY package*.json ./
-
-RUN npm install --frozen-lockfile
-
+COPY apps/ai-service/package.json ./apps/ai-service/
+RUN npm install
 COPY . .
-
 ENV NX_DAEMON=false
-
 RUN npx nx sync
-RUN npx nx build @org/ai-service
-
+RUN npx nx build ai-service
 EXPOSE 3009
-
 CMD ["node", "apps/ai-service/dist/main.js"]

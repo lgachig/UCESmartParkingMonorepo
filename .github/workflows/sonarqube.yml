@@ -2,9 +2,9 @@ name: SonarQube Analysis - UCE Nexus Monorepo
 
 on:
   push:
-    branches: ['PROD']
+    branches: ['Psd']
   pull_request:
-    branches: ['PROD']
+    branches: ['asd']
 
 jobs:
   sonarqube:

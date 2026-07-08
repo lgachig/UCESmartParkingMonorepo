@@ -52,6 +52,7 @@ export const AnyNull = runtime.AnyNull
 
 export const ModelName = {
   Reservation: 'Reservation',
+  OutboxEvent: 'OutboxEvent',
   AuditLog: 'AuditLog'
 } as const
 
@@ -91,6 +92,21 @@ export const ReservationScalarFieldEnum = {
 export type ReservationScalarFieldEnum = (typeof ReservationScalarFieldEnum)[keyof typeof ReservationScalarFieldEnum]
 
 
+export const OutboxEventScalarFieldEnum = {
+  id: 'id',
+  eventType: 'eventType',
+  aggregateId: 'aggregateId',
+  payload: 'payload',
+  status: 'status',
+  createdAt: 'createdAt',
+  processedAt: 'processedAt',
+  retryCount: 'retryCount',
+  errorMessage: 'errorMessage'
+} as const
+
+export type OutboxEventScalarFieldEnum = (typeof OutboxEventScalarFieldEnum)[keyof typeof OutboxEventScalarFieldEnum]
+
+
 export const AuditLogScalarFieldEnum = {
   id: 'id',
   action: 'action',
@@ -109,6 +125,13 @@ export const SortOrder = {
 } as const
 
 export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
+
+
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
 
 
 export const NullableJsonNullValueInput = {

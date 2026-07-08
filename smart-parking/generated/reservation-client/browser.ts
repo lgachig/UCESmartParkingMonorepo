@@ -23,6 +23,11 @@ export * from './enums.js';
  */
 export type Reservation = Prisma.ReservationModel
 /**
+ * Model OutboxEvent
+ * 
+ */
+export type OutboxEvent = Prisma.OutboxEventModel
+/**
  * Model AuditLog
  * 
  */

@@ -25,6 +25,11 @@ output "realtime_elastic_ip" {
   value       = aws_eip.realtime.public_ip
 }
 
+output "ai_private_ip" {
+  description = "GitHub Secret: QA_EC2_AI_HOST"
+  value       = module.ai.private_ip
+}
+
 output "lab_b_setup_summary" {
   value = <<-EOT
     ── Lab B desplegado ──────────────────────────────────────────

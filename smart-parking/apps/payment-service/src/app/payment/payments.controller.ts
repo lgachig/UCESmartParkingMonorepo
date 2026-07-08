@@ -21,11 +21,14 @@ import {
 import { PaymentsService } from './payments.service';
 import { CalculateFeeDto, CreatePaymentDto } from './dto/payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../auth/enums/role.enum';
 import { ServiceKeyGuard } from '../auth/guards/service-key.guard';
 import { StripeService } from '../stripe/stripe.service';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { RabbitmqConsumerService } from '../rabbitmq/rabbitmq-consumer.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { ReceiptService } from './receipt.service';
 import { Logger } from '@nestjs/common';
 
@@ -111,6 +114,15 @@ export class PaymentsController {
     return this.receiptService.getReceiptByPaymentId(id);
   }
 
+  @ApiOperation({ summary: 'Get payment statistics for admin dashboard (admin)' })
+  @ApiResponse({ status: 200, description: 'Aggregated payment statistics' })
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get('stats')
+  getStats() {
+    return this.paymentsService.getStats();
+  }
+
   @ApiOperation({ summary: 'Get payment by ID' })
   @ApiParam({ name: 'id', description: 'Payment UUID' })
   @Get(':id')
@@ -128,7 +140,7 @@ export class StripeWebhookController {
     private readonly stripeService: StripeService,
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly consumer: RabbitmqConsumerService,
+    private readonly outbox: OutboxService,
     private readonly receiptService: ReceiptService,
   ) { }
 
@@ -167,12 +179,31 @@ export class StripeWebhookController {
           ? session.payment_intent
           : session.payment_intent?.id;
 
-      await this.prisma.payment.update({
-        where: { id: paymentId },
-        data: {
-          status: 'COMPLETED',
-          stripePaymentIntentId: paymentIntentId,
-        },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payment.update({
+          where: { id: paymentId },
+          data: {
+            status: 'COMPLETED',
+            stripePaymentIntentId: paymentIntentId,
+          },
+        });
+
+        await this.audit.log(
+          {
+            action: 'PAYMENT_COMPLETED',
+            authUserId: userId,
+            metadata: { paymentId, reservationId, stripeSessionId: session.id },
+          },
+          tx,
+        );
+
+        await this.outbox.record(tx, 'PAYMENT_COMPLETED', paymentId, {
+          paymentId,
+          reservationId,
+          userId,
+          stripeSessionId: session.id,
+          timestamp: new Date().toISOString(),
+        });
       });
 
       try {
@@ -180,21 +211,6 @@ export class StripeWebhookController {
       } catch (err) {
         this.logger.error(`Failed to create receipt for payment ${paymentId}`, err);
       }
-
-      await this.audit.log({
-        action: 'PAYMENT_COMPLETED',
-        authUserId: userId,
-        metadata: { paymentId, reservationId, stripeSessionId: session.id },
-      });
-
-      await (this.consumer as unknown as {
-        publishEvent: (key: string, data: unknown) => Promise<void>;
-      })['publishEvent']('payment.completed', {
-        paymentId,
-        reservationId,
-        userId,
-        stripeSessionId: session.id,
-      });
 
       this.logger.log(`Payment ${paymentId} completed via Stripe webhook`);
     }
@@ -205,24 +221,28 @@ export class StripeWebhookController {
       };
       const { paymentId, reservationId, userId } = session.metadata;
 
-      await this.prisma.payment.update({
-        where: { id: paymentId },
-        data: { status: 'FAILED' },
-      });
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payment.update({
+          where: { id: paymentId },
+          data: { status: 'FAILED' },
+        });
 
-      await this.audit.log({
-        action: 'PAYMENT_FAILED',
-        authUserId: userId,
-        metadata: { paymentId, reservationId, reason: 'Stripe session expired' },
-      });
+        await this.audit.log(
+          {
+            action: 'PAYMENT_FAILED',
+            authUserId: userId,
+            metadata: { paymentId, reservationId, reason: 'Stripe session expired' },
+          },
+          tx,
+        );
 
-      await (this.consumer as unknown as {
-        publishEvent: (key: string, data: unknown) => Promise<void>;
-      })['publishEvent']('payment.failed', {
-        paymentId,
-        reservationId,
-        userId,
-        reason: 'Stripe session expired',
+        await this.outbox.record(tx, 'PAYMENT_FAILED', paymentId, {
+          paymentId,
+          reservationId,
+          userId,
+          reason: 'Stripe session expired',
+          timestamp: new Date().toISOString(),
+        });
       });
 
       this.logger.log(`Payment ${paymentId} failed — Stripe session expired`);

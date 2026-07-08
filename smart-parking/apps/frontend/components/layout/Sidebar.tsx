@@ -37,7 +37,6 @@ function getMenuItems(role: UserRole): MenuItem[] {
   return [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/user' },
     { icon: History, label: 'Mis Reservas', path: '/user/reservations' },
-    { icon: Car, label: 'Mi Vehículo', path: '/user/vehicle' },
     { icon: Settings, label: 'Settings', path: '/user/settings' },
   ];
 }

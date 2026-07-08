@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { ReservationClientService } from '../clients/reservation-client.service';
 import { UserClientService } from '../clients/user-client.service';
 import { StripeService } from '../stripe/stripe.service';
@@ -31,6 +32,7 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly outbox: OutboxService,
     private readonly feeCalculator: ParkingFeeCalculatorService,
     private readonly reservationClient: ReservationClientService,
     private readonly userClient: UserClientService,
@@ -102,27 +104,44 @@ export class PaymentsService {
     const durationMinutes = this.resolveDurationMinutes(reservation);
     const fee = this.feeCalculator.calculate(profile.role, durationMinutes);
 
-    const payment = await this.prisma.payment.create({
-      data: {
-        reservationId: reservation.id,
+    const payment = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.payment.create({
+        data: {
+          reservationId: reservation.id,
+          userId: reservation.userId,
+          amount: fee.amount,
+          currency: fee.currency,
+          status: 'PENDING',
+        },
+      });
+
+      await this.audit.log(
+        {
+          action: 'PAYMENT_CREATED',
+          authUserId: reservation.userId,
+          metadata: {
+            paymentId: created.id,
+            reservationId,
+            amount: fee.amount,
+            ratePerHour: fee.ratePerHour,
+            durationMinutes: fee.durationMinutes,
+            role: fee.role,
+          },
+        },
+        tx,
+      );
+
+      await this.outbox.record(tx, 'PAYMENT_CREATED', created.id, {
+        paymentId: created.id,
+        reservationId,
         userId: reservation.userId,
         amount: fee.amount,
         currency: fee.currency,
-        status: 'PENDING',
-      },
-    });
+        status: created.status,
+        timestamp: new Date().toISOString(),
+      });
 
-    await this.audit.log({
-      action: 'PAYMENT_CREATED',
-      authUserId: reservation.userId,
-      metadata: {
-        paymentId: payment.id,
-        reservationId,
-        amount: fee.amount,
-        ratePerHour: fee.ratePerHour,
-        durationMinutes: fee.durationMinutes,
-        role: fee.role,
-      },
+      return created;
     });
 
     this.logger.log(
@@ -139,6 +158,42 @@ export class PaymentsService {
     const payment = await this.prisma.payment.findUnique({ where: { id } });
     if (!payment) throw new NotFoundException('Payment not found');
     return payment;
+  }
+
+  async getStats() {
+    const [total, completed, pending, failed, completedSum, recent] =
+      await Promise.all([
+        this.prisma.payment.count(),
+        this.prisma.payment.count({ where: { status: 'COMPLETED' } }),
+        this.prisma.payment.count({ where: { status: 'PENDING' } }),
+        this.prisma.payment.count({ where: { status: 'FAILED' } }),
+        this.prisma.payment.aggregate({
+          _sum: { amount: true },
+          where: { status: 'COMPLETED' },
+        }),
+        this.prisma.payment.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          select: {
+            id: true,
+            reservationId: true,
+            userId: true,
+            amount: true,
+            currency: true,
+            status: true,
+            createdAt: true,
+          },
+        }),
+      ]);
+
+    return {
+      total,
+      completed,
+      pending,
+      failed,
+      totalAmountCompleted: completedSum._sum.amount ?? 0,
+      recent,
+    };
   }
 
   async findByReservationId(reservationId: string) {
@@ -178,15 +233,31 @@ export class PaymentsService {
     const baseUrl = corsOrigins.split(',')[0].trim();
 
     if (amount === 0) {
-      await this.prisma.payment.update({
-        where: { id: paymentId },
-        data: { status: 'COMPLETED' },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payment.update({
+          where: { id: paymentId },
+          data: { status: 'COMPLETED' },
+        });
+
+        await this.audit.log(
+          {
+            action: 'PAYMENT_COMPLETED_FREE',
+            authUserId: userId,
+            metadata: { paymentId, reservationId: payment.reservationId, amount: 0 },
+          },
+          tx,
+        );
+
+        await this.outbox.record(tx, 'PAYMENT_COMPLETED', paymentId, {
+          paymentId,
+          reservationId: payment.reservationId,
+          userId,
+          amount: 0,
+          free: true,
+          timestamp: new Date().toISOString(),
+        });
       });
-      await this.audit.log({
-        action: 'PAYMENT_COMPLETED_FREE',
-        authUserId: userId,
-        metadata: { paymentId, reservationId: payment.reservationId, amount: 0 },
-      });
+
       return {
         url: `${baseUrl}/payment/success?payment_id=${paymentId}`,
         sessionId: '',

@@ -13,9 +13,11 @@ import { MetricsMiddleware } from './middlewares/metrics.middleware';
 import { AuditModule } from './audit/audit.module';
 import { AppRedisModule } from './redis/redis.module';
 import { KafkaModule } from './kafka/kafka.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ParkingModule,
     HealthModule,
     MetricsModule,

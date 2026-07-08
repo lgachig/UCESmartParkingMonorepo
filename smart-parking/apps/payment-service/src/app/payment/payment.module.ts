@@ -13,9 +13,10 @@ import {
 import { StripeModule } from '../stripe/stripe.module';
 import { RabbitmqConsumerService } from '../rabbitmq/rabbitmq-consumer.service';
 import { ReceiptService } from './receipt.service';
+import { OutboxModule } from '../outbox/outbox.module';
 
 @Module({
-  imports: [PrismaModule, AuditModule, AuthModule, ClientsModule, StripeModule],
+  imports: [PrismaModule, AuditModule, AuthModule, ClientsModule, StripeModule, OutboxModule],
   controllers: [
     InternalPaymentsController,
     PaymentsController,

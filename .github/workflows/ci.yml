@@ -27,6 +27,9 @@ on:
         value: ${{ jobs.changes.outputs.audit }}
       infra:
         value: ${{ jobs.changes.outputs.infra }}
+      ai:
+        value: ${{ jobs.changes.outputs.ai }}
+
   push:
     branches: ['feature/**']
   pull_request:
@@ -51,6 +54,7 @@ jobs:
       notification: ${{ steps.filter.outputs.notification }}
       audit: ${{ steps.filter.outputs.audit }}
       infra: ${{ steps.filter.outputs.infra }}
+      ai: ${{ steps.filter.outputs.ai }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -68,6 +72,7 @@ jobs:
             realtime: 'smart-parking/apps/realtime-service/**'
             notification: 'smart-parking/apps/notification-service/**'
             audit: 'smart-parking/apps/audit-service/**'
+            ai: 'smart-parking/apps/ai-service/**'
             infra:
               - 'infra/**'
               - '.github/workflows/**'

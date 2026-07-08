@@ -18,6 +18,27 @@ export interface Reservation {
 }
 
 export const reservationService = {
+  async getRecent(params?: { limit?: number; startDate?: string; endDate?: string }): Promise<Reservation[]> {
+    const search = new URLSearchParams();
+    if (params?.limit) search.append('limit', String(params.limit));
+    if (params?.startDate) search.append('startDate', params.startDate);
+    if (params?.endDate) search.append('endDate', params.endDate);
+    const { data } = await reservationApi.get<Reservation[]>(`/reservations/recent?${search.toString()}`);
+    return data;
+  },
+
+  async getStatistics(): Promise<{
+    total_reservations: number;
+    active_reservations: number;
+    completed_reservations: number;
+    cancelled_reservations: number;
+    expired_reservations: number;
+    average_duration: number;
+  }> {
+    const { data } = await reservationApi.get('/reservations/statistics');
+    return data;
+  },
+
   async getMyReservations(): Promise<Reservation[]> {
     const { data } = await reservationApi.get<Reservation[]>('/reservations/my-reservations');
     return data;

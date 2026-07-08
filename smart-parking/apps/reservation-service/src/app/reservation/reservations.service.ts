@@ -9,6 +9,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { KafkaService } from '../kafka/kafka.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { AppRedisService } from '../redis/redis.service';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
@@ -24,10 +25,11 @@ export class ReservationsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly kafka: KafkaService,
+    private readonly outbox: OutboxService,
     private readonly redis: AppRedisService,
     private readonly configService: ConfigService,
     private readonly httpService: HttpService,
-  ) {}
+  ) { }
 
   private get parkingUrl() {
     return this.configService.get<string>('PARKING_SERVICE_URL');
@@ -100,6 +102,14 @@ export class ReservationsService {
     }
   }
 
+  /**
+   * NOTA ACID: la llamada HTTP a parking-service (reserve/occupy/release) NO puede
+   * vivir dentro de la transacción Postgres (es otra base de datos/servicio), así que
+   * se hace ANTES de abrir la transacción local. Dentro de la transacción sólo entran
+   * operaciones atómicas de este servicio: reservation + audit_log + outbox_events.
+   * Si algo dentro de la transacción falla, Postgres revierte todo (atomicidad real
+   * para los datos que sí son propiedad de este servicio).
+   */
   async create(userId: string, dto: CreateReservationDto) {
     const existing = await this.prisma.reservation.findFirst({
       where: { userId, status: { in: ['PENDING', 'ACTIVE'] } },
@@ -116,42 +126,52 @@ export class ReservationsService {
 
     try {
       await this.verifySlotAvailable(dto.slotId);
-
       await this.reserveSlotInParking(dto.slotId);
 
       const expiresAt = new Date(Date.now() + this.expiryMinutes * 60 * 1000);
-      const reservation = await this.prisma.reservation.create({
-        data: {
+
+      const reservation = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.reservation.create({
+          data: {
+            userId,
+            vehicleId: dto.vehicleId,
+            slotId: dto.slotId,
+            reservationCode: this.generateCode(),
+            status: 'PENDING',
+            expiresAt,
+          },
+        });
+
+        await this.audit.log(
+          {
+            action: 'RESERVATION_CREATED',
+            authUserId: userId,
+            reservationId: created.id,
+            metadata: { slotId: dto.slotId, vehicleId: dto.vehicleId, expiresAt },
+          },
+          tx,
+        );
+
+        await this.outbox.record(tx, 'RESERVATION_CREATED', created.id, {
+          id: created.id,
           userId,
-          vehicleId: dto.vehicleId,
           slotId: dto.slotId,
-          reservationCode: this.generateCode(),
-          status: 'PENDING',
+          vehicleId: dto.vehicleId,
+          reservationCode: created.reservationCode,
+          status: created.status,
           expiresAt,
-        },
-      });
+          timestamp: new Date().toISOString(),
+        });
 
-      await this.audit.log({
-        action: 'RESERVATION_CREATED',
-        authUserId: userId,
-        reservationId: reservation.id,
-        metadata: { slotId: dto.slotId, vehicleId: dto.vehicleId, expiresAt },
-      });
-
-      await this.kafka.emit('reservation.created', {
-        id: reservation.id,
-        userId,
-        slotId: dto.slotId,
-        vehicleId: dto.vehicleId,
-        reservationCode: reservation.reservationCode,
-        status: reservation.status,
-        expiresAt,
-        timestamp: new Date().toISOString(),
+        return created;
       });
 
       return reservation;
     } catch (err) {
       await this.redis.releaseLock(lockKey);
+      // compensación: si ya se había reservado el slot en parking-service y la
+      // transacción local falló, se libera para no dejar el slot huérfano.
+      await this.releaseSlotInParking(dto.slotId);
       throw err;
     }
   }
@@ -179,26 +199,36 @@ export class ReservationsService {
       throw new BadRequestException(`Cannot cancel reservation with status ${reservation.status}`);
     }
 
-    const updated = await this.prisma.reservation.update({
-      where: { id },
-      data: { status: 'CANCELLED', cancelledAt: new Date() },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.reservation.updateMany({
+        where: { id, status: reservation.status },
+        data: { status: 'CANCELLED', cancelledAt: new Date() },
+      });
+
+      // Aislamiento: si otra transacción concurrente ya cambió el status, count=0
+      if (result.count === 0) {
+        throw new ConflictException('Reservation status changed concurrently, retry');
+      }
+
+      const fresh = await tx.reservation.findUniqueOrThrow({ where: { id } });
+
+      await this.audit.log(
+        { action: 'RESERVATION_CANCELLED', authUserId: userId, reservationId: id },
+        tx,
+      );
+
+      await this.outbox.record(tx, 'RESERVATION_CANCELLED', id, {
+        id,
+        userId,
+        slotId: reservation.slotId,
+        timestamp: new Date().toISOString(),
+      });
+
+      return fresh;
     });
 
     await this.releaseSlotInParking(reservation.slotId);
     await this.redis.releaseLock(`lock:slot:${reservation.slotId}`);
-
-    await this.audit.log({
-      action: 'RESERVATION_CANCELLED',
-      authUserId: userId,
-      reservationId: id,
-    });
-
-    await this.kafka.emit('reservation.cancelled', {
-      id,
-      userId,
-      slotId: reservation.slotId,
-      timestamp: new Date().toISOString(),
-    });
 
     return updated;
   }
@@ -210,33 +240,45 @@ export class ReservationsService {
       throw new BadRequestException(`Cannot cancel reservation with status ${reservation.status}`);
     }
 
-    const updated = await this.prisma.reservation.update({
-      where: { id },
-      data: { status: 'CANCELLED', cancelledAt: new Date() },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.reservation.updateMany({
+        where: { id, status: reservation.status },
+        data: { status: 'CANCELLED', cancelledAt: new Date() },
+      });
+
+      if (result.count === 0) {
+        throw new ConflictException('Reservation status changed concurrently, retry');
+      }
+
+      const fresh = await tx.reservation.findUniqueOrThrow({ where: { id } });
+
+      await this.audit.log(
+        {
+          action: 'RESERVATION_ADMIN_CANCELLED',
+          authUserId: adminUserId,
+          reservationId: id,
+          metadata: {
+            ownerId: reservation.userId,
+            slotId: reservation.slotId,
+            previousStatus: reservation.status,
+          },
+        },
+        tx,
+      );
+
+      await this.outbox.record(tx, 'RESERVATION_CANCELLED', id, {
+        id,
+        userId: reservation.userId,
+        slotId: reservation.slotId,
+        cancelledBy: adminUserId,
+        timestamp: new Date().toISOString(),
+      });
+
+      return fresh;
     });
 
     await this.releaseSlotInParking(reservation.slotId);
-
     await this.redis.releaseLock(`lock:slot:${reservation.slotId}`);
-
-    await this.audit.log({
-      action: 'RESERVATION_ADMIN_CANCELLED',
-      authUserId: adminUserId,
-      reservationId: id,
-      metadata: {
-        ownerId: reservation.userId,
-        slotId: reservation.slotId,
-        previousStatus: reservation.status,
-      },
-    });
-
-    await this.kafka.emit('reservation.cancelled', {
-      id,
-      userId: reservation.userId,
-      slotId: reservation.slotId,
-      cancelledBy: adminUserId,
-      timestamp: new Date().toISOString(),
-    });
 
     return updated;
   }
@@ -256,24 +298,37 @@ export class ReservationsService {
 
     await this.occupySlotInParking(reservation.slotId);
 
-    const updated = await this.prisma.reservation.update({
-      where: { id },
-      data: { status: 'ACTIVE', checkInAt: new Date() },
-    });
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.reservation.updateMany({
+        where: { id, status: 'PENDING' },
+        data: { status: 'ACTIVE', checkInAt: new Date() },
+      });
 
-    await this.audit.log({
-      action: 'RESERVATION_CHECKIN',
-      authUserId: userId,
-      reservationId: id,
-      metadata: { checkInAt: updated.checkInAt },
-    });
+      if (result.count === 0) {
+        throw new ConflictException('Reservation status changed concurrently, retry');
+      }
 
-    await this.kafka.emit('reservation.checkin', {
-      id,
-      userId,
-      slotId: reservation.slotId,
-      checkInAt: updated.checkInAt,
-      timestamp: new Date().toISOString(),
+      const fresh = await tx.reservation.findUniqueOrThrow({ where: { id } });
+
+      await this.audit.log(
+        {
+          action: 'RESERVATION_CHECKIN',
+          authUserId: userId,
+          reservationId: id,
+          metadata: { checkInAt: fresh.checkInAt },
+        },
+        tx,
+      );
+
+      await this.outbox.record(tx, 'RESERVATION_CHECKIN', id, {
+        id,
+        userId,
+        slotId: reservation.slotId,
+        checkInAt: fresh.checkInAt,
+        timestamp: new Date().toISOString(),
+      });
+
+      return fresh;
     });
 
     return updated;
@@ -293,33 +348,62 @@ export class ReservationsService {
     const checkInAt = reservation.checkInAt!;
     const durationMinutes = Math.ceil((checkOutAt.getTime() - checkInAt.getTime()) / 60000);
 
-    const updated = await this.prisma.reservation.update({
-      where: { id },
-      data: { status: 'COMPLETED', checkOutAt, durationMinutes },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.reservation.updateMany({
+        where: { id, status: 'ACTIVE' },
+        data: { status: 'COMPLETED', checkOutAt, durationMinutes },
+      });
+
+      if (result.count === 0) {
+        throw new ConflictException('Reservation status changed concurrently, retry');
+      }
+
+      const fresh = await tx.reservation.findUniqueOrThrow({ where: { id } });
+
+      await this.audit.log(
+        {
+          action: 'RESERVATION_CHECKOUT',
+          authUserId: userId,
+          reservationId: id,
+          metadata: { checkOutAt, durationMinutes },
+        },
+        tx,
+      );
+
+      await this.outbox.record(tx, 'RESERVATION_CHECKOUT', id, {
+        id,
+        userId,
+        slotId: reservation.slotId,
+        vehicleId: reservation.vehicleId,
+        checkInAt,
+        checkOutAt,
+        durationMinutes,
+        timestamp: new Date().toISOString(),
+      });
+
+      return fresh;
     });
 
     await this.releaseSlotInParking(reservation.slotId);
     await this.redis.releaseLock(`lock:slot:${reservation.slotId}`);
 
-    await this.audit.log({
-      action: 'RESERVATION_CHECKOUT',
-      authUserId: userId,
-      reservationId: id,
-      metadata: { checkOutAt, durationMinutes },
-    });
-
-    await this.kafka.emit('reservation.checkout', {
-      id,
-      userId,
-      slotId: reservation.slotId,
-      vehicleId: reservation.vehicleId,
-      checkInAt,
-      checkOutAt,
-      durationMinutes,
-      timestamp: new Date().toISOString(),
-    });
-
     return updated;
+  }
+
+  async findRecent(limit = 100, startDate?: string, endDate?: string) {
+    const where: Record<string, unknown> = {};
+    if (startDate || endDate) {
+      where.createdAt = {
+        ...(startDate ? { gte: new Date(startDate) } : {}),
+        ...(endDate ? { lte: new Date(`${endDate}T23:59:59.999Z`) } : {}),
+      };
+    }
+
+    return this.prisma.reservation.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 500),
+    });
   }
 
   async findByStatus(status: string) {
@@ -395,28 +479,39 @@ export class ReservationsService {
     });
 
     for (const reservation of expired) {
-      await this.prisma.reservation.update({
-        where: { id: reservation.id },
-        data: { status: 'EXPIRED' },
-      });
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          const result = await tx.reservation.updateMany({
+            where: { id: reservation.id, status: 'PENDING' },
+            data: { status: 'EXPIRED' },
+          });
 
-      await this.releaseSlotInParking(reservation.slotId);
-      await this.redis.releaseLock(`lock:slot:${reservation.slotId}`);
+          if (result.count === 0) return; // ya la tomó otro ciclo/proceso
 
-      await this.audit.log({
-        action: 'RESERVATION_EXPIRED',
-        reservationId: reservation.id,
-        metadata: { slotId: reservation.slotId, userId: reservation.userId },
-      });
+          await this.audit.log(
+            {
+              action: 'RESERVATION_EXPIRED',
+              reservationId: reservation.id,
+              metadata: { slotId: reservation.slotId, userId: reservation.userId },
+            },
+            tx,
+          );
 
-      await this.kafka.emit('reservation.expired', {
-        id: reservation.id,
-        userId: reservation.userId,
-        slotId: reservation.slotId,
-        timestamp: new Date().toISOString(),
-      });
+          await this.outbox.record(tx, 'RESERVATION_EXPIRED', reservation.id, {
+            id: reservation.id,
+            userId: reservation.userId,
+            slotId: reservation.slotId,
+            timestamp: new Date().toISOString(),
+          });
+        });
 
-      this.logger.log(`Reservation ${reservation.id} expired and slot ${reservation.slotId} released`);
+        await this.releaseSlotInParking(reservation.slotId);
+        await this.redis.releaseLock(`lock:slot:${reservation.slotId}`);
+
+        this.logger.log(`Reservation ${reservation.id} expired and slot ${reservation.slotId} released`);
+      } catch (err) {
+        this.logger.error(`Failed to expire reservation ${reservation.id}`, err as any);
+      }
     }
 
     if (expired.length > 0) {
