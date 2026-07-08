@@ -1,6 +1,15 @@
 #!/bin/bash
 set -euxo pipefail
 
+# ── Swap File (prevents OOM on t3.micro) ──────────────────────────────
+if ! swapon --show 2>/dev/null | grep -q /swapfile; then
+  fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo "/swapfile swap swap defaults 0 0" >> /etc/fstab
+fi
+
 dnf update -y
 dnf install -y docker
 systemctl enable docker && systemctl start docker
@@ -83,6 +92,12 @@ services:
     image: rabbitmq:3-management
     restart: unless-stopped
     ports: ["5672:5672", "15672:15672"]
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports: ["27017:27017"]
+    volumes:
+      - mongo_data:/data/db
   auth-service:
     image: ${dockerhub_user}/${docker_image}:${docker_image_tag}
     container_name: smartparking-auth-service
@@ -93,6 +108,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  mongo_data:
 COMPOSE
 local_ip=$(hostname -I | awk '{print $1}')
 sed -i "s/_LOCAL_IP_/$local_ip/g" /opt/smartparking/docker-compose.yml
