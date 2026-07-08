@@ -10,12 +10,14 @@ import { StatisticsController } from './statistics.controller';
 import { InternalSlotsController } from './internal-slots.controller';
 import { AppRedisModule } from '../redis/redis.module';
 import { AuthModule } from '../auth/auth.module';
+import { OutboxModule } from '../outbox/outbox.module';
 
 @Module({
   imports: [
     PrismaModule,
     AppRedisModule,
     AuthModule,
+    OutboxModule,
   ],
   controllers: [
     FacultiesController,

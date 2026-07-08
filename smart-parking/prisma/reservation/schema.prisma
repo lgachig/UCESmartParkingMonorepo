@@ -38,6 +38,28 @@ model Reservation {
   @@map("reservations")
 }
 
+enum OutboxStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+model OutboxEvent {
+  id            String       @id @default(uuid())
+  eventType     String       @map("event_type")
+  aggregateId   String       @map("aggregate_id")
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  processedAt   DateTime?    @map("processed_at")
+  retryCount    Int          @default(0) @map("retry_count")
+  errorMessage  String?      @map("error_message")
+
+  @@index([status])
+  @@index([aggregateId])
+  @@map("outbox_events")
+}
+
 model AuditLog {
   id             String   @id @default(uuid())
   action         String

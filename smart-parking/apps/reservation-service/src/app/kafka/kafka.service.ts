@@ -46,6 +46,21 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Igual que emit() pero SÍ propaga el error. Lo usa el Outbox processor
+   * para poder marcar el evento como FAILED y reintentarlo.
+   */
+  async emitStrict(topic: string, message: any) {
+    if (!this.isConnected) {
+      throw new Error(`Kafka producer not connected. Cannot send to ${topic}`);
+    }
+    await this.producer.send({
+      topic,
+      messages: [{ value: JSON.stringify(message) }],
+    });
+    this.logger.log(`Published Kafka event to topic: ${topic}`);
+  }
+
   async ping(): Promise<boolean> {
     try {
       const admin = this.kafka.admin();

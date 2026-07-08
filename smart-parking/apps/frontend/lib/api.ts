@@ -113,3 +113,4 @@ export const parkingApi = createApi(env.parkingApiUrl, true);
 export const reservationApi = createApi(env.reservationApiUrl, true);
 export const paymentApi = createApi(env.paymentApiUrl, true);
 export const aiApi = createApi(env.aiApiUrl, true);
+export const systemApi = createApi(env.authApiUrl, true);

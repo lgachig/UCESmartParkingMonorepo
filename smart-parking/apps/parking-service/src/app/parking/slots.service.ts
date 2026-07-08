@@ -3,6 +3,7 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { CreateSlotDto, UpdateSlotDto, SlotStatus } from './dto/slot.dto';
 import { AuditService } from '../audit/audit.service';
 import { KafkaService } from '../kafka/kafka.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { AppRedisService } from '../redis/redis.service';
 import { ZonesService } from './zones.service';
 import { FacultiesService } from './faculties.service';
@@ -13,6 +14,7 @@ export class SlotsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly kafka: KafkaService,
+    private readonly outbox: OutboxService,
     private readonly redis: AppRedisService,
     private readonly zonesService: ZonesService,
     private readonly facultiesService: FacultiesService,
@@ -169,9 +171,8 @@ export class SlotsService {
   async changeStatus(id: string, fromStatus: SlotStatus | SlotStatus[], toStatus: SlotStatus, eventName: string, authUserId?: string) {
     const slot = await this.findOne(id);
 
-    const allowed = Array.isArray(fromStatus)
-      ? fromStatus.includes(slot.status)
-      : slot.status === fromStatus;
+    const allowedFromStatuses = Array.isArray(fromStatus) ? fromStatus : [fromStatus];
+    const allowed = allowedFromStatuses.includes(slot.status);
 
     if (!allowed) {
       throw new BadRequestException(
@@ -181,28 +182,50 @@ export class SlotsService {
       );
     }
 
-    const updated = await this.prisma.slot.update({
-      where: { id },
-      data: { status: toStatus },
-      include: { zone: true, faculty: true },
+    const outboxEventType = eventName.toUpperCase().replace(/\./g, '_');
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // Aislamiento real: el update sólo aplica si el status sigue siendo uno de
+      // los permitidos en el momento exacto del UPDATE (no en el momento del SELECT
+      // de arriba), cerrando la condición de carrera entre lectura y escritura.
+      const result = await tx.slot.updateMany({
+        where: { id, status: { in: allowedFromStatuses } },
+        data: { status: toStatus },
+      });
+
+      if (result.count === 0) {
+        throw new ConflictException(
+          `Slot ${id} status changed concurrently, expected one of ${allowedFromStatuses.join(', ')}`,
+        );
+      }
+
+      const fresh = await tx.slot.findUniqueOrThrow({
+        where: { id },
+        include: { zone: true, faculty: true },
+      });
+
+      await this.audit.log(
+        {
+          action: `SLOT_${toStatus}`,
+          authUserId,
+          slotId: id,
+          metadata: { previousStatus: slot.status, currentStatus: toStatus },
+        },
+        tx,
+      );
+
+      await this.outbox.record(tx, outboxEventType, id, {
+        id: fresh.id,
+        number: fresh.number,
+        status: fresh.status,
+        previousStatus: slot.status,
+        timestamp: new Date().toISOString(),
+      });
+
+      return fresh;
     });
 
     await this.invalidateCache();
-
-    await this.audit.log({
-      action: `SLOT_${toStatus}`,
-      authUserId,
-      slotId: id,
-      metadata: { previousStatus: slot.status, currentStatus: toStatus },
-    });
-
-    await this.kafka.emit(eventName, {
-      id: updated.id,
-      number: updated.number,
-      status: updated.status,
-      previousStatus: slot.status,
-      timestamp: new Date().toISOString(),
-    });
 
     return updated;
   }
