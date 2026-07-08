@@ -19,6 +19,7 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
   applyCors(app, configService);
   app.use(configureHelmet());
+  app.enableCors()
 
   const config = new DocumentBuilder()
     .setTitle('UCE Smart Parking — API Gateway')
