@@ -215,40 +215,58 @@ jobs:
       - name: Get IPs (Account A — prod)
         id: ips_prod_a
         run: |
+          set -euo pipefail
+
+          echo "── Cuenta AWS (debe ser Account A / prod, NO Lab B) ──"
+          aws sts get-caller-identity
+
+          echo ""
+          echo "── Instancias running con tag Environment=prod ──"
+          aws ec2 describe-instances \
+            --filters "Name=tag:Environment,Values=prod" "Name=instance-state-name,Values=running" \
+            --query "Reservations[].Instances[].{Service:Tags[?Key==\`Service\`].Value|[0],Name:Tags[?Key==\`Name\`].Value|[0],PrivateIP:PrivateIpAddress,State:State.Name}" \
+            --output table || true
+
           get_ip() {
             local svc="$1"
             local ip
+            echo "→ Buscando Service=${svc}..." >&2
             ip=$(aws ec2 describe-instances \
               --filters "Name=tag:Service,Values=${svc}" "Name=tag:Environment,Values=prod" \
                         "Name=instance-state-name,Values=running" \
               --query "Reservations[0].Instances[0].PrivateIpAddress" --output text 2>/dev/null)
             if [ -z "$ip" ] || [ "$ip" = "None" ] || [ "$ip" = "null" ]; then
-              echo "::error::No EC2 running for Service=${svc} (prod)"; return 1
+              echo "::error::No hay EC2 running con tags Service=${svc} + Environment=prod. Si falta notification/audit: cd infra/terraform/environments/prod && terraform apply" >&2
+              return 1
             fi
+            echo "  ✔ ${svc}=${ip}" >&2
             echo "$ip"
           }
 
           get_ips_multi() {
             local svc="$1"
             local ips
+            echo "→ Buscando ASG Service=${svc}..." >&2
             ips=$(aws ec2 describe-instances \
               --filters "Name=tag:Service,Values=${svc}" "Name=tag:Environment,Values=prod" \
                         "Name=instance-state-name,Values=running" \
               --query "Reservations[].Instances[].PrivateIpAddress" --output text 2>/dev/null | tr '\t' ',' | tr ' ' ',' | sed 's/,,*/,/g;s/^,//;s/,$//')
             if [ -z "$ips" ]; then
-              echo "::error::No EC2 running for Service=${svc} (prod ASG)"; return 1
+              echo "::error::No hay instancias ASG running con Service=${svc} + Environment=prod (gateway/frontend). Revisa el ASG en la consola AWS." >&2
+              return 1
             fi
+            echo "  ✔ ${svc}=${ips}" >&2
             echo "$ips"
           }
 
-          AUTH_IP=$(get_ip "auth")             || exit 1
-          USER_IP=$(get_ip "user")             || exit 1
-          VEHICLE_IP=$(get_ip "vehicle")       || exit 1
-          PARKING_IP=$(get_ip "parking")       || exit 1
-          NOTIFICATION_IP=$(get_ip "notification") || exit 1
-          AUDIT_IP=$(get_ip "audit")               || exit 1
-          GATEWAY_IPS=$(get_ips_multi "gateway")   || exit 1
-          FRONTEND_IPS=$(get_ips_multi "frontend") || exit 1
+          AUTH_IP=$(get_ip "auth")
+          USER_IP=$(get_ip "user")
+          VEHICLE_IP=$(get_ip "vehicle")
+          PARKING_IP=$(get_ip "parking")
+          NOTIFICATION_IP=$(get_ip "notification")
+          AUDIT_IP=$(get_ip "audit")
+          GATEWAY_IPS=$(get_ips_multi "gateway")
+          FRONTEND_IPS=$(get_ips_multi "frontend")
 
           echo "auth_ip=$AUTH_IP"           >> $GITHUB_OUTPUT
           echo "user_ip=$USER_IP"           >> $GITHUB_OUTPUT
