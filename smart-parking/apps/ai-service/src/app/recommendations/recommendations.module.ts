@@ -18,5 +18,6 @@ import { SearchClientModule } from '../search-client/search-client.module';
     ],
     controllers: [RecommendationsController],
     providers: [RecommendationsService],
+    exports: [RecommendationsService],
 })
 export class RecommendationsModule { }
