@@ -22,11 +22,28 @@ describe('ReservationsService', () => {
       count: jest.fn(),
       aggregate: jest.fn(),
     },
-    auditLog: { create: jest.fn() },
+    auditLog: {
+      create: jest.fn(),
+    },
+    outboxEvent: {
+      create: jest.fn(),
+      update: jest.fn(),
+      findMany: jest.fn(),
+    },
+    $transaction: jest.fn(async (callback) => {
+      return callback(prismaMock);
+    }),
   };
   const auditMock = { log: jest.fn() };
-  const kafkaMock = { emit: jest.fn() };
-  const outboxMock = { record: jest.fn() };
+  const kafkaMock = {
+    emit: jest.fn(),
+    publish: jest.fn(),
+  };
+  const outboxMock = {
+    record: jest.fn(),
+    create: jest.fn(),
+    createEvent: jest.fn(),
+  };
   const redisMock = {
     acquireLock: jest.fn(),
     releaseLock: jest.fn(),
