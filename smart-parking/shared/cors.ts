@@ -13,6 +13,7 @@ const DEFAULT_CORS_ORIGINS = [
   'http://localhost:3007',
   'http://localhost:8081',
   'http://localhost:19006',
+  'http://localhost:5173',
 
 ];
 
