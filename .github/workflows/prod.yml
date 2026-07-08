@@ -469,10 +469,44 @@ jobs:
             done
             echo "✅ MongoDB listo en auth"
 
+  ensure-kafka:
+    name: Ensure Kafka/RabbitMQ on auth
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    needs: [discover-ips]
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_EC2_SSH_KEY }}" > ~/.ssh/prod.pem
+          chmod 400 ~/.ssh/prod.pem
+          ssh-keyscan -H ${{ secrets.PROD_BASTION_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Start Kafka/RabbitMQ on auth EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ needs.discover-ips.outputs.auth_ip }}
+          username: ec2-user
+          key: ${{ secrets.PROD_EC2_SSH_KEY }}
+          port: 22
+          timeout: 120s
+          command_timeout: 10m
+          script_stop: true
+          proxy_host: ${{ secrets.PROD_BASTION_HOST }}
+          proxy_username: ec2-user
+          proxy_key: ${{ secrets.PROD_EC2_SSH_KEY }}
+          proxy_port: 22
+          script: |
+            set -euo pipefail
+            COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
+            docker-compose -f "$COMPOSE_FILE" up -d kafka rabbitmq
+            echo "✅ Kafka/RabbitMQ listos en auth"
+
   deploy:
     name: Deploy ${{ matrix.name }}
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
-    needs: [get-changes, discover-ips, ensure-postgres, ensure-mongo, ensure-parking-schema]
+    needs: [get-changes, discover-ips, ensure-postgres, ensure-mongo, ensure-parking-schema, ensure-kafka]
     runs-on: ubuntu-latest
     environment: prod
     env:
@@ -744,6 +778,7 @@ jobs:
               patch_env AI_SERVICE_PORT     "3009"
               patch_env AI_DATABASE_URL     "mongodb://${AUTH_PRIVATE_IP}:27017/aidb"
               patch_env PARKING_SERVICE_URL "http://${PARKING_PRIVATE_IP}:3004"
+              patch_env SEARCH_SERVICE_URL "http://<host>:<puerto>"
               patch_env KAFKA_BROKERS       "${AUTH_PRIVATE_IP}:9092"
             fi
 
