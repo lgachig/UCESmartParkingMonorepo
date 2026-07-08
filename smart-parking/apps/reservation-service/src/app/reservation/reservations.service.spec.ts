@@ -22,28 +22,11 @@ describe('ReservationsService', () => {
       count: jest.fn(),
       aggregate: jest.fn(),
     },
-    auditLog: {
-      create: jest.fn(),
-    },
-    outboxEvent: {
-      create: jest.fn(),
-      update: jest.fn(),
-      findMany: jest.fn(),
-    },
-    $transaction: jest.fn(async (callback) => {
-      return callback(prismaMock);
-    }),
+    auditLog: { create: jest.fn() },
   };
   const auditMock = { log: jest.fn() };
-  const kafkaMock = {
-    emit: jest.fn(),
-    publish: jest.fn(),
-  };
-  const outboxMock = {
-    record: jest.fn(),
-    create: jest.fn(),
-    createEvent: jest.fn(),
-  };
+  const kafkaMock = { emit: jest.fn() };
+  const outboxMock = { record: jest.fn() };
   const redisMock = {
     acquireLock: jest.fn(),
     releaseLock: jest.fn(),
@@ -104,7 +87,7 @@ describe('ReservationsService', () => {
     await expect(service.cancel('r1', 'u1')).rejects.toThrow(BadRequestException);
   });
 
-  it('should emit reservation.created Kafka event on successful creation', async () => {
+  it('should record a RESERVATION_CREATED outbox event on successful creation', async () => {
     prismaMock.reservation.findFirst.mockResolvedValue(null);
     redisMock.acquireLock.mockResolvedValue(true);
     const { of } = await import('rxjs');
@@ -115,6 +98,11 @@ describe('ReservationsService', () => {
       expiresAt: new Date(), slotId: 'slot-id', vehicleId: 'vehicle-id',
     });
     await service.create('user-id', { slotId: 'slot-id', vehicleId: 'vehicle-id' });
-    expect(kafkaMock.emit).toHaveBeenCalledWith('reservation.created', expect.any(Object));
+    expect(outboxMock.record).toHaveBeenCalledWith(
+      expect.anything(),
+      'RESERVATION_CREATED',
+      'r1',
+      expect.any(Object),
+    );
   });
 });
