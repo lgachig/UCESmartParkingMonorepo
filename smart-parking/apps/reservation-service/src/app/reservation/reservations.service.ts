@@ -27,7 +27,7 @@ export class ReservationsService {
     private readonly redis: AppRedisService,
     private readonly configService: ConfigService,
     private readonly httpService: HttpService,
-  ) {}
+  ) { }
 
   private get parkingUrl() {
     return this.configService.get<string>('PARKING_SERVICE_URL');
@@ -320,6 +320,22 @@ export class ReservationsService {
     });
 
     return updated;
+  }
+
+  async findRecent(limit = 100, startDate?: string, endDate?: string) {
+    const where: Record<string, unknown> = {};
+    if (startDate || endDate) {
+      where.createdAt = {
+        ...(startDate ? { gte: new Date(startDate) } : {}),
+        ...(endDate ? { lte: new Date(`${endDate}T23:59:59.999Z`) } : {}),
+      };
+    }
+
+    return this.prisma.reservation.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 500),
+    });
   }
 
   async findByStatus(status: string) {

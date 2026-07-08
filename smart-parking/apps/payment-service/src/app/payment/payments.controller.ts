@@ -21,6 +21,9 @@ import {
 import { PaymentsService } from './payments.service';
 import { CalculateFeeDto, CreatePaymentDto } from './dto/payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../auth/enums/role.enum';
 import { ServiceKeyGuard } from '../auth/guards/service-key.guard';
 import { StripeService } from '../stripe/stripe.service';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
@@ -109,6 +112,15 @@ export class PaymentsController {
   @Get(':id/receipt')
   getReceipt(@Param('id') id: string) {
     return this.receiptService.getReceiptByPaymentId(id);
+  }
+
+  @ApiOperation({ summary: 'Get payment statistics for admin dashboard (admin)' })
+  @ApiResponse({ status: 200, description: 'Aggregated payment statistics' })
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get('stats')
+  getStats() {
+    return this.paymentsService.getStats();
   }
 
   @ApiOperation({ summary: 'Get payment by ID' })

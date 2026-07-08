@@ -36,7 +36,7 @@ import { Role } from '../auth/enums/role.enum';
 @ApiTags('Users')
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   @ApiOperation({ summary: 'Create user profile (internal - auth-service only)' })
   @ApiBody({ type: CreateUserProfileDto })
@@ -88,6 +88,16 @@ export class UsersController {
   @Get('search')
   search(@Query() query: SearchUsersQueryDto) {
     return this.usersService.search(query.q, query.page, query.limit);
+  }
+
+  @ApiOperation({ summary: 'Get user statistics for admin dashboard (admin)' })
+  @ApiBearerAuth()
+  @ApiResponse({ status: 200, description: 'Aggregated user statistics' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get('stats')
+  getStats() {
+    return this.usersService.getStats();
   }
 
   @ApiOperation({ summary: 'List all active profiles (admin)' })

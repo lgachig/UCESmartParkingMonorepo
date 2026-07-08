@@ -141,6 +141,42 @@ export class PaymentsService {
     return payment;
   }
 
+  async getStats() {
+    const [total, completed, pending, failed, completedSum, recent] =
+      await Promise.all([
+        this.prisma.payment.count(),
+        this.prisma.payment.count({ where: { status: 'COMPLETED' } }),
+        this.prisma.payment.count({ where: { status: 'PENDING' } }),
+        this.prisma.payment.count({ where: { status: 'FAILED' } }),
+        this.prisma.payment.aggregate({
+          _sum: { amount: true },
+          where: { status: 'COMPLETED' },
+        }),
+        this.prisma.payment.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          select: {
+            id: true,
+            reservationId: true,
+            userId: true,
+            amount: true,
+            currency: true,
+            status: true,
+            createdAt: true,
+          },
+        }),
+      ]);
+
+    return {
+      total,
+      completed,
+      pending,
+      failed,
+      totalAmountCompleted: completedSum._sum.amount ?? 0,
+      recent,
+    };
+  }
+
   async findByReservationId(reservationId: string) {
     return this.prisma.payment.findMany({
       where: { reservationId },

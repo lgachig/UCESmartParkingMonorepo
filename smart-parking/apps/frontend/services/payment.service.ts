@@ -30,7 +30,30 @@ export interface PaymentRecord {
   fee?: { amount: number; currency: string; durationMinutes: number };
 }
 
+export interface PaymentStats {
+  total: number;
+  completed: number;
+  pending: number;
+  failed: number;
+  totalAmountCompleted: number;
+  recent: Array<{
+    id: string;
+    reservationId: string;
+    userId: string;
+    amount: number;
+    currency: string;
+    status: string;
+    createdAt: string;
+  }>;
+}
+
 export const paymentService = {
+  // --- ADMIN ---
+  async getStats(): Promise<PaymentStats> {
+    const { data } = await paymentApi.get<PaymentStats>('/payments/stats');
+    return data;
+  },
+
   async createFromReservation(reservationId: string): Promise<PaymentRecord> {
     const { data } = await paymentApi.post<PaymentRecord>('/payments/from-reservation', {
       reservationId,
