@@ -47,14 +47,12 @@ function lintEnvFile(filePath: string) {
     const value = valParts.join('=').trim().replace(/^['"]|['"]$/g, '');
     const cleanKey = key.trim();
 
-    // Check user service url ends with /api
     if (cleanKey.endsWith('USER_SERVICE_URL') || cleanKey === 'NEXT_PUBLIC_USER_API_URL') {
       if (!value.endsWith('/api')) {
         logError(filePath, lineNum, `${cleanKey} does not end with the mandatory '/api' prefix (value: '${value}')`);
       }
     }
 
-    // Check database URLs point to their expected database
     const expectedDbs: Record<string, string> = {
       'DATABASE_URL': 'smartparking',
       'USER_DATABASE_URL': 'userdb',
@@ -132,7 +130,7 @@ function lintComposeContent(filePath: string, content: string, startLineOffset: 
           'postgres', 'redis', 'kafka', 'rabbitmq', 'mongo', 'auth-service', 'user-service',
           'vehicle-service', 'parking-service', 'reservation-service',
           'frontend', 'gateway-service', 'payment-service', 'realtime-service',
-          'notification-service', 'audit-service', 'ai-service', 'app'
+          'notification-service', 'audit-service', 'ai-service', 'app', 'n8n'
         ];
         if (!validServices.includes(serviceName)) {
           logError(filePath, lineNum, `Unknown or invalid service name: '${serviceName}'`);
