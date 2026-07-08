@@ -11,6 +11,9 @@ const DEFAULT_CORS_ORIGINS = [
   'http://localhost:3005',
   'http://localhost:3006',
   'http://localhost:3007',
+  'http://localhost:8081',
+  'http://localhost:19006',
+
 ];
 
 function parseOriginList(value: string | undefined): string[] {
