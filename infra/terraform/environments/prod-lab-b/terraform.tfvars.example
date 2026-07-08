@@ -1,0 +1,17 @@
+key_name       = "LABCONTECTION_A"
+dockerhub_user = "lgachig"
+
+aws_region        = "us-east-1"
+environment       = "prod-lab-b"
+lab_a_environment = "prod"
+vpc_cidr          = "10.0.0.0/16"
+subnet_cidr       = "10.0.1.0/24"
+availability_zone = "us-east-1a"
+lab_a_vpc_cidr    = "172.31.0.0/16"
+
+# Credenciales de prod (Account A) — exportar antes de apply:
+#   export TF_VAR_lab_a_access_key="..."
+#   export TF_VAR_lab_a_secret_key="..."
+#   export TF_VAR_lab_a_session_token="..."
+#
+# Credenciales de Account B: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN

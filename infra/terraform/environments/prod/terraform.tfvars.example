@@ -4,12 +4,16 @@ key_name         = "LABCONTECTION_A"
 allowed_ssh_cidr = "0.0.0.0/0"
 dockerhub_user   = "lgachig"
 
-# ASG de gateway y frontend
 asg_min_size         = 1
 asg_max_size         = 2
 asg_desired_capacity = 1
 
-# Secretos (NO poner aquí — exportar en terminal o usar GitHub Environment "prod"):
-# export TF_VAR_jwt_secret="..."
-# export TF_VAR_jwt_refresh_secret="..."
-# export TF_VAR_internal_service_key="..."
+# Secretos JWT / INTERNAL_SERVICE_KEY: NO van en Terraform (igual que QA).
+# Configúralos en GitHub Environment "prod" → PROD_JWT_SECRET, PROD_JWT_REFRESH_SECRET,
+# PROD_INTERNAL_SERVICE_KEY. El workflow prod.yml los inyecta vía SSH en el deploy.
+
+# Tras apply de prod-lab-b, re-aplicar prod con:
+# lab_b_reservation_private_ip = "10.0.1.x"
+# lab_b_payment_private_ip     = "10.0.1.x"
+# lab_b_realtime_public_ip     = "x.x.x.x"
+# lab_b_ai_private_ip          = "10.0.1.x"

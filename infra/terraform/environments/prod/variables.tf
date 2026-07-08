@@ -51,20 +51,27 @@ variable "asg_desired_capacity" {
   default     = 1
 }
 
-variable "jwt_secret" {
+# ── prod-lab-b (Account B) — completar tras el apply de environments/prod-lab-b ──
+variable "lab_b_reservation_private_ip" {
   type        = string
-  description = "JWT signing secret (gateway/auth)"
-  sensitive   = true
+  description = "IP privada de reservation en prod-lab-b. Vacío en el primer apply de prod."
+  default     = ""
 }
 
-variable "jwt_refresh_secret" {
+variable "lab_b_payment_private_ip" {
   type        = string
-  description = "JWT refresh secret (gateway/auth)"
-  sensitive   = true
+  description = "IP privada de payment en prod-lab-b. Vacío en el primer apply de prod."
+  default     = ""
 }
 
-variable "internal_service_key" {
+variable "lab_b_realtime_public_ip" {
   type        = string
-  description = "Internal service-to-service auth key"
-  sensitive   = true
+  description = "Elastic IP de realtime en prod-lab-b (WebSocket público)."
+  default     = ""
+}
+
+variable "lab_b_ai_private_ip" {
+  type        = string
+  description = "IP privada de ai en prod-lab-b."
+  default     = ""
 }
