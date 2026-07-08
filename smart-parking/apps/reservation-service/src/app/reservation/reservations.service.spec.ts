@@ -7,6 +7,7 @@ import { KafkaService } from '../kafka/kafka.service';
 import { AppRedisService } from '../redis/redis.service';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
+import { OutboxService } from '../outbox/outbox.service';
 
 describe('ReservationsService', () => {
   let service: ReservationsService;
@@ -25,6 +26,15 @@ describe('ReservationsService', () => {
   };
   const auditMock = { log: jest.fn() };
   const kafkaMock = { emit: jest.fn() };
+  const outboxMock = {
+
+    createEvent: jest.fn(),
+
+    markAsProcessed: jest.fn(),
+
+    markAsFailed: jest.fn(),
+
+  };
   const redisMock = {
     acquireLock: jest.fn(),
     releaseLock: jest.fn(),
@@ -50,7 +60,8 @@ describe('ReservationsService', () => {
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuditService, useValue: auditMock },
         { provide: KafkaService, useValue: kafkaMock },
-        { provide: AppRedisService, useValue: redisMock },
+        { provide: OutboxService, useValue: outboxMock },
+        { provide: AppRedisService, useValue: redisMock }, ,
         { provide: ConfigService, useValue: configMock },
         { provide: HttpService, useValue: httpMock },
       ],

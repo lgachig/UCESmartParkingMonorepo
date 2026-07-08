@@ -26,6 +26,7 @@ export class ReservationsService {
     private readonly audit: AuditService,
     private readonly kafka: KafkaService,
     private readonly outbox: OutboxService,
+    private readonly outboxService: OutboxService,
     private readonly redis: AppRedisService,
     private readonly configService: ConfigService,
     private readonly httpService: HttpService,

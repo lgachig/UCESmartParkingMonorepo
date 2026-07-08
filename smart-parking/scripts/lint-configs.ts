@@ -139,7 +139,6 @@ function lintComposeContent(filePath: string, content: string, startLineOffset: 
       }
 
       if (currentService) {
-        // Properties/Sections inside service (usually indent 4)
         if (indent === 4 && trimmed.endsWith(':')) {
           const section = trimmed.slice(0, -1).trim();
           if (section === 'ports') {
@@ -201,7 +200,6 @@ function lintComposeContent(filePath: string, content: string, startLineOffset: 
     }
   }
 
-  // Validate volumes across all parsed services
   for (const s of services) {
     if (s.name === 'postgres') {
       const hasPostgresVol = s.volumes.some(v => v.includes('postgres_data:/var/lib/postgresql/data'));
@@ -267,7 +265,6 @@ function run() {
 
   console.log('🔍 Running strict configuration linter...');
 
-  // 1. Lint all .env files recursively
   const allFiles = getFiles(smartParkingDir);
   const envFiles = allFiles.filter(f => path.basename(f).startsWith('.env') || path.extname(f) === '.env');
   console.log(`Checking ${envFiles.length} env file(s)...`);
@@ -275,21 +272,18 @@ function run() {
     lintEnvFile(envFile);
   }
 
-  // 2. Lint root docker-compose
   const rootCompose = path.join(rootDir, 'docker-compose.yml');
   if (fs.existsSync(rootCompose)) {
     console.log('Checking root docker-compose.yml...');
     lintComposeContent(rootCompose, fs.readFileSync(rootCompose, 'utf-8'));
   }
 
-  // 3. Lint EC2 docker-compose
   const ec2Compose = path.join(rootDir, 'infra/ec2/docker-compose.yml');
   if (fs.existsSync(ec2Compose)) {
     console.log('Checking infra/ec2/docker-compose.yml...');
     lintComposeContent(ec2Compose, fs.readFileSync(ec2Compose, 'utf-8'));
   }
 
-  // 4. Lint Terraform templates
   const qaTemplate = path.join(rootDir, 'infra/terraform/environments/qa/templates/user-data.sh.tpl');
   if (fs.existsSync(qaTemplate)) {
     console.log('Checking QA user-data.sh.tpl...');
