@@ -386,21 +386,16 @@ jobs:
           timeout: 120s
           command_timeout: 10m
           script_stop: true
-          debug: true
           proxy_host: ${{ secrets.QA_BASTION_HOST }}
           proxy_username: ec2-user
           proxy_key: ${{ secrets.QA_EC2_SSH_KEY }}
           proxy_port: 22
           script: |
             set -euo pipefail
-            if [ "$(docker ps -aq -f name=^smartparking-mongo$)" ]; then
-              docker start smartparking-mongo
-            else
-              docker run -d --name smartparking-mongo --restart unless-stopped \
-                -p 27017:27017 -v smartparking_mongo_data:/data/db mongo:7
-            fi
+            COMPOSE_FILE="/opt/smartparking/docker-compose.yml"
+            docker-compose -f "$COMPOSE_FILE" up -d mongo
             for i in $(seq 1 15); do
-              docker exec smartparking-mongo mongosh --quiet --eval "db.adminCommand('ping')" &>/dev/null && break
+              docker-compose -f "$COMPOSE_FILE" exec -T mongo mongosh --quiet --eval "db.adminCommand('ping')" &>/dev/null && break
               [ "$i" -eq 15 ] && { echo "❌ MongoDB not ready"; exit 1; }
               sleep 2
             done
