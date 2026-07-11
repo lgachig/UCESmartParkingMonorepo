@@ -31,7 +31,7 @@ on:
         value: ${{ jobs.changes.outputs.ai }}
 
   push:
-    branches: ['feature/**']
+    branches: ['fs']
   pull_request:
 
 permissions:

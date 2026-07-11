@@ -2,10 +2,10 @@ name: PROD CI/CD
 
 on:
   push:
-    branches: [feature/**]
+    branches: [fea]
   pull_request:
     types: [closed]
-    branches: [feature/**]
+    branches: [fea]
   workflow_dispatch:
     inputs:
       force_deploy_all:
