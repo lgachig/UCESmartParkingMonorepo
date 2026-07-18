@@ -34,5 +34,29 @@
     "typescript-eslint": "^8.62.0",
     "vite": "^8.1.1",
     "wait-on": "^9.0.10"
+  },
+  "build": {
+    "appId": "com.uce.smartparking.desktop",
+    "productName": "UCE Smart Parking",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.js"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "mac": {
+      "target": "dmg"
+    }
   }
 }
