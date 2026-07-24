@@ -1,25 +1,61 @@
-node_modules
-**/node_modules
-dist
-**/dist
-.git
-.gitignore
-.nx/cache
-*.log
-npm-debug.log*
+# =====================================================================
+# Docker Ignore Configuration - Smart Parking Monorepo
+# =====================================================================
+
+# --- Dependencies & Build Outputs ---
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.nx/
+**/.nx/
+.next/
+**/.next/
+coverage/
+**/coverage/
+
+# --- Environment & Configuration Secrets ---
 .env
 .env.*
 !.env.example
-coverage
-**/.next
-**/coverage
-*.md
-.DS_Store
 
-node_modules
-**/node_modules
-**/.git
-**/.nx/cache
-**/dist
+# --- Local IDEs & Tooling ---
+.agents/
+.claude/
+.cursor/
+.gemini/
+.vscode/
+.idea/
+.project
+.classpath
+.settings/
+.DS_Store
+Thumbs.db
+
+# --- Non-Dockerized Projects (Mobile & Desktop) ---
+apps/mobile/
+desktop/
+
+# --- Logs & Temp Files ---
+*.log
+logs/
+**/logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+.eslintcache
+
+# --- Version Control ---
+.git/
+**/.git/
+.gitignore
+.gitattributes
+
+# --- Tests & Documentation ---
 **/*.spec.ts
 **/*.test.ts
+**/*.spec.js
+**/*.test.js
+*.md
+docs/

@@ -36,3 +36,8 @@ MANUAL-DESPLIEGUE-PROD.md
 # Node
 node_modules/
 
+# Pruebas de carga (JMeter)
+pruebas-carga-smart-parking/jmeter.log
+pruebas-carga-smart-parking/resultados/
+pruebas-carga-smart-parking/tokens.csv
+pruebas-carga-smart-parking/usuarios.csv
