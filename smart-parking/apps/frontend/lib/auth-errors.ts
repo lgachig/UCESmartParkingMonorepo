@@ -8,6 +8,15 @@ export function getAuthErrorMessage(
     if (!error.response) {
       return 'No se pudo conectar con el servidor. Verifica que los servicios estén activos.';
     }
+    if (error.response.status === 401) return 'Credenciales incorrectas.';
+    if (error.response.status === 409) return 'Ya existe una cuenta con ese correo.';
+    if (error.response.status === 429) {
+      return 'Demasiados intentos. Espera un minuto e intenta de nuevo.';
+    }
+    if (error.response.status === 400) {
+      return 'Datos inválidos o token expirado.';
+    }
+
     const data = error.response.data as {
       message?: string | string[] | { message?: string };
     };
@@ -19,14 +28,6 @@ export function getAuthErrorMessage(
       'message' in data.message
     ) {
       return String(data.message.message);
-    }
-    if (error.response.status === 401) return 'Credenciales incorrectas.';
-    if (error.response.status === 409) return 'Ya existe una cuenta con ese correo.';
-    if (error.response.status === 429) {
-      return 'Demasiados intentos. Espera un minuto e intenta de nuevo.';
-    }
-    if (error.response.status === 400) {
-      return 'Datos inválidos o token expirado.';
     }
   }
   return fallback;

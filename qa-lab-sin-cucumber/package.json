@@ -1,0 +1,20 @@
+{
+  "name": "qa-lab-sin-cucumber",
+  "version": "1.0.0",
+  "description": "Pruebas de aceptación E2E con Selenium Webdriver utilizando Jest sin Cucumber",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "jest": "^29.7.0",
+    "selenium-webdriver": "^4.46.0"
+  },
+  "jest": {
+    "testTimeout": 30000
+  }
+}

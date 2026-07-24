@@ -18,7 +18,7 @@ When('ingresa el correo {string} y la contraseña {string}', async function (ema
 
 When('presiona el botón {string}', async function (textoBoton) {
   const driver = getDriver();
-  await driver.findElement(By.xpath(`//button[contains(text(),'${textoBoton}')]`)).click();
+  await driver.findElement(By.xpath(`//button[contains(.,'${textoBoton}')]`)).click();
   await driver.sleep(2000);
 });
 
@@ -41,4 +41,17 @@ Then('el sistema lo redirige fuera de la página de login', async function () {
     console.log(bodyText);
   }
   assert.ok(!url.includes('/login'), 'Seguía en /login, el test falló');
+});
+
+Then('el usuario permanece en la página de login', async function () {
+  const driver = getDriver();
+  await driver.sleep(1500); 
+  const url = await driver.getCurrentUrl();
+  assert.ok(url.includes('/login'), `Se esperaba permanecer en /login pero la URL fue ${url}`);
+});
+
+Then('no se produce ninguna redirección fuera del login', async function () {
+  const driver = getDriver();
+  const url = await driver.getCurrentUrl();
+  assert.ok(url.includes('/login'), `No debía redirigir, pero la URL fue ${url}`);
 });

@@ -1,0 +1,1267 @@
+[
+  {
+    "description": "",
+    "elements": [
+      {
+        "description": "",
+        "id": "cancelación-de-una-reserva;cancelar-una-reserva-pendiente-exitosamente",
+        "keyword": "Scenario",
+        "line": 4,
+        "name": "Cancelar una reserva pendiente exitosamente",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 6436843000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 5,
+            "name": "el usuario \"user1@uce.edu.ec\" ha iniciado sesión",
+            "match": {
+              "location": "features/steps/reserva.steps.js:10"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 4524486624
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 6,
+            "name": "selecciona un espacio disponible en el mapa",
+            "match": {
+              "location": "features/steps/reserva.steps.js:111"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1132125167
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 7,
+            "name": "confirma la reserva",
+            "match": {
+              "location": "features/steps/reserva.steps.js:135"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1562243333
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 8,
+            "name": "cancela la reserva desde el panel de detalle",
+            "match": {
+              "location": "features/steps/cancelacion.steps.js:6"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1559083041
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 9,
+            "name": "el sistema muestra el mensaje \"Reserva cancelada\"",
+            "match": {
+              "location": "features/steps/common.steps.js:6"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 30186917
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 57839916
+            }
+          }
+        ],
+        "tags": [],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "cancelación-de-una-reserva;cancelar-la-reserva-y-verificar-que-el-usuario-puede-volver-a-reservar",
+        "keyword": "Scenario",
+        "line": 12,
+        "name": "Cancelar la reserva y verificar que el usuario puede volver a reservar",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 4749343084
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 13,
+            "name": "el usuario \"user1@uce.edu.ec\" ha iniciado sesión",
+            "match": {
+              "location": "features/steps/reserva.steps.js:10"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 3516469375
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "selecciona un espacio disponible en el mapa",
+            "match": {
+              "location": "features/steps/reserva.steps.js:111"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1089571165
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "confirma la reserva",
+            "match": {
+              "location": "features/steps/reserva.steps.js:135"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1573134500
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "cancela la reserva desde el panel de detalle",
+            "match": {
+              "location": "features/steps/cancelacion.steps.js:6"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1552376208
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 17,
+            "name": "selecciona un espacio disponible en el mapa",
+            "match": {
+              "location": "features/steps/reserva.steps.js:111"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1041443208
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 18,
+            "name": "confirma la reserva",
+            "match": {
+              "location": "features/steps/reserva.steps.js:135"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1555451457
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 19,
+            "name": "aparece la opción de hacer check-in",
+            "match": {
+              "location": "features/steps/reserva.steps.js:145"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 17290458
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 57340249
+            }
+          }
+        ],
+        "tags": [],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "cancelación-de-una-reserva;el-botón-de-cancelar-reserva-se-deshabilita-mientras-se-procesa-la-cancelación",
+        "keyword": "Scenario",
+        "line": 22,
+        "name": "El botón de cancelar reserva se deshabilita mientras se procesa la cancelación",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 5208699416
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 23,
+            "name": "el usuario \"user1@uce.edu.ec\" ha iniciado sesión",
+            "match": {
+              "location": "features/steps/reserva.steps.js:10"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 3237189875
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 24,
+            "name": "selecciona un espacio disponible en el mapa",
+            "match": {
+              "location": "features/steps/reserva.steps.js:111"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1092897000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 25,
+            "name": "confirma la reserva",
+            "match": {
+              "location": "features/steps/reserva.steps.js:135"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1590435041
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 26,
+            "name": "cancela la reserva desde el panel de detalle",
+            "match": {
+              "location": "features/steps/cancelacion.steps.js:6"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1556221292
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 27,
+            "name": "el botón de cancelar quedó inhabilitado durante el procesamiento",
+            "match": {
+              "location": "features/steps/cancelacion.steps.js:16"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 14001957
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 56198208
+            }
+          }
+        ],
+        "tags": [],
+        "type": "scenario"
+      }
+    ],
+    "id": "cancelación-de-una-reserva",
+    "line": 1,
+    "keyword": "Feature",
+    "name": "Cancelación de una reserva",
+    "tags": [],
+    "uri": "features/cancelacion.feature"
+  },
+  {
+    "description": "",
+    "elements": [
+      {
+        "description": "",
+        "id": "check-in-y-check-out-de-una-reserva;check-in-y-check-out-exitoso-de-un-espacio",
+        "keyword": "Scenario",
+        "line": 4,
+        "name": "Check-in y check-out exitoso de un espacio",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 5764907916
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 5,
+            "name": "el usuario \"user1@uce.edu.ec\" ha iniciado sesión",
+            "match": {
+              "location": "features/steps/reserva.steps.js:10"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 2801378375
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 6,
+            "name": "selecciona un espacio disponible en el mapa",
+            "match": {
+              "location": "features/steps/reserva.steps.js:111"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1077109833
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 7,
+            "name": "confirma la reserva",
+            "match": {
+              "location": "features/steps/reserva.steps.js:135"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1556205750
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 8,
+            "name": "realiza el check-in en el espacio reservado",
+            "match": {
+              "location": "features/steps/checkin-checkout.steps.js:7"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1559671833
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 9,
+            "name": "finaliza la sesión con check-out",
+            "match": {
+              "location": "features/steps/checkin-checkout.steps.js:17"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 2061157374
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 10,
+            "name": "el sistema refleja el fin de la sesión de parqueo",
+            "match": {
+              "location": "features/steps/checkin-checkout.steps.js:28"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 36234916
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 51109166
+            }
+          }
+        ],
+        "tags": [],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "check-in-y-check-out-de-una-reserva;el-botón-de-check-in-no-está-disponible-si-no-hay-una-reserva-pendiente",
+        "keyword": "Scenario",
+        "line": 13,
+        "name": "El botón de check-in no está disponible si no hay una reserva pendiente",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 5430406666
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 14,
+            "name": "el usuario \"user1@uce.edu.ec\" ha iniciado sesión",
+            "match": {
+              "location": "features/steps/reserva.steps.js:10"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 2792506750
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 15,
+            "name": "navega directamente a la vista de \"Mis Reservas\"",
+            "match": {
+              "location": "features/steps/checkin-checkout.steps.js:51"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1131687541
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 16,
+            "name": "no se muestra ningún botón de \"LLEGUE — CHECK IN\" en la página",
+            "match": {
+              "location": "features/steps/checkin-checkout.steps.js:57"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 21755833
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 57230749
+            }
+          }
+        ],
+        "tags": [],
+        "type": "scenario"
+      }
+    ],
+    "id": "check-in-y-check-out-de-una-reserva",
+    "line": 1,
+    "keyword": "Feature",
+    "name": "Check-in y Check-out de una reserva",
+    "tags": [],
+    "uri": "features/checkin-checkout.feature"
+  },
+  {
+    "description": "  Como estudiante de la UCE\n  Quiero iniciar sesión con mis credenciales\n  Para acceder al sistema de parqueadero",
+    "elements": [
+      {
+        "description": "",
+        "id": "inicio-de-sesión;login-exitoso-con-credenciales-válidas",
+        "keyword": "Scenario",
+        "line": 7,
+        "name": "Login exitoso con credenciales válidas",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 4260118958
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 8,
+            "name": "el usuario abre la página de login",
+            "match": {
+              "location": "features/steps/login.steps.js:8"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 859193165
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "ingresa el correo \"user1@uce.edu.ec\" y la contraseña \"A12345a-@\"",
+            "match": {
+              "location": "features/steps/login.steps.js:13"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 304695749
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "presiona el botón \"ACCEDER\"",
+            "match": {
+              "location": "features/steps/login.steps.js:19"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 2051749125
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 11,
+            "name": "el sistema lo redirige fuera de la página de login",
+            "match": {
+              "location": "features/steps/login.steps.js:25"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 18296875
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 144696458
+            }
+          }
+        ],
+        "tags": [],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "inicio-de-sesión;login-fallido-con-contraseña-incorrecta",
+        "keyword": "Scenario",
+        "line": 14,
+        "name": "Login fallido con contraseña incorrecta",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 5391300166
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 15,
+            "name": "el usuario abre la página de login",
+            "match": {
+              "location": "features/steps/login.steps.js:8"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 928352874
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 16,
+            "name": "ingresa el correo \"user1@uce.edu.ec\" y la contraseña \"ClaveIncorrecta1!\"",
+            "match": {
+              "location": "features/steps/login.steps.js:13"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 393978332
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "presiona el botón \"ACCEDER\"",
+            "match": {
+              "location": "features/steps/login.steps.js:19"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 2080518584
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 18,
+            "name": "el sistema muestra el mensaje de error \"Credenciales incorrectas.\"",
+            "match": {
+              "location": "features/steps/common.steps.js:18"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 37745500
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 19,
+            "name": "el usuario permanece en la página de login",
+            "match": {
+              "location": "features/steps/login.steps.js:46"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1514734708
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 55035042
+            }
+          }
+        ],
+        "tags": [],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "inicio-de-sesión;intentar-iniciar-sesión-sin-ingresar-datos",
+        "keyword": "Scenario",
+        "line": 22,
+        "name": "Intentar iniciar sesión sin ingresar datos",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 5174682000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 23,
+            "name": "el usuario abre la página de login",
+            "match": {
+              "location": "features/steps/login.steps.js:8"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 818613624
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 24,
+            "name": "presiona el botón \"ACCEDER\"",
+            "match": {
+              "location": "features/steps/login.steps.js:19"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 2116691542
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 25,
+            "name": "el usuario permanece en la página de login",
+            "match": {
+              "location": "features/steps/login.steps.js:46"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1515485749
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 26,
+            "name": "no se produce ninguna redirección fuera del login",
+            "match": {
+              "location": "features/steps/login.steps.js:53"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 9206583
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 62069875
+            }
+          }
+        ],
+        "tags": [],
+        "type": "scenario"
+      }
+    ],
+    "id": "inicio-de-sesión",
+    "line": 1,
+    "keyword": "Feature",
+    "name": "Inicio de sesión",
+    "tags": [],
+    "uri": "features/login.feature"
+  },
+  {
+    "description": "  Como visitante de la plataforma\n  Quiero crear una cuenta institucional\n  Para poder reservar espacios de parqueo",
+    "elements": [
+      {
+        "description": "",
+        "id": "registro-de-nuevo-usuario;registro-exitoso-con-datos-válidos",
+        "keyword": "Scenario",
+        "line": 7,
+        "name": "Registro exitoso con datos válidos",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 4931509541
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 8,
+            "name": "el usuario abre la página de registro",
+            "match": {
+              "location": "features/steps/registro.steps.js:7"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 805057332
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "completa el formulario de registro con un correo institucional único y datos válidos",
+            "match": {
+              "location": "features/steps/registro.steps.js:20"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 340404791
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "presiona el botón \"CREAR MI CUENTA\"",
+            "match": {
+              "location": "features/steps/login.steps.js:19"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 2100128750
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 11,
+            "name": "el sistema lo redirige fuera de la página de registro",
+            "match": {
+              "location": "features/steps/registro.steps.js:56"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 20247959
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 63398667
+            }
+          }
+        ],
+        "tags": [],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "registro-de-nuevo-usuario;intentar-registrar-un-correo-que-ya-existe",
+        "keyword": "Scenario",
+        "line": 14,
+        "name": "Intentar registrar un correo que ya existe",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 4591528208
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 15,
+            "name": "el usuario abre la página de registro",
+            "match": {
+              "location": "features/steps/registro.steps.js:7"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 985356333
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 16,
+            "name": "completa el formulario de registro con el correo \"user1@uce.edu.ec\" ya existente",
+            "match": {
+              "location": "features/steps/registro.steps.js:33"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 554040957
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "presiona el botón \"CREAR MI CUENTA\"",
+            "match": {
+              "location": "features/steps/login.steps.js:19"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 2052982084
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 18,
+            "name": "el sistema muestra el mensaje \"Ya existe una cuenta con ese correo.\"",
+            "match": {
+              "location": "features/steps/common.steps.js:6"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 39687166
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 58226540
+            }
+          }
+        ],
+        "tags": [],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "registro-de-nuevo-usuario;intentar-registrar-con-contraseñas-que-no-coinciden",
+        "keyword": "Scenario",
+        "line": 21,
+        "name": "Intentar registrar con contraseñas que no coinciden",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 5405423833
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 22,
+            "name": "el usuario abre la página de registro",
+            "match": {
+              "location": "features/steps/registro.steps.js:7"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 985141166
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 23,
+            "name": "completa el formulario de registro con contraseñas distintas entre sí",
+            "match": {
+              "location": "features/steps/registro.steps.js:44"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 313082374
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 24,
+            "name": "presiona el botón \"CREAR MI CUENTA\"",
+            "match": {
+              "location": "features/steps/login.steps.js:19"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 2048713124
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 25,
+            "name": "el sistema muestra el mensaje \"Las contraseñas no coinciden\"",
+            "match": {
+              "location": "features/steps/common.steps.js:6"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 37951667
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 26,
+            "name": "el usuario permanece en la página de registro",
+            "match": {
+              "location": "features/steps/registro.steps.js:66"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1010799541
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 64262333
+            }
+          }
+        ],
+        "tags": [],
+        "type": "scenario"
+      }
+    ],
+    "id": "registro-de-nuevo-usuario",
+    "line": 1,
+    "keyword": "Feature",
+    "name": "Registro de nuevo usuario",
+    "tags": [],
+    "uri": "features/registro.feature"
+  },
+  {
+    "description": "",
+    "elements": [
+      {
+        "description": "",
+        "id": "reserva-de-espacio-de-parqueo;reservar-un-espacio-disponible",
+        "keyword": "Scenario",
+        "line": 4,
+        "name": "Reservar un espacio disponible",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 5120748583
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 5,
+            "name": "el usuario \"user1@uce.edu.ec\" ha iniciado sesión",
+            "match": {
+              "location": "features/steps/reserva.steps.js:10"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 2811539708
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 6,
+            "name": "selecciona un espacio disponible en el mapa",
+            "match": {
+              "location": "features/steps/reserva.steps.js:111"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1081395666
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 7,
+            "name": "confirma la reserva",
+            "match": {
+              "location": "features/steps/reserva.steps.js:135"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1549313374
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 8,
+            "name": "aparece la opción de hacer check-in",
+            "match": {
+              "location": "features/steps/reserva.steps.js:145"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 8595834
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 55944041
+            }
+          }
+        ],
+        "tags": [],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "reserva-de-espacio-de-parqueo;intentar-reservar-un-segundo-espacio-teniendo-ya-una-reserva-activa",
+        "keyword": "Scenario",
+        "line": 11,
+        "name": "Intentar reservar un segundo espacio teniendo ya una reserva activa",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 5022974583
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 12,
+            "name": "el usuario \"user1@uce.edu.ec\" ha iniciado sesión",
+            "match": {
+              "location": "features/steps/reserva.steps.js:10"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 3141724875
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 13,
+            "name": "selecciona un espacio disponible en el mapa",
+            "match": {
+              "location": "features/steps/reserva.steps.js:111"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1079640875
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "confirma la reserva",
+            "match": {
+              "location": "features/steps/reserva.steps.js:135"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1565242166
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 15,
+            "name": "intenta seleccionar otro espacio disponible en el mapa",
+            "match": {
+              "location": "features/steps/reserva.steps.js:151"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1049370290
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 16,
+            "name": "el sistema muestra el mensaje \"Ya tienes una reserva activa.\"",
+            "match": {
+              "location": "features/steps/common.steps.js:6"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 27264708
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 52140625
+            }
+          }
+        ],
+        "tags": [],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "reserva-de-espacio-de-parqueo;intentar-acceder-al-mapa-de-reservas-sin-haber-iniciado-sesión",
+        "keyword": "Scenario",
+        "line": 19,
+        "name": "Intentar acceder al mapa de reservas sin haber iniciado sesión",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 5285863666
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 20,
+            "name": "el usuario no ha iniciado sesión",
+            "match": {
+              "location": "features/steps/reserva.steps.js:162"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 823729415
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 21,
+            "name": "intenta navegar directamente a la ruta de usuario",
+            "match": {
+              "location": "features/steps/reserva.steps.js:168"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 224918499
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 22,
+            "name": "el sistema lo redirige a la página de login",
+            "match": {
+              "location": "features/steps/reserva.steps.js:173"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 214654499
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 58293000
+            }
+          }
+        ],
+        "tags": [],
+        "type": "scenario"
+      }
+    ],
+    "id": "reserva-de-espacio-de-parqueo",
+    "line": 1,
+    "keyword": "Feature",
+    "name": "Reserva de espacio de parqueo",
+    "tags": [],
+    "uri": "features/reserva.feature"
+  }
+]

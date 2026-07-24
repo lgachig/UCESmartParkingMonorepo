@@ -10,7 +10,17 @@ module.exports = {
         return driver;
     },
     async quitDriver() {
-        if (driver) await driver.quit();
-        driver = null;
+        if (driver) {
+            const currentDriver = driver;
+            driver = null;
+            try {
+                await Promise.race([
+                    currentDriver.quit(),
+                    new Promise((resolve) => setTimeout(resolve, 5000))
+                ]);
+            } catch (e) {
+                console.error('Error during driver quit:', e);
+            }
+        }
     },
 };

@@ -4,7 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "cucumber-js features/**/*.feature",
+    "test:dry-run": "cucumber-js features/**/*.feature --dry-run",
+    "test:login": "cucumber-js features/login.feature",
+    "test:reserva": "cucumber-js features/reserva.feature",
+    "test:registro": "cucumber-js features/registro.feature",
+    "test:cancelacion": "cucumber-js features/cancelacion.feature",
+    "test:checkin-checkout": "cucumber-js features/checkin-checkout.feature",
+    "test:report": "cucumber-js features/**/*.feature --format json:reports/cucumber-report.json --format html:reports/cucumber-report.html"
   },
   "keywords": [],
   "author": "",
