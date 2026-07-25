@@ -19,7 +19,7 @@ import { KafkaModule } from './kafka/kafka.module';
 
 
 @Module({
-  imports: [PrismaModule, HealthModule, MetricsModule, UserClientModule, AppRedisModule, AuditModule, KafkaModule, AuthModule, ThrottlerModule.forRoot([{ ttl: 60000, limit: 10, },]),
+  imports: [PrismaModule, HealthModule, MetricsModule, UserClientModule, AppRedisModule, AuditModule, KafkaModule, AuthModule, ThrottlerModule.forRoot([{ ttl: 60000, limit: Number(process.env.THROTTLE_LIMIT_GLOBAL || 100000), },]),
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: Joi.object({

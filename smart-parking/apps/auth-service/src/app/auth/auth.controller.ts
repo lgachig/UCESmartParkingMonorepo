@@ -41,7 +41,7 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   @ApiResponse({ status: 429, description: 'Too many login attempts (limit: 5/min)' })
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Throttle({ default: { limit: Number(process.env.THROTTLE_LIMIT_LOGIN || 100000), ttl: 60000 } })
   @Post('login')
   async login(@Body() data: LoginDto) {
     return this.authService.login(data);

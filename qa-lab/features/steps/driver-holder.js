@@ -3,7 +3,15 @@ let driver = null;
 
 module.exports = {
     async createDriver() {
-        driver = await new Builder().forBrowser('chrome').build();
+        const chrome = require('selenium-webdriver/chrome');
+        const options = new chrome.Options();
+        if (process.env.CI) {
+            options.addArguments('--headless', '--no-sandbox', '--disable-dev-shm-usage');
+        }
+        driver = await new Builder()
+            .forBrowser('chrome')
+            .setChromeOptions(options)
+            .build();
         return driver;
     },
     getDriver() {

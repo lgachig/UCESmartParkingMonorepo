@@ -2,10 +2,10 @@ name: QA CI/CD
 
 on:
   push:
-    branches: ['f']
+    branches: ['f', 'feature/selenium']
   pull_request:
     types: [closed]
-    branches: ['f']
+    branches: ['f', 'feature/selenium']
   workflow_dispatch:
     inputs:
       force_deploy_all:

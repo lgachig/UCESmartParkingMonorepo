@@ -23,7 +23,7 @@ export class ReservationsController {
   @ApiBody({ type: CreateReservationDto })
   @ApiResponse({ status: 201, description: 'Reservation created' })
   @ApiResponse({ status: 409, description: 'Slot unavailable or user has active reservation' })
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Throttle({ default: { limit: Number(process.env.THROTTLE_LIMIT_RESERVATION || 100000), ttl: 60000 } })
   @UseGuards(RolesGuard)
   @Roles(Role.STUDENT, Role.PROFESSOR, Role.GUEST, Role.ADMIN)
   @Post()
@@ -101,7 +101,7 @@ export class ReservationsController {
   @ApiOperation({ summary: 'Cancel a reservation' })
   @ApiParam({ name: 'id', description: 'Reservation UUID' })
   @ApiResponse({ status: 200, description: 'Reservation cancelled' })
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Throttle({ default: { limit: Number(process.env.THROTTLE_LIMIT_RESERVATION || 100000), ttl: 60000 } })
   @UseGuards(RolesGuard)
   @Roles(Role.STUDENT, Role.PROFESSOR, Role.GUEST, Role.ADMIN)
   @Put(':id/cancel')
@@ -115,7 +115,7 @@ export class ReservationsController {
   @ApiOperation({ summary: 'Check-in: activate reservation when user arrives' })
   @ApiParam({ name: 'id', description: 'Reservation UUID' })
   @ApiResponse({ status: 200, description: 'Check-in successful' })
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Throttle({ default: { limit: Number(process.env.THROTTLE_LIMIT_RESERVATION || 100000), ttl: 60000 } })
   @Post(':id/check-in')
   checkIn(
     @Param('id') id: string,
@@ -127,7 +127,7 @@ export class ReservationsController {
   @ApiOperation({ summary: 'Check-out: complete reservation and release slot' })
   @ApiParam({ name: 'id', description: 'Reservation UUID' })
   @ApiResponse({ status: 200, description: 'Check-out successful, duration calculated' })
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Throttle({ default: { limit: Number(process.env.THROTTLE_LIMIT_RESERVATION || 100000), ttl: 60000 } })
   @Post(':id/check-out')
   checkOut(
     @Param('id') id: string,
