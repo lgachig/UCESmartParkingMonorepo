@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY apps/gateway-service/package.json ./apps/gateway-service/
 
-RUN npm install
+RUN npm ci --legacy-peer-deps
 
 COPY . .
 
