@@ -95,7 +95,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: smart-parking/package-lock.json
 
-      - run: npm ci --prefix smart-parking
+      - run: npm install --legacy-peer-deps --prefix smart-parking
 
       - name: Lint Environment and Docker-Compose Config
         run: cd smart-parking && npx ts-node scripts/lint-configs.ts
