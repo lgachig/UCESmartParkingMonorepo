@@ -24,7 +24,7 @@ import { MetricsMiddleware } from './middlewares/metrics.middleware';
         CORS_ORIGINS: Joi.string().optional(),
       }),
     }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: Number(process.env.THROTTLE_LIMIT_GLOBAL || 100000) }]),
     MetricsModule,
     AppRedisModule,
     HealthModule,

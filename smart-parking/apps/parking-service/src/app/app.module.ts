@@ -24,7 +24,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     AuditModule,
     AppRedisModule,
     KafkaModule,
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: Number(process.env.THROTTLE_LIMIT_GLOBAL || 100000) }]),
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: Joi.object({

@@ -20,7 +20,7 @@ import { AppRedisModule } from './redis/redis.module';
     MetricsModule,
     AuditModule,
     AppRedisModule,
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: Number(process.env.THROTTLE_LIMIT_GLOBAL || 100000) }]),
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: Joi.object({

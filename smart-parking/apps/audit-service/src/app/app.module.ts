@@ -20,7 +20,7 @@ import { KafkaConsumerModule } from './kafka/kafka-consumer.module';
     HealthModule,
     MetricsModule,
     AppRedisModule,
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: Number(process.env.THROTTLE_LIMIT_GLOBAL || 100000) }]),
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: Joi.object({

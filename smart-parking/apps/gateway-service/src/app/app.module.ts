@@ -41,7 +41,7 @@ import { RequestLoggerMiddleware } from './middlewares/request-logger.middleware
         url: cfg.get<string>('REDIS_URL'),
       }),
     }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: Number(process.env.THROTTLE_LIMIT_GLOBAL || 100000) }]),
     HealthModule,
     MetricsModule,
     ProxyModule,
