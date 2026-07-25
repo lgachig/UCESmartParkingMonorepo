@@ -744,6 +744,12 @@ jobs:
             docker-compose -f "$COMPOSE_FILE" up -d --force-recreate ${{ matrix.service_name }}
             docker-compose -f "$COMPOSE_FILE" ps
 
+            echo "🧹 Liberando memoria antes de migraciones..."
+            docker container prune -f || true
+            docker image prune -af --filter "until=1h" || true
+            free -h || true
+            df -h / || true
+
             reset_db_schema() {
               local db="$1"
               docker run --rm -e PGPASSWORD=admin -e PGCONNECT_TIMEOUT=5 postgres:16 \
